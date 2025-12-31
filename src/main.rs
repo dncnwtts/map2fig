@@ -19,12 +19,33 @@ fn main() {
         0
     };
 
+    /*
     let map = read_healpix_column(filename, col_index);
     println!("Total pixels: {}", map.len());
     println!("First 10 pixels: {:?}", &map[..10.min(map.len())]);
 
     plot::plot_mollweide(&map, 512, "output.png");
     println!("Saved Mollweide projection to output.png");
+    */
 
+
+    let nside = 16; // small for testing
+    let map = generate_index_map(nside);
+
+    plot::plot_mollweide(&map, nside as usize, "test_map.png");
+
+}
+
+
+
+pub fn generate_index_map(nside: i64) -> Vec<f64> {
+    let npix = 12 * nside * nside;
+    let mut map = Vec::with_capacity(npix as usize);
+
+    for pix in 0..npix {
+        map.push(pix as f64); // simple 0..npix-1 map
+    }
+
+    map
 }
 

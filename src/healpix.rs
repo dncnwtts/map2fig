@@ -1,11 +1,15 @@
 use std::f64::consts::PI;
+use rand::Rng;
 
 const HALF_PI: f64 = PI / 2.0;
-const JRLL: [i32; 12] = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
-const JPLL: [i32; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
+const TWOPI: f64 = 2.0 * PI;
+const INV_HALFPI: f64 = 2.0 / PI;
+const TWOTHIRD: f64 = 2.0 / 3.0;
+
+const JRLL: [i64; 12] = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
+const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 
 
-/*
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
     let ncap = 2 * nside * (nside - 1);
@@ -49,6 +53,47 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     (theta, phi)
 }
 
+pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
+    assert!(theta >= 0.0 && theta <= PI);
+
+    let z = theta.cos();
+    let za = z.abs();
+    let tt = ((phi % TWOPI) + TWOPI) % TWOPI * INV_HALFPI;
+
+    if za <= TWOTHIRD {
+        let temp1 = nside as f64 * (0.5 + tt);
+        let temp2 = nside as f64 * (0.75 * z);
+
+        let jp = (temp1 - temp2).floor() as i64;
+        let jm = (temp1 + temp2).floor() as i64;
+
+        let ir = nside + 1 + jp - jm;
+        let kshift = 1 - (ir & 1);
+
+        let mut ip = (jp + jm - nside + kshift + 1) / 2;
+        ip = imodulo(ip, 4 * nside);
+
+        2 * nside * (nside - 1) + (ir - 1) * 4 * nside + ip
+    } else {
+        let tp = tt - tt.floor();
+        let tmp = nside as f64 * (3.0 * (1.0 - za)).sqrt();
+
+        let jp = (tp * tmp).floor() as i64;
+        let jm = ((1.0 - tp) * tmp).floor() as i64;
+
+        let ir = jp + jm + 1;
+        let mut ip = (tt * ir as f64).floor() as i64;
+        ip = imodulo(ip, 4 * ir);
+
+        if z > 0.0 {
+            2 * ir * (ir - 1) + ip
+        } else {
+            12 * nside * nside - 2 * ir * (ir + 1) + ip
+        }
+    }
+}
+
+
 
 pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
@@ -81,46 +126,111 @@ pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
 
     (theta, phi)
 }
-*/
+
+pub fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
+    assert!(theta >= 0.0 && theta <= PI);
+
+    let z = theta.cos();
+    let za = z.abs();
+
+    // φ mapped to [0,4)
+    let tt = ((phi % TWOPI) + TWOPI) % TWOPI * INV_HALFPI;
+
+    let (face, ix, iy): (usize, i64, i64);
+
+    if za <= TWOTHIRD {
+        // ===== Equatorial region =====
+        let temp1 = nside as f64 * (0.5 + tt);
+        let temp2 = nside as f64 * (0.75 * z);
+
+        let jp = (temp1 - temp2).floor() as i64;
+        let jm = (temp1 + temp2).floor() as i64;
+
+        let ifp = jp / nside;
+        let ifm = jm / nside;
+
+        face = if ifp == ifm {
+            (ifp | 4) as usize
+        } else if ifp < ifm {
+            ifp as usize
+        } else {
+            (ifm + 8) as usize
+        };
+
+        ix = jm & (nside - 1);
+        iy = nside - (jp & (nside - 1)) - 1;
+    } else {
+        // ===== Polar caps =====
+        let mut ntt = tt.floor() as i64;
+        if ntt >= 4 {
+            ntt = 3;
+        }
+
+        let tp = tt - ntt as f64;
+        let tmp = nside as f64 * (3.0 * (1.0 - za)).sqrt();
+
+        let mut jp = (tp * tmp).floor() as i64;
+        let mut jm = ((1.0 - tp) * tmp).floor() as i64;
+
+        if jp >= nside { jp = nside - 1; }
+        if jm >= nside { jm = nside - 1; }
+
+        if z >= 0.0 {
+            face = ntt as usize;
+            ix = nside - jm - 1;
+            iy = nside - jp - 1;
+        } else {
+            face = (ntt + 8) as usize;
+            ix = jp;
+            iy = jm;
+        }
+    }
+
+    xyf2nest(nside, ix, iy, face)
+}
+
+
 
 
 /// Convert (ix, iy, face) → NESTED pixel index
-pub fn xyf2nest(nside: u32, ix: u32, iy: u32, face: u32) -> u64 {
-    let mut morton: u64 = 0;
+pub fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
+    let mut morton: i64 = 0;
 
     // Interleave bits of ix and iy
     for bit in 0..32 {
-        morton |= ((ix as u64 >> bit) & 1) << (2 * bit);
-        morton |= ((iy as u64 >> bit) & 1) << (2 * bit + 1);
+        morton |= ((ix as i64 >> bit) & 1) << (2 * bit);
+        morton |= ((iy as i64 >> bit) & 1) << (2 * bit + 1);
     }
 
-    morton + (face as u64) * (nside as u64) * (nside as u64)
+    morton + (face as i64) * (nside as i64) * (nside as i64)
 }
 
 /// Convert NESTED pixel index → (ix, iy, face)
-pub fn nest2xyf(nside: u32, pix: u64) -> (u32, u32, u32) {
-    let npface = (nside as u64) * (nside as u64);
+pub fn nest2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
+    let npface = nside * nside;
 
-    let face = (pix / npface) as u32;
-    let mut p = pix % npface;
+    let face = (pix / npface) as usize;
+    let mut p = (pix % npface) as u64;
 
-    let mut ix: u32 = 0;
-    let mut iy: u32 = 0;
+    let mut ix: u64 = 0;
+    let mut iy: u64 = 0;
     let mut bit: u32 = 0;
 
-    // De-interleave bits
+    // De-interleave bits (Morton decode)
     while p != 0 {
-        ix |= ((p & 1) as u32) << bit;
+        ix |= (p & 1) << bit;
         p >>= 1;
-        iy |= ((p & 1) as u32) << bit;
+
+        iy |= (p & 1) << bit;
         p >>= 1;
+
         bit += 1;
     }
 
-    (ix, iy, face)
+    (ix as i64, iy as i64, face)
 }
 
-pub fn xyf2ring(nside: i32, ix: i32, iy: i32, face: i32) -> i32 {
+pub fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
     let nl4 = 4 * nside;
     let jr = JRLL[face as usize] * nside - ix - iy - 1;
 
@@ -156,7 +266,7 @@ pub fn xyf2ring(nside: i32, ix: i32, iy: i32, face: i32) -> i32 {
 }
 
 
-pub fn ring2xyf(nside: i32, pix: i32) -> (i32, i32, i32) {
+pub fn ring2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
     let ncap = 2 * nside * (nside - 1);
     let npix = 12 * nside * nside;
     let nl2 = 2 * nside;
@@ -207,14 +317,20 @@ pub fn ring2xyf(nside: i32, pix: i32) -> (i32, i32, i32) {
     let ix = (ipt - irt) >> 1;
     let iy = (-(ipt + irt)) >> 1;
 
-    (ix, iy, face)
+    (ix, iy, face as usize)
 }
 
-fn isqrt(x: i32) -> i32 {
-    (x as f64).sqrt() as i32
+#[inline]
+fn imodulo(a: i64, m: i64) -> i64 {
+    let r = a % m;
+    if r < 0 { r + m } else { r }
 }
 
-fn special_div(a: i32, b: i32) -> i32 {
+fn isqrt(x: i64) -> i64 {
+    (x as f64).sqrt() as i64
+}
+
+fn special_div(a: i64, b: i64) -> i64 {
     if a >= 0 {
         a / b
     } else {
@@ -222,24 +338,31 @@ fn special_div(a: i32, b: i32) -> i32 {
     }
 }
 
+fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
+    let cosd = theta1.cos() * theta2.cos()
+        + theta1.sin() * theta2.sin() * (phi1 - phi2).cos();
+    cosd.clamp(-1.0, 1.0).acos()
+}
+
+
 /// Convert a nested pixel index to a ring pixel index
-pub fn nest2ring(nside: u32, ipnest: u64) -> u64 {
-    if !nside.is_power_of_two() {
+pub fn nest2ring(nside: i64, ipnest: i64) -> i64 {
+    if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");
     }
 
     let (ix, iy, face) = nest2xyf(nside, ipnest);
-    xyf2ring(nside as i32, ix as i32, iy as i32, face as i32) as u64
+    xyf2ring(nside, ix, iy, face) as i64
 }
 
 /// Convert a ring pixel index to a nested pixel index
-pub fn ring2nest(nside: u32, ipring: u64) -> u64 {
-    if !nside.is_power_of_two() {
+pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
+    if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");
     }
 
-    let (ix, iy, face) = ring2xyf(nside as i32, ipring as i32);
-    xyf2nest(nside, ix as u32, iy as u32, face as u32)
+    let (ix, iy, face) = ring2xyf(nside as i64, ipring as i64);
+    xyf2nest(nside, ix, iy, face)
 }
 
 #[cfg(test)]
@@ -270,11 +393,11 @@ mod tests {
         let npix = 12 * nside * nside;
 
         // Deterministic pseudo-random sampling
-        let mut seed: u64 = 0xdeadbeef;
+        let mut seed: i64 = 0xdeadbeef;
 
         for _ in 0..10_000 {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-            let pix = seed % npix as u64;
+            let pix = seed % npix as i64;
 
             let (ix, iy, face) = nest2xyf(nside, pix);
             let pix2 = xyf2nest(nside, ix, iy, face);
@@ -308,12 +431,12 @@ fn test_nest_ring_roundtrip() {
     let npix = 12 * nside * nside;
 
     for pix in (0..npix).step_by(97) {
-        let (ix, iy, face) = nest2xyf(nside as u32, pix as u64);
-        let ring = xyf2ring(nside, ix as i32, iy as i32, face as i32);
+        let (ix, iy, face) = nest2xyf(nside as i64, pix as i64);
+        let ring = xyf2ring(nside, ix as i64, iy as i64, face);
         let (ix2, iy2, face2) = ring2xyf(nside, ring);
 
-        let pix2 = xyf2nest(nside as u32, ix2 as u32, iy2 as u32, face2 as u32);
-        assert_eq!(pix as u64, pix2);
+        let pix2 = xyf2nest(nside, ix2, iy2, face2);
+        assert_eq!(pix as i64, pix2);
     }
 }
 #[test]
@@ -322,9 +445,78 @@ fn test_nest_ring_roundtrip_simple() {
     let npix = 12 * nside * nside;
 
     for pix in 0..npix {
-        let ring = nest2ring(nside, pix as u64);
+        let ring = nest2ring(nside, pix as i64);
         let nest = ring2nest(nside, ring);
-        assert_eq!(pix as u64, nest, "pix={} failed roundtrip", pix);
+        assert_eq!(pix as i64, nest, "pix={} failed roundtrip", pix);
     }
 }
+
+
+#[test]
+fn test_ang_roundtrip_nest() {
+    let nside = 16;
+    let npix = 12 * nside * nside;
+
+    for ipix in 0..npix {
+        let (theta, phi) = pix2ang_nest(nside, ipix);
+        let ipix2 = ang2pix_nest(nside, theta, phi);
+        assert_eq!(ipix, ipix2);
+    }
+}
+
+
+#[test]
+fn test_random_angles() {
+    let nside = 64;
+
+    for _ in 0..10000 {
+        let theta = rand::random::<f64>() * PI;
+        let phi = rand::random::<f64>() * 2.0 * PI;
+
+        let ipix = ang2pix_nest(nside, theta, phi);
+        let (theta2, phi2) = pix2ang_nest(nside, ipix);
+
+        // Pixel center must lie in same pixel
+        let ipix2 = ang2pix_nest(nside, theta2, phi2);
+        assert_eq!(ipix, ipix2);
+    }
+}
+
+
+#[test]
+fn test_ang_pix_ang_consistency() {
+    let nside = 32;
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..10_000 {
+        let u: f64 = rng.r#gen();
+        let v: f64 = rng.r#gen();
+
+        let theta = (1.0 - 2.0*u).acos();
+        let phi = 2.0 * std::f64::consts::PI * v;
+
+        let ipix = ang2pix_ring(nside, theta, phi);
+        let (theta2, phi2) = pix2ang_ring(nside, ipix);
+
+        let d = ang_dist(theta, phi, theta2, phi2);
+
+        let pix_ang = (std::f64::consts::PI / (3.0 * (nside*nside) as f64)).sqrt();
+        assert!(d < pix_ang, "Too far: d={}", d);
+    }
+}
+
+
+
+#[test]
+fn test_pix_ang_pix_roundtrip_ring() {
+    let nside = 32;
+    let npix = 12 * nside * nside;
+
+    for ipix in 0..npix {
+        let (theta, phi) = pix2ang_ring(nside, ipix);
+        let ipix2 = ang2pix_ring(nside, theta, phi);
+        assert_eq!(ipix, ipix2);
+    }
+}
+
 
