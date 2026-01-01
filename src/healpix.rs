@@ -1,6 +1,7 @@
 use std::f64::consts::PI;
 use rand::Rng;
 
+pub const HPX_UNSEEN: f64 = -1.6375e30;
 const HALF_PI: f64 = PI / 2.0;
 const TWOPI: f64 = 2.0 * PI;
 const INV_HALFPI: f64 = 2.0 / PI;
@@ -9,6 +10,10 @@ const TWOTHIRD: f64 = 2.0 / 3.0;
 const JRLL: [i64; 12] = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
 const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 
+#[inline]
+pub fn is_seen(v: f64) -> bool {
+    v.is_finite() && v != HPX_UNSEEN
+}
 
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;

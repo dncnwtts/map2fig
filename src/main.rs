@@ -19,20 +19,25 @@ fn main() {
         0
     };
 
-    /*
     let map = read_healpix_column(filename, col_index);
     println!("Total pixels: {}", map.len());
     println!("First 10 pixels: {:?}", &map[..10.min(map.len())]);
 
-    plot::plot_mollweide(&map, 512, "output.png");
+    plot::plot_mollweide(&map, 512, 1024, 512, "output.png");
     println!("Saved Mollweide projection to output.png");
+
+    let nside = 16; // small for testing
+    let map2 = generate_index_map(nside);
+    plot::plot_mollweide(&map2, nside, 1024, 512, "output2.png");
+    println!("Saved Mollweide projection to output.png");
+
+    /*
+
+    plot::plot_mollweide_oval(1024, 512, "test_map.png");
+    println!("Saved mollweide_black.png");
     */
 
 
-    let nside = 16; // small for testing
-    let map = generate_index_map(nside);
-
-    plot::plot_mollweide(&map, nside as usize, "test_map.png");
 
 }
 
