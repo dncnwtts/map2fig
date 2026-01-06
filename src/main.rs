@@ -21,7 +21,7 @@ fn main() {
 
     let map = read_healpix_column(filename, col_index);
 
-    let width = 4800;
+    let width = 1600;
 
     //plot::plot_mollweide(&map, width, "output.png", Some(0.0), Some(50.0));
     plot::plot_mollweide(&map, width, "output.png", None, None);

@@ -285,6 +285,19 @@ pub fn plot_mollweide(
         }
     }
 
+    let border_width_px = (width as f64 * 0.004).max(2.0);
+
+    println!("Border width is {border_width_px}");
+
+    draw_projection_border(
+        &mut img,
+        map_height,
+        Rgb([0, 0, 0]),
+        border_width_px,
+        |u, v| (u * u) / 4.0 + v * v,
+    );
+
+
 
 
     img.save(filename).expect("Failed to save PNG");
@@ -316,6 +329,43 @@ pub fn draw_colorbar(
 
     img.save(filename).expect("Failed to save colorbar");
 }
+
+pub fn draw_projection_border<F>(
+    img: &mut RgbImage,
+    map_height: u32,
+    border_color: Rgb<u8>,
+    line_width_px: f64,
+    dist_fn: F,
+)
+where
+    F: Fn(f64, f64) -> f64,
+{
+    let nx = img.width() as f64;
+    let ny = map_height as f64;
+
+    let xc = (nx - 1.0) / 2.0;
+    let yc = (ny - 1.0) / 2.0;
+
+    // Normalized pixel size
+    let delta = 2.0 / nx;
+
+    // Inflate band for perceptual correctness
+    let band = line_width_px * delta * 2.5;
+
+    for py in 0..map_height {
+        for px in 0..img.width() {
+            let u = 2.0 * (px as f64 - xc) / xc;
+            let v = -(py as f64 - yc) / yc;
+
+            let d = dist_fn(u, v);
+
+            if d >= 1.0 - band && d <= 1.0 {
+                img.put_pixel(px, py, border_color);
+            }
+        }
+    }
+}
+
 
 
 
