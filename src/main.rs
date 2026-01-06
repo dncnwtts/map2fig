@@ -7,6 +7,7 @@ use clap::Parser;
 use fits::read_healpix_column;
 use crate::colormap::Colormap;
 use crate::plot::NegMode;
+use image::Rgba;
 
 #[derive(Clone, Debug)]
 struct RgbaArg {
@@ -14,6 +15,14 @@ struct RgbaArg {
     g: u8,
     b: u8,
     a: u8,
+}
+
+
+#[derive(Clone, Debug)]
+enum BadColor {
+    Auto,
+    Gray,
+    Rgba(u8, u8, u8, u8),
 }
 
 use std::str::FromStr;
@@ -41,6 +50,36 @@ impl FromStr for RgbaArg {
         }
     }
 }
+
+impl FromStr for BadColor {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_lowercase();
+
+        match s.as_str() {
+            "auto" => Ok(BadColor::Auto),
+            "gray" | "grey" => Ok(BadColor::Gray),
+            _ => {
+                let parts: Vec<_> = s.split(',').collect();
+                if parts.len() != 4 {
+                    return Err(
+                        "Expected 'auto', 'gray', or RGBA as r,g,b,a".into()
+                    );
+                }
+
+                let vals: Result<Vec<u8>, _> =
+                    parts.iter().map(|p| p.parse::<u8>()).collect();
+
+                match vals {
+                    Ok(v) => Ok(BadColor::Rgba(v[0], v[1], v[2], v[3])),
+                    Err(_) => Err("RGBA values must be 0–255".into()),
+                }
+            }
+        }
+    }
+}
+
 
 
 #[derive(Parser, Debug)]
@@ -114,9 +153,22 @@ struct Args {
     /// RGBA color for bad / masked pixels
     #[arg(long, default_value = "255,0,255,255")]
     bad_color: RgbaArg,
+
+    #[arg(long, default_value = "auto")]
+    bad_color: BadColor,
 }
 
-use image::Rgba;
+
+fn resolve_bad_color(
+    bad: BadColor,
+    background: Rgba<u8>,
+) -> Rgba<u8> {
+    match bad {
+        BadColor::Auto => background,
+        BadColor::Gray => Rgba([128, 128, 128, 255]),
+        BadColor::Rgba(r, g, b, a) => Rgba([r, g, b, a]),
+    }
+}
 
 
 
@@ -142,12 +194,9 @@ fn main() {
         "unseen" => NegMode::Unseen,
         _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
     };
-    let bad_color = Rgba([
-        args.bad_color.r,
-        args.bad_color.g,
-        args.bad_color.b,
-        args.bad_color.a,
-    ]);
+    let background = Rgba([255, 255, 255, 255]); // or transparent
+    let bad_color = resolve_bad_color(args.bad_color, background);
+
 
     println!("Reading HEALPix column {} from {}", args.col, args.fits);
     let map = read_healpix_column(&args.fits, args.col);
