@@ -10,3 +10,4 @@ imageproc = "0.23"
 rusttype = "0.9"
 fitsrs = "0.4.1"
 rand = "0.8"
+clap = { version = "4", features = ["derive"] }

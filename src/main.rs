@@ -1,34 +1,62 @@
 mod fits;
 mod plot;
 mod healpix;
+mod colormap;
 
+use std::path::PathBuf;
+
+use clap::Parser;
 use fits::read_healpix_column;
-use std::env;
+use crate::colormap::Colormap;
+
+/// Simple HEALPix Mollweide plotter
+#[derive(Parser, Debug)]
+#[command(author, version, about)]
+struct Args {
+    /// Input FITS file
+    #[arg(short, long, default_value = "cosmoglobe_DIRBE_10_I_n00512_DR2_v3.1.fits")]
+    fits: String,
+
+    #[arg(short = 'i', long, default_value_t = 0)]
+    col: usize,
+    
+    #[arg(short = 'c', long, default_value = "viridis")]
+    cmap: String,
+
+
+    /// Output width in pixels
+    #[arg(short, long, default_value_t = 1600)]
+    width: u32,
+
+    /// Output filename
+    #[arg(short, long, default_value = "output.png")]
+    out: String,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} <fits_file> [column_index]", args[0]);
-        std::process::exit(1);
-    }
+    let args = Args::parse();
 
-    let filename = &args[1];
-    let col_index: usize = if args.len() >= 3 {
-        args[2].parse().expect("Column index must be a number")
-    } else {
-        0
+    // Map colormap string to Colormap enum
+    let cmap = match args.cmap.to_lowercase().as_str() {
+        "viridis" => Colormap::Viridis,
+        "plasma"  => Colormap::Plasma,
+        "inferno" => Colormap::Inferno,
+        other     => {
+            eprintln!("Unknown colormap: {}", other);
+            std::process::exit(1);
+        }
     };
 
-    let map = read_healpix_column(filename, col_index);
+    println!("Reading HEALPix column {} from {}", args.col, args.fits);
+    let map = read_healpix_column(&args.fits, args.col);
 
-    let width = 1600;
+    println!("Plotting Mollweide projection, width={} px, colormap={:?}", args.width, cmap);
+    plot::plot_mollweide(&map, args.width, &args.out, None, None, cmap);
 
-    //plot::plot_mollweide(&map, width, "output.png", Some(0.0), Some(50.0));
-    plot::plot_mollweide(&map, width, "output.png", None, None);
-    println!("Saved Mollweide projection to output.png");
-
-
+    println!("Saved Mollweide projection to {}", args.out);
 }
+
+
 
 
 

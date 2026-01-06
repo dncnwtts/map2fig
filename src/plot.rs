@@ -1,5 +1,6 @@
 use image::{GrayImage, RgbImage, Luma, Rgb};
 use std::f64::consts::PI;
+use crate::colormap::{apply, Colormap};
 
 
 const FONT_W: u32 = 6;
@@ -133,6 +134,7 @@ pub fn plot_mollweide(
     filename: &str,
     minv: Option<f64>,
     maxv: Option<f64>,
+    cmap: Colormap,
 ) {
 
     let map_height = width / 2;
@@ -215,14 +217,14 @@ pub fn plot_mollweide(
 
 
             let t = ((val - minv) / (maxv - minv)).clamp(0.0, 1.0);
-            let color = colormap_gray(t);
+            let color = apply(cmap,t);
             img.put_pixel(px, py, color);
         }
     }
     for py in map_height..height {
         for px in 0..width {
             let t = px as f64 / (width - 1) as f64;
-            let color = colormap_gray(t);
+            let color = apply(cmap,t);
             img.put_pixel(px, py, color);
         }
     }
@@ -369,18 +371,6 @@ where
 
 
 
-fn colormap_viridis(t: f64) -> Rgb<u8> {
-    // Clamp t to [0,1]
-    let t = t.clamp(0.0, 1.0);
-
-    // Viridis-like approximation
-    // You could replace this with exact values or use a crate like 'palette'
-    let r = (0.280 * (1.0 - t) + 0.993 * t) * 255.0;
-    let g = (0.0   * (1.0 - t) + 0.906 * t) * 255.0;
-    let b = (0.509 * (1.0 - t) + 0.143 * t) * 255.0;
-
-    Rgb([r as u8, g as u8, b as u8])
-}
 
 fn colormap_gray(t: f64) -> Rgb<u8> {
     let v = (t.clamp(0.0, 1.0) * 255.0) as u8;
