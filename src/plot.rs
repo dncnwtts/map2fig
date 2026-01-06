@@ -1,4 +1,4 @@
-use image::{GrayImage, RgbImage, RgbaImage, Luma, Rgb, Rgba};
+use image::{GrayImage, RgbaImage, Luma, Rgb, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 
@@ -230,7 +230,7 @@ pub fn plot_mollweide(
     let mut img = RgbaImage::from_pixel(width, height, bg);
 
 
-    let npix = map.len() as f64;
+    let _npix = map.len() as f64;
 
     for py in 0..map_height {
         for px in 0..width {

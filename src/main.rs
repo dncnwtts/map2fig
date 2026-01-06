@@ -188,7 +188,7 @@ fn main() {
         "unseen" => NegMode::Unseen,
         _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
     };
-    let background = if args.transparent {
+    let _background = if args.transparent {
         Rgba([0, 0, 0, 0])
     } else {
         Rgba([255, 255, 255, 255])

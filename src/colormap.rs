@@ -1,11 +1,11 @@
 use image::Rgb;
 
-/// Lookup tables generated externally (256 × RGB)
+// Lookup tables generated externally (256 × RGB)
 include!("../colormap/viridis_lut.rs");
 include!("../colormap/plasma_lut.rs");
 include!("../colormap/inferno_lut.rs");
 
-/// A sampled colormap backed by a fixed RGB lookup table
+// A sampled colormap backed by a fixed RGB lookup table
 #[derive(Debug)]
 pub struct Colormap {
     /// Canonical name (used by CLI, logging, etc.)
@@ -34,12 +34,12 @@ pub static INFERNO: Colormap = Colormap {
     lut: &INFERNO_LUT,
 };
 
-/// Registry of all available colormaps
-///
-/// Adding a new colormap requires:
-///   1. include!("foo_lut.rs")
-///   2. pub static FOO: Colormap = ...
-///   3. add it to this slice
+// Registry of all available colormaps
+//
+// Adding a new colormap requires:
+//   1. include!("foo_lut.rs")
+//   2. pub static FOO: Colormap = ...
+//   3. add it to this slice
 pub static COLORMAPS: &[&Colormap] = &[
     &VIRIDIS,
     &PLASMA,
@@ -76,7 +76,7 @@ impl Colormap {
 /*  Lookup helpers                                                            */
 /* ------------------------------------------------------------------------- */
 
-/// Find a colormap by name (case-insensitive)
+// Find a colormap by name (case-insensitive)
 pub fn get_colormap(name: &str) -> &'static Colormap {
     let name = name.to_lowercase();
     COLORMAPS
@@ -92,7 +92,7 @@ pub fn get_colormap(name: &str) -> &'static Colormap {
         })
 }
 
-/// Return all available colormap names (for CLI help, --list, etc.)
+// Return all available colormap names (for CLI help, --list, etc.)
 pub fn available_colormaps() -> Vec<&'static str> {
     COLORMAPS.iter().map(|c| c.name).collect()
 }
