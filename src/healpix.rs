@@ -12,7 +12,7 @@ const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 
 #[inline]
 pub fn is_seen(v: f64) -> bool {
-    v.is_finite() && v != HPX_UNSEEN
+    v.is_finite() && v > HPX_UNSEEN
 }
 
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
@@ -369,6 +369,27 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
     let (ix, iy, face) = ring2xyf(nside as i64, ipring as i64);
     xyf2nest(nside, ix, iy, face)
 }
+
+pub fn nside_from_npix(npix: usize) -> Result<i64, String> {
+    if npix % 12 != 0 {
+        return Err(format!("npix={} is not divisible by 12", npix));
+    }
+
+    let nside2 = npix / 12;
+    let nside_f = (nside2 as f64).sqrt();
+    let nside = nside_f.round() as i64;
+
+    if (nside as i128) * (nside as i128) != nside2 as i128 {
+        return Err(format!("npix={} does not correspond to a square nside", npix));
+    }
+
+    if !(nside as u64).is_power_of_two() {
+        return Err(format!("nside={} is not a power of two", nside));
+    }
+
+    Ok(nside)
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -6,5 +6,7 @@ edition = "2024"
 [dependencies]
 cdshealpix = "0.7"
 image = "0.25"
+imageproc = "0.23"
+rusttype = "0.9"
 fitsrs = "0.4.1"
 rand = "0.8"
