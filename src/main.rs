@@ -8,6 +8,7 @@ use fits::read_healpix_column;
 use crate::colormap::Colormap;
 use crate::plot::NegMode;
 use image::Rgba;
+use crate::colormap::get_colormap;
 
 #[derive(Clone, Debug)]
 struct RgbaArg {
@@ -20,7 +21,7 @@ struct RgbaArg {
 
 #[derive(Clone, Debug)]
 enum BadColor {
-    Auto,
+    Under,
     Gray,
     Rgba(u8, u8, u8, u8),
 }
@@ -58,7 +59,7 @@ impl FromStr for BadColor {
         let s = s.to_lowercase();
 
         match s.as_str() {
-            "auto" => Ok(BadColor::Auto),
+            "auto" => Ok(BadColor::Under),
             "gray" | "grey" => Ok(BadColor::Gray),
             _ => {
                 let parts: Vec<_> = s.split(',').collect();
@@ -150,21 +151,21 @@ struct Args {
     neg_mode: String,
 
 
-    /// RGBA color for bad / masked pixels
-    #[arg(long, default_value = "255,0,255,255")]
-    bad_color: RgbaArg,
-
-    #[arg(long, default_value = "auto")]
+    #[arg(long, default_value = "gray", value_parser = clap::value_parser!(BadColor))]
     bad_color: BadColor,
+
 }
 
 
 fn resolve_bad_color(
     bad: BadColor,
-    background: Rgba<u8>,
+    cmap: &Colormap,
 ) -> Rgba<u8> {
     match bad {
-        BadColor::Auto => background,
+        BadColor::Under => {
+            let c = cmap.under();
+            Rgba([c[0], c[1], c[2], 255])
+        }
         BadColor::Gray => Rgba([128, 128, 128, 255]),
         BadColor::Rgba(r, g, b, a) => Rgba([r, g, b, a]),
     }
@@ -172,19 +173,12 @@ fn resolve_bad_color(
 
 
 
+
 fn main() {
     let args = Args::parse();
 
-    // Map colormap string to Colormap enum
-    let cmap = match args.cmap.to_lowercase().as_str() {
-        "viridis" => Colormap::Viridis,
-        "plasma"  => Colormap::Plasma,
-        "inferno" => Colormap::Inferno,
-        other     => {
-            eprintln!("Unknown colormap: {}", other);
-            std::process::exit(1);
-        }
-    };
+    let cmap = get_colormap(&args.cmap);
+
     if  args.log as u8 + args.symlog as u8 + args.asinh as u8 > 1 {
         panic!("Only one of --log, --symlog, or --asinh may be specified");
     }
@@ -194,15 +188,17 @@ fn main() {
         "unseen" => NegMode::Unseen,
         _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
     };
-    let background = Rgba([255, 255, 255, 255]); // or transparent
-    let bad_color = resolve_bad_color(args.bad_color, background);
-
+    let background = if args.transparent {
+        Rgba([0, 0, 0, 0])
+    } else {
+        Rgba([255, 255, 255, 255])
+    };
+ 
+    let bad_color = resolve_bad_color(args.bad_color, cmap);
 
     println!("Reading HEALPix column {} from {}", args.col, args.fits);
     let map = read_healpix_column(&args.fits, args.col);
-    // let map = generate_index_map(1);
 
-    println!("Plotting Mollweide projection, width={} px, colormap={:?}", args.width, cmap);
     plot::plot_mollweide(&map, args.width, &args.out, 
         args.min, args.max, cmap, !args.no_cbar, args.transparent, !args.no_border,
         args.gamma, args.log, args.symlog, args.asinh,

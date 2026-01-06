@@ -1,6 +1,6 @@
 use image::{GrayImage, RgbImage, RgbaImage, Luma, Rgb, Rgba};
 use std::f64::consts::PI;
-use crate::colormap::{apply, Colormap};
+use crate::colormap::{Colormap};
 
 #[derive(Clone, Copy)]
 pub enum Scale {
@@ -137,7 +137,7 @@ pub fn plot_mollweide(
     filename: &str,
     minv: Option<f64>,
     maxv: Option<f64>,
-    cmap: Colormap,
+    cmap: &Colormap,
     show_colorbar: bool,
     transparent: bool,
     draw_border: bool,
@@ -267,26 +267,24 @@ pub fn plot_mollweide(
             let ipix = ang2pix_ring(nside as i64, theta, lon);
             let val = map[ipix as usize];
 
-
-            match scale_value(val, minv, maxv, scale, neg_mode, gamma) {
+            let px_color = match scale_value(val, minv, maxv, scale, neg_mode, gamma) {
                 PixelValue::Color(t) => {
-                    let color = apply(cmap, t);
-                    img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
+                    let c = cmap.sample(t);
+                    Rgba([c[0], c[1], c[2], 255])
                 }
                 PixelValue::Bad => {
-                    let bad = bad_color; // user-defined
-                    img.put_pixel(px, py, Rgba([bad[0], bad[1], bad[2], bad[3]]));
+                    bad_color
                 }
-            }
-
-
+            };
+            
+            img.put_pixel(px, py, px_color);
         }
     }
     if show_colorbar {
         for py in map_height..height {
             for px in 0..width {
                 let t = px as f64 / (width - 1) as f64;
-                let color = apply(cmap,t);
+                let color = cmap.sample(t);
                 img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
             }
         }
