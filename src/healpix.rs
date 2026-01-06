@@ -1,4 +1,5 @@
 use std::f64::consts::PI;
+use rand::Rng;
 
 pub const HPX_UNSEEN: f64 = -1.6375e30;
 const HALF_PI: f64 = PI / 2.0;
