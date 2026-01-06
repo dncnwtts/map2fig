@@ -1,64 +1,67 @@
-use image::{GrayImage, RgbImage, Luma, Rgb};
+use image::{GrayImage, RgbImage, RgbaImage, Luma, Rgb, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{apply, Colormap};
 
-
-const FONT_W: u32 = 6;
-const FONT_H: u32 = 8;
-
-// Digits 0–9, '.' , '-', 'e'
-static FONT: &[(&str, [u8; 8])] = &[
-    ("0", [0x3E,0x51,0x49,0x45,0x3E,0,0,0]),
-    ("1", [0x00,0x42,0x7F,0x40,0x00,0,0,0]),
-    ("2", [0x42,0x61,0x51,0x49,0x46,0,0,0]),
-    ("3", [0x21,0x41,0x45,0x4B,0x31,0,0,0]),
-    ("4", [0x18,0x14,0x12,0x7F,0x10,0,0,0]),
-    ("5", [0x27,0x45,0x45,0x45,0x39,0,0,0]),
-    ("6", [0x3C,0x4A,0x49,0x49,0x30,0,0,0]),
-    ("7", [0x01,0x71,0x09,0x05,0x03,0,0,0]),
-    ("8", [0x36,0x49,0x49,0x49,0x36,0,0,0]),
-    ("9", [0x06,0x49,0x49,0x29,0x1E,0,0,0]),
-    (".", [0x00,0x40,0x60,0x00,0x00,0,0,0]),
-    ("-", [0x08,0x08,0x08,0x08,0x08,0,0,0]),
-    ("e", [0x38,0x54,0x54,0x54,0x18,0,0,0]),
-];
-
-fn glyph(c: char) -> Option<[u8; 8]> {
-    FONT.iter().find(|(k, _)| k.chars().next().unwrap() == c).map(|(_, g)| *g)
+#[derive(Clone, Copy)]
+pub enum Scale {
+    Linear,
+    Log,
+    Symlog { linthresh: f64 },
+    Asinh { scale: f64 },
 }
 
-fn draw_text(
-    img: &mut GrayImage,
-    x0: u32,
-    y0: u32,
-    text: &str,
-) {
-    let mut x = x0;
-    for c in text.chars() {
-        if let Some(g) = glyph(c) {
-            for (row, bits) in g.iter().enumerate() {
-                for col in 0..5 {
-                    if bits & (1 << (4 - col)) != 0 {
-                        let px = x + col;
-                        let py = y0 + row as u32;
-                        if px < img.width() && py < img.height() {
-                            img.put_pixel(px, py, Luma([0u8]));
-                        }
-                    }
-                }
+#[derive(Clone, Copy)]
+pub enum NegMode {
+    Zero,
+    Unseen,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PixelValue {
+    Color(f64),
+    Bad,
+}
+
+
+fn asinh(x: f64) -> f64 {
+    (x + (x * x + 1.0).sqrt()).ln()
+}
+
+pub fn scale_value(
+    v: f64,
+    min: f64,
+    max: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    gamma: f64,
+) -> PixelValue {
+    if !v.is_finite() {
+        return PixelValue::Bad;
+    }
+
+    let t = match scale {
+        Scale::Linear => (v - min) / (max - min),
+
+        Scale::Log => {
+            if v <= 0.0 || min <= 0.0 {
+                return match neg_mode {
+                    NegMode::Zero => PixelValue::Color(0.0),
+                    NegMode::Unseen => PixelValue::Bad,
+                };
             }
-            x += FONT_W;
+            (v.log10() - min.log10()) / (max.log10() - min.log10())
         }
-    }
+
+        Scale::Asinh { scale } => {
+            (v / scale).asinh() / (max / scale).asinh()
+        }
+
+        _ => unreachable!(),
+    };
+
+    PixelValue::Color(t.clamp(0.0, 1.0).powf(1.0 / gamma))
 }
 
-fn format_value(v: f64) -> String {
-    if v.abs() >= 100.0 || v.abs() <= 0.01 {
-        format!("{:.3e}", v)
-    } else {
-        format!("{:.4}", v)
-    }
-}
 
 
 /// Solve 2θ + sin(2θ) = π sin φ for Mollweide projection
@@ -126,7 +129,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 
-use crate::healpix::{HPX_UNSEEN, is_seen, ang2pix_ring, nside_from_npix};
+use crate::healpix::{is_seen, ang2pix_ring, nside_from_npix};
 
 pub fn plot_mollweide(
     map: &[f64],
@@ -135,11 +138,27 @@ pub fn plot_mollweide(
     minv: Option<f64>,
     maxv: Option<f64>,
     cmap: Colormap,
+    show_colorbar: bool,
+    transparent: bool,
+    draw_border: bool,
+    gamma: f64,
+    log: bool,
+    symlog: bool,
+    asinh_: bool,
+    linthresh: f64,
+    asinh_scale: f64,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
 ) {
 
     let map_height = width / 2;
     let colorbar_height = map_height / 20;
-    let height = map_height + colorbar_height;
+    let height = if show_colorbar {
+        map_height + colorbar_height
+    }
+    else {
+        map_height
+    };
     let npix = map.len();
     let nside = nside_from_npix(npix)
         .expect("Input map is not a valid full-sky HEALPix map");
@@ -170,13 +189,46 @@ pub fn plot_mollweide(
             (lo, hi)
         }
     };
+
+    if gamma <= 0.0 {
+        panic!("Gamma must be > 0");
+    }
     
-    if minv >= maxv {
-        panic!("Invalid color scale: {minv} >= {maxv}");
+    if minv > maxv {
+        panic!("Invalid color scale: {minv} > {maxv}");
     }
 
+
+    let scale = if log {
+        Scale::Log
+    } else if symlog {
+        let lt = if linthresh > 0.0 {
+            linthresh
+        } else {
+            0.01 * data_max.abs().max(data_min.abs())
+        };
+        Scale::Symlog { linthresh: lt }
+    } else if asinh_ {
+        let s = if asinh_scale > 0.0 {
+            asinh_scale
+        } else {
+            0.1 * (data_max - data_min)
+        };
+        Scale::Asinh { scale: s }
+    } else {
+            Scale::Linear
+    };
+
+
     println!("map min = {}, max = {}", minv, maxv);
-    let mut img = RgbImage::from_pixel(width, height, Rgb([255, 255, 255]));
+    let bg = if transparent {
+        Rgba([0, 0, 0, 0])   // fully transparent
+    } else {
+        Rgba([255, 255, 255, 255])
+    };
+    
+    let mut img = RgbaImage::from_pixel(width, height, bg);
+
 
     let npix = map.len() as f64;
 
@@ -216,88 +268,101 @@ pub fn plot_mollweide(
             let val = map[ipix as usize];
 
 
-            let t = ((val - minv) / (maxv - minv)).clamp(0.0, 1.0);
-            let color = apply(cmap,t);
-            img.put_pixel(px, py, color);
-        }
-    }
-    for py in map_height..height {
-        for px in 0..width {
-            let t = px as f64 / (width - 1) as f64;
-            let color = apply(cmap,t);
-            img.put_pixel(px, py, color);
-        }
-    }
-
-    // ---------------- Colorbar tick marks ----------------
-    // ---------------- Tick scaling ----------------
-    let nticks = 5;        // major ticks
-    let nminor = 5; // minor ticks per major interval
-    
-    // Scale tick heights relative to colorbar
-    let major_tick_height = (colorbar_height as f64 * 0.5).round() as u32;
-    let minor_tick_height = (colorbar_height as f64 * 0.3).round() as u32;
-    
-    let major_tick_height = major_tick_height.max(1);
-    let minor_tick_height = minor_tick_height.max(1);
-    
-    // Scale tick widths relative to image width
-    let major_tick_width = ((width as f64) * 0.002).round() as u32; // ~0.2% of width
-    let minor_tick_width = ((width as f64) * 0.001).round() as u32; // ~0.1% of width
-    
-    let major_tick_width = major_tick_width.max(1);
-    let minor_tick_width = minor_tick_width.max(1);
-    
-    let tick_bottom = height - 1;
-    
-    // Major ticks
-    for i in 0..nticks {
-        let t = i as f64 / (nticks - 1) as f64;
-        let px = (t * (width - 1) as f64).round() as u32;
-    
-        let tick_top = tick_bottom - major_tick_height;
-        for dx in 0..major_tick_width {
-            for py in tick_top..=tick_bottom {
-                let x = px.saturating_add(dx);
-                if x < width {
-                    img.put_pixel(x, py, Rgb([0, 0, 0]));
+            match scale_value(val, minv, maxv, scale, neg_mode, gamma) {
+                PixelValue::Color(t) => {
+                    let color = apply(cmap, t);
+                    img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
+                }
+                PixelValue::Bad => {
+                    let bad = bad_color; // user-defined
+                    img.put_pixel(px, py, Rgba([bad[0], bad[1], bad[2], bad[3]]));
                 }
             }
+
+
         }
-    
-        // Minor ticks between this and next major tick
-        if i + 1 < nticks {
-            let t0 = i as f64 / (nticks - 1) as f64;
-            let t1 = (i + 1) as f64 / (nticks - 1) as f64;
-    
-            for j in 1..nminor {
-                let tm = t0 + (t1 - t0) * (j as f64 / nminor as f64);
-                let pxm = (tm * (width - 1) as f64).round() as u32;
-    
-                let tick_top = tick_bottom - minor_tick_height;
-                for dx in 0..minor_tick_width {
-                    for py in tick_top..=tick_bottom {
-                        let x = pxm.saturating_add(dx);
-                        if x < width {
-                            img.put_pixel(x, py, Rgb([0, 0, 0]));
+    }
+    if show_colorbar {
+        for py in map_height..height {
+            for px in 0..width {
+                let t = px as f64 / (width - 1) as f64;
+                let color = apply(cmap,t);
+                img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
+            }
+        }
+
+        // ---------------- Colorbar tick marks ----------------
+        // ---------------- Tick scaling ----------------
+        let nticks = 5;        // major ticks
+        let nminor = 5; // minor ticks per major interval
+        
+        // Scale tick heights relative to colorbar
+        let major_tick_height = (colorbar_height as f64 * 0.5).round() as u32;
+        let minor_tick_height = (colorbar_height as f64 * 0.3).round() as u32;
+        
+        let major_tick_height = major_tick_height.max(1);
+        let minor_tick_height = minor_tick_height.max(1);
+        
+        // Scale tick widths relative to image width
+        let major_tick_width = ((width as f64) * 0.002).round() as u32; // ~0.2% of width
+        let minor_tick_width = ((width as f64) * 0.001).round() as u32; // ~0.1% of width
+        
+        let major_tick_width = major_tick_width.max(1);
+        let minor_tick_width = minor_tick_width.max(1);
+        
+        let tick_bottom = height - 1;
+        
+        // Major ticks
+        for i in 0..nticks {
+            let t = i as f64 / (nticks - 1) as f64;
+            let px = (t * (width - 1) as f64).round() as u32;
+        
+            let tick_top = tick_bottom - major_tick_height;
+            for dx in 0..major_tick_width {
+                for py in tick_top..=tick_bottom {
+                    let x = px.saturating_add(dx);
+                    if x < width {
+                        img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                    }
+                }
+            }
+        
+            // Minor ticks between this and next major tick
+            if i + 1 < nticks {
+                let t0 = i as f64 / (nticks - 1) as f64;
+                let t1 = (i + 1) as f64 / (nticks - 1) as f64;
+        
+                for j in 1..nminor {
+                    let tm = t0 + (t1 - t0) * (j as f64 / nminor as f64);
+                    let pxm = (tm * (width - 1) as f64).round() as u32;
+        
+                    let tick_top = tick_bottom - minor_tick_height;
+                    for dx in 0..minor_tick_width {
+                        for py in tick_top..=tick_bottom {
+                            let x = pxm.saturating_add(dx);
+                            if x < width {
+                                img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                            }
                         }
                     }
                 }
             }
         }
+
     }
 
-    let border_width_px = (width as f64 * 0.004).max(2.0);
 
-    println!("Border width is {border_width_px}");
-
-    draw_projection_border(
-        &mut img,
-        map_height,
-        Rgb([0, 0, 0]),
-        border_width_px,
-        |u, v| (u * u) / 4.0 + v * v,
-    );
+    if draw_border {
+        let border_width_px = (width as f64 * 0.004).max(2.0);
+        println!("Border width is {border_width_px}");
+        draw_projection_border(
+            &mut img,
+            map_height,
+            Rgba([0, 0, 0, 255]),
+            border_width_px,
+            |u, v| (u * u) / 4.0 + v * v,
+        );
+    }
 
 
 
@@ -333,9 +398,9 @@ pub fn draw_colorbar(
 }
 
 pub fn draw_projection_border<F>(
-    img: &mut RgbImage,
+    img: &mut RgbaImage,
     map_height: u32,
-    border_color: Rgb<u8>,
+    border_color: Rgba<u8>,
     line_width_px: f64,
     dist_fn: F,
 )

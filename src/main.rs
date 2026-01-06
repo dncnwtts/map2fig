@@ -3,13 +3,46 @@ mod plot;
 mod healpix;
 mod colormap;
 
-use std::path::PathBuf;
-
 use clap::Parser;
 use fits::read_healpix_column;
 use crate::colormap::Colormap;
+use crate::plot::NegMode;
 
-/// Simple HEALPix Mollweide plotter
+#[derive(Clone, Debug)]
+struct RgbaArg {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+use std::str::FromStr;
+
+impl FromStr for RgbaArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<_> = s.split(',').collect();
+        if parts.len() != 4 {
+            return Err("Expected RGB as r,g,b,a".into());
+        }
+
+        let nums: Result<Vec<u8>, _> =
+            parts.iter().map(|p| p.parse::<u8>()).collect();
+
+        match nums {
+            Ok(v) => Ok(Self {
+                r: v[0],
+                g: v[1],
+                b: v[2],
+                a: v[3]
+            }),
+            Err(_) => Err("RGBA values must be 0–255".into()),
+        }
+    }
+}
+
+
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct Args {
@@ -19,19 +52,73 @@ struct Args {
 
     #[arg(short = 'i', long, default_value_t = 0)]
     col: usize,
-    
+
     #[arg(short = 'c', long, default_value = "viridis")]
     cmap: String,
 
-
-    /// Output width in pixels
     #[arg(short, long, default_value_t = 1600)]
     width: u32,
 
-    /// Output filename
     #[arg(short, long, default_value = "output.png")]
     out: String,
+
+    /// Disable map border
+    #[arg(long)]
+    no_border: bool,
+
+    /// Transparent background (PNG)
+    #[arg(long)]
+    transparent: bool,
+
+    /// Disable colorbar
+    #[arg(long = "no-cbar", default_value_t = false)]
+    no_cbar: bool,
+
+    /// Lower color scale limit
+    #[arg(long)]
+    min: Option<f64>,
+    
+    /// Upper color scale limit
+    #[arg(long)]
+    max: Option<f64>,
+
+    /// Gamma correction for colormap (1.0 = linear)
+    #[arg(long, default_value_t = 1.0)]
+    gamma: f64,
+
+    /// Use logarithmic color scaling (positive values only)
+    #[arg(long)]
+    log: bool,
+    
+    /// Use symmetric logarithmic scaling
+    #[arg(long)]
+    symlog: bool,
+    
+    /// Linear region half-width for symlog
+    #[arg(long, default_value_t = 0.0)]
+    linthresh: f64,
+
+    /// Use asinh color scaling
+    #[arg(long)]
+    asinh: bool,
+    
+    /// Asinh scale parameter (larger = more linear)
+    #[arg(long, default_value_t = 0.0)]
+    asinh_scale: f64,
+    
+    /// How to handle invalid/negative values
+    #[arg(long, default_value = "unseen")]
+    neg_mode: String,
+
+
+    /// RGBA color for bad / masked pixels
+    #[arg(long, default_value = "255,0,255,255")]
+    bad_color: RgbaArg,
 }
+
+use image::Rgba;
+
+
 
 fn main() {
     let args = Args::parse();
@@ -46,12 +133,31 @@ fn main() {
             std::process::exit(1);
         }
     };
+    if  args.log as u8 + args.symlog as u8 + args.asinh as u8 > 1 {
+        panic!("Only one of --log, --symlog, or --asinh may be specified");
+    }
+
+    let neg_mode = match args.neg_mode.as_str() {
+        "zero" => NegMode::Zero,
+        "unseen" => NegMode::Unseen,
+        _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
+    };
+    let bad_color = Rgba([
+        args.bad_color.r,
+        args.bad_color.g,
+        args.bad_color.b,
+        args.bad_color.a,
+    ]);
 
     println!("Reading HEALPix column {} from {}", args.col, args.fits);
     let map = read_healpix_column(&args.fits, args.col);
+    // let map = generate_index_map(1);
 
     println!("Plotting Mollweide projection, width={} px, colormap={:?}", args.width, cmap);
-    plot::plot_mollweide(&map, args.width, &args.out, None, None, cmap);
+    plot::plot_mollweide(&map, args.width, &args.out, 
+        args.min, args.max, cmap, !args.no_cbar, args.transparent, !args.no_border,
+        args.gamma, args.log, args.symlog, args.asinh,
+        args.linthresh, args.asinh_scale, neg_mode, bad_color);
 
     println!("Saved Mollweide projection to {}", args.out);
 }
