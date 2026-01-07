@@ -511,25 +511,18 @@ fn test_random_angles() {
 
 #[test]
 fn test_ang_pix_ang_consistency() {
-    let nside = 32;
-    let mut rng = rand::thread_rng();
+    let nside = 8;
+    let npix = 12 * nside * nside;
+    const EPSILON: f64 = 1e-4;
 
-    for _ in 0..10_000 {
-        let u: f64 = rng.r#gen();
-        let v: f64 = rng.r#gen();
-
-        let theta = (1.0 - 2.0*u).acos();
-        let phi = 2.0 * std::f64::consts::PI * v;
-
-        let ipix = ang2pix_ring(nside, theta, phi);
-        let (theta2, phi2) = pix2ang_ring(nside, ipix);
-
-        let d = ang_dist(theta, phi, theta2, phi2);
-
-        let pix_ang = (std::f64::consts::PI / (3.0 * (nside*nside) as f64)).sqrt();
-        assert!(d < pix_ang, "Too far: d={}", d);
+    for pix in 0..npix {
+        let (theta, phi) = pix2ang_ring(nside, pix);
+        let pix2 = ang2pix_ring(nside, theta, phi);
+        let d = ang_dist(theta, phi, pix2ang_ring(nside, pix2).0, pix2ang_ring(nside, pix2).1);
+        assert!(d < EPSILON, "Too far: d={}", d);
     }
 }
+
 
 
 

@@ -39,6 +39,18 @@ pub fn scale_value(
         return PixelValue::Bad;
     }
 
+    // Handle underflow
+    if v < min {
+        return match neg_mode {
+            NegMode::Zero => PixelValue::Color(0.0),
+            NegMode::Unseen => PixelValue::Bad,
+        };
+    }
+
+    // Handle overflow
+    let v = v.min(max);
+
+    // Compute normalized value t in [0,1]
     let t = match scale {
         Scale::Linear => (v - min) / (max - min),
 
@@ -52,11 +64,23 @@ pub fn scale_value(
             (v.log10() - min.log10()) / (max.log10() - min.log10())
         }
 
-        Scale::Asinh { scale } => {
-            (v / scale).asinh() / (max / scale).asinh()
-        }
+        Scale::Asinh { scale } => (v / scale).asinh() / (max / scale).asinh(),
 
-        _ => unreachable!(),
+        Scale::Symlog { linthresh } => {
+            // Symmetric log: linear near 0, log outside ±linthresh
+            let sign = if v >= 0.0 { 1.0 } else { -1.0 };
+            let abs_v = v.abs();
+            let abs_min = min.abs();
+            let abs_max = max.abs();
+
+            let norm = if abs_v <= linthresh {
+                (abs_v - abs_min) / (linthresh - abs_min)
+            } else {
+                (abs_v.ln() - linthresh.ln()) / (abs_max.ln() - linthresh.ln())
+            };
+
+            (norm * sign + 1.0) / 2.0 // map [-1,+1] → [0,1]
+        }
     };
 
     PixelValue::Color(t.clamp(0.0, 1.0).powf(1.0 / gamma))
