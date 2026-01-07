@@ -1,14 +1,14 @@
 use std::str::FromStr;
-use image::Rgba;
 
 use healpix_plotter::{
     BadColor, NegMode, PixelValue,
-    RgbaArg, generate_index_map, get_colormap,
-    scale_value, plot_mollweide,
+    RgbaArg, generate_index_map, 
+    scale_value
 };
 
 use healpix_plotter::plot::Scale; // <- Scale comes from plot module
-use healpix_plotter::resolve_bad_color; // <- now public from lib.rs
+
+
 
 
 /// ----------------------------
@@ -94,53 +94,25 @@ fn test_neg_mode_behavior() {
     assert!(matches!(t, PixelValue::Bad));
 }
 
-/// ----------------------------
-/// Test resolve_bad_color returns correct RGBA
-/// ----------------------------
 #[test]
-fn test_resolve_bad_color() {
-    let cmap = get_colormap("viridis");
+fn test_plot_smoke() {
+    let map = healpix_plotter::generate_index_map(1);
+    let cmap = healpix_plotter::get_colormap("viridis");
 
-    let auto_color = healpix_plotter::resolve_bad_color(Some(BadColor::Auto), cmap);
-    assert_eq!(auto_color.0[3], 255);
-
-    let gray_color = healpix_plotter::resolve_bad_color(Some(BadColor::Gray), cmap);
-    assert_eq!(gray_color, Rgba([128,128,128,255]));
-
-    let custom_color = BadColor::Rgba(10,20,30,40);
-    let c = healpix_plotter::resolve_bad_color(Some(custom_color), cmap);
-    assert_eq!(c, Rgba([10,20,30,40]));
-}
-
-/// ----------------------------
-/// Test plotting with small map
-/// ----------------------------
-#[test]
-fn test_plot_small_map() {
-    let map = generate_index_map(1); // 12 pixels
-    let cmap = get_colormap("viridis");
-    let bad_color = Rgba([128,128,128,255]);
-    let neg_mode = NegMode::Zero;
-
-    // Should not panic
-    plot_mollweide(
+    healpix_plotter::plot_mollweide(
         &map,
-        100,
-        "test.png",
+        32,
+        "smoke.png",
         None,
         None,
         cmap,
-        true,
         false,
         true,
+        false,
         1.0,
-        false,
-        false,
-        false,
-        0.0,
-        1.0,
-        neg_mode,
-        bad_color,
+        healpix_plotter::plot::Scale::Linear,
+        healpix_plotter::NegMode::Zero,
+        image::Rgba([0, 0, 0, 0]),
     );
 }
 

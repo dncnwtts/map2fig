@@ -11,6 +11,7 @@ COLORMAPS = [
     "inferno",
     "magma",
     "cividis",
+    "afmhot",
     # add more here
 ]
 

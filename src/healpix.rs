@@ -1,5 +1,4 @@
 use std::f64::consts::PI;
-use rand::Rng;
 
 pub const HPX_UNSEEN: f64 = -1.6375e30;
 const HALF_PI: f64 = PI / 2.0;
@@ -343,11 +342,6 @@ fn special_div(a: i64, b: i64) -> i64 {
     }
 }
 
-fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
-    let cosd = theta1.cos() * theta2.cos()
-        + theta1.sin() * theta2.sin() * (phi1 - phi2).cos();
-    cosd.clamp(-1.0, 1.0).acos()
-}
 
 
 /// Convert a nested pixel index to a ring pixel index
@@ -390,10 +384,17 @@ pub fn nside_from_npix(npix: usize) -> Result<i64, String> {
     Ok(nside)
 }
 
+#[cfg(test)]
+fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
+    let cosd = theta1.cos() * theta2.cos()
+        + theta1.sin() * theta2.sin() * (phi1 - phi2).cos();
+    cosd.clamp(-1.0, 1.0).acos()
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     #[test]
     fn test_xyf_nest_invertibility_small() {

@@ -1,4 +1,4 @@
-use image::{GrayImage, RgbaImage, Luma, Rgb, Rgba};
+use image::{GrayImage, RgbaImage, Luma, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 
@@ -6,8 +6,9 @@ use crate::colormap::{Colormap};
 pub enum Scale {
     Linear,
     Log,
-    Symlog { linthresh: f64 },
     Asinh { scale: f64 },
+    Symlog { linthresh: f64 },
+    PlanckLog { linthresh: f64 },
 }
 
 #[derive(Clone, Copy)]
@@ -23,91 +24,114 @@ pub enum PixelValue {
 }
 
 
-fn asinh(x: f64) -> f64 {
-    (x + (x * x + 1.0).sqrt()).ln()
-}
 
 pub fn scale_value(
-    v: f64,
+    value: f64,
     min: f64,
     max: f64,
     scale: Scale,
     neg_mode: NegMode,
-    gamma: f64,
+    gamma: f64,          // <-- apply gamma
 ) -> PixelValue {
-    if !v.is_finite() {
-        return PixelValue::Bad;
+    if min >= max {
+        panic!("min must be < max");
     }
 
-    // Handle underflow
-    if v < min {
-        return match neg_mode {
-            NegMode::Zero => PixelValue::Color(0.0),
-            NegMode::Unseen => PixelValue::Bad,
-        };
-    }
-
-    // Handle overflow
-    let v = v.min(max);
-
-    // Compute normalized value t in [0,1]
-    let t = match scale {
-        Scale::Linear => (v - min) / (max - min),
-
-        Scale::Log => {
-            if v <= 0.0 || min <= 0.0 {
+    let mut t: f64 = match scale {
+        Scale::Linear => {
+            if value < min {
                 return match neg_mode {
                     NegMode::Zero => PixelValue::Color(0.0),
                     NegMode::Unseen => PixelValue::Bad,
                 };
+            } else if value > max {
+                1.0
+            } else {
+                (value - min) / (max - min)
             }
-            (v.log10() - min.log10()) / (max.log10() - min.log10())
         }
 
-        Scale::Asinh { scale } => (v / scale).asinh() / (max / scale).asinh(),
+        Scale::Log => {
+            if value <= 0.0 || value < min {
+                return match neg_mode {
+                    NegMode::Zero => PixelValue::Color(0.0),
+                    NegMode::Unseen => PixelValue::Bad,
+                };
+            } else if value > max {
+                1.0
+            } else {
+                (value.ln() - min.ln()) / (max.ln() - min.ln())
+            }
+        }
+
+        Scale::Asinh { scale } => {
+            let val = (value / scale).asinh();
+            let min_val = (min / scale).asinh();
+            let max_val = (max / scale).asinh();
+
+            if val < min_val {
+                return match neg_mode {
+                    NegMode::Zero => PixelValue::Color(0.0),
+                    NegMode::Unseen => PixelValue::Bad,
+                };
+            } else if val > max_val {
+                1.0
+            } else {
+                (val - min_val) / (max_val - min_val)
+            }
+        }
 
         Scale::Symlog { linthresh } => {
-            // Symmetric log: linear near 0, log outside ±linthresh
-            let sign = if v >= 0.0 { 1.0 } else { -1.0 };
-            let abs_v = v.abs();
-            let abs_min = min.abs();
-            let abs_max = max.abs();
-
-            let norm = if abs_v <= linthresh {
-                (abs_v - abs_min) / (linthresh - abs_min)
+            let abs_val = value.abs();
+            let scaled = if abs_val < linthresh {
+                0.5 + 0.5 * (value / linthresh)
             } else {
-                (abs_v.ln() - linthresh.ln()) / (abs_max.ln() - linthresh.ln())
+                0.5 + 0.5 * value.signum()
+                    * (linthresh + (abs_val - linthresh).ln())
+                    / (linthresh + (max.abs() - linthresh).ln())
             };
 
-            (norm * sign + 1.0) / 2.0 // map [-1,+1] → [0,1]
+            if value < min {
+                return match neg_mode {
+                    NegMode::Zero => PixelValue::Color(0.0),
+                    NegMode::Unseen => PixelValue::Bad,
+                };
+            } else if value > max {
+                1.0
+            } else {
+                scaled
+            }
+        }
+
+        Scale::PlanckLog { linthresh } => {
+            if value < min {
+                return match neg_mode {
+                    NegMode::Zero => PixelValue::Color(0.0),
+                    NegMode::Unseen => PixelValue::Bad,
+                };
+            } else if value > max {
+                1.0
+            } else {
+                if value.abs() < linthresh {
+                    0.5 + 0.5 * (value / linthresh)
+                } else {
+                    0.5 + 0.5 * value.signum()
+                        * (linthresh + (value.abs() - linthresh).ln())
+                        / (linthresh + (max - linthresh).ln())
+                }
+            }
         }
     };
 
-    PixelValue::Color(t.clamp(0.0, 1.0).powf(1.0 / gamma))
+    // Apply gamma correction (only if t is in [0,1])
+    if t < 0.0 { t = 0.0; }
+    if t > 1.0 { t = 1.0; }
+    t = t.powf(1.0 / gamma);
+
+    PixelValue::Color(t)
 }
 
 
-
-/// Solve 2θ + sin(2θ) = π sin φ for Mollweide projection
-fn mollweide_theta(phi: f64) -> f64 {
-    let mut theta = phi; // initial guess
-    for _ in 0..10 {
-        let delta = (2.0 * theta + (2.0 * theta).sin() - PI * phi) / (2.0 + 2.0 * (2.0 * theta).cos());
-        theta -= delta;
-        if delta.abs() < 1e-10 {
-            break;
-        }
-    }
-    theta
-}
-
-/// Mollweide projection: lon/lat in radians -> x/y in [-2√2,2√2] x [-√2,√2]
-fn mollweide(lon: f64, lat: f64) -> (f64, f64) {
-    let theta = mollweide_theta(lat);
-    let x = 2.0 * 2f64.sqrt() / PI * lon * theta.cos();
-    let y = 2f64.sqrt() * theta.sin();
-    (x, y)
-}
 
 pub fn plot_mollweide_oval(width: u32, height: u32, filename: &str) {
     let mut img = GrayImage::from_pixel(width, height, Luma([255u8])); // white background
@@ -129,14 +153,6 @@ pub fn plot_mollweide_oval(width: u32, height: u32, filename: &str) {
 }
 
 
-
-fn rescale_linear(val: f64, vmin: f64, vmax: f64) -> u8 {
-    if val.is_nan() {
-        return 0;
-    }
-    let t = ((val - vmin) / (vmax - vmin)).clamp(0.0, 1.0);
-    (t * 255.0) as u8
-}
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     assert!((0.0..=100.0).contains(&p));
@@ -166,11 +182,7 @@ pub fn plot_mollweide(
     transparent: bool,
     draw_border: bool,
     gamma: f64,
-    log: bool,
-    symlog: bool,
-    asinh_: bool,
-    linthresh: f64,
-    asinh_scale: f64,
+    scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
 ) {
@@ -200,8 +212,10 @@ pub fn plot_mollweide(
     }
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    /*
     let data_min = values.first().copied().unwrap();
     let data_max = values.last().copied().unwrap();
+    */
 
 
 
@@ -221,27 +235,6 @@ pub fn plot_mollweide(
     if minv > maxv {
         panic!("Invalid color scale: {minv} > {maxv}");
     }
-
-
-    let scale = if log {
-        Scale::Log
-    } else if symlog {
-        let lt = if linthresh > 0.0 {
-            linthresh
-        } else {
-            0.01 * data_max.abs().max(data_min.abs())
-        };
-        Scale::Symlog { linthresh: lt }
-    } else if asinh_ {
-        let s = if asinh_scale > 0.0 {
-            asinh_scale
-        } else {
-            0.1 * (data_max - data_min)
-        };
-        Scale::Asinh { scale: s }
-    } else {
-            Scale::Linear
-    };
 
 
     println!("map min = {}, max = {}", minv, maxv);
@@ -454,13 +447,3 @@ where
         }
     }
 }
-
-
-
-
-
-fn colormap_gray(t: f64) -> Rgb<u8> {
-    let v = (t.clamp(0.0, 1.0) * 255.0) as u8;
-    Rgb([v, v, v])
-}
-
