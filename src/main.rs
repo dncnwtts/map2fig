@@ -16,8 +16,7 @@ fn main() {
             Scale::PlanckLog {
                 linthresh: args.linthresh.unwrap_or(300.0),
             },
-            //"planck",
-            "viridis",
+            "planck-log",
         )
     } else {
         let scale = if args.symlog {
