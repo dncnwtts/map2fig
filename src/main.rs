@@ -25,7 +25,7 @@ fn main() {
             }
         } else if args.asinh {
             Scale::Asinh {
-                scale: args.asinh_scale,
+                scale: args.linthresh.unwrap_or(1.0),
             }
         } else if args.log {
             Scale::Log

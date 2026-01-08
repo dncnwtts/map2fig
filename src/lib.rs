@@ -100,10 +100,6 @@ pub struct Args {
     #[arg(long)]
     pub asinh: bool,
 
-    /// Asinh scale parameter
-    #[arg(long, default_value_t = 0.0)]
-    pub asinh_scale: f64,
-
     /// Negative/invalid handling: zero or unseen
     #[arg(long, default_value = "unseen")]
     pub neg_mode: String,

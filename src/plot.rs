@@ -2,6 +2,7 @@ use image::{GrayImage, RgbaImage, Luma, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 
+
 #[derive(Clone, Copy)]
 pub enum Scale {
     Linear,
@@ -31,13 +32,12 @@ pub fn scale_value(
     max: f64,
     scale: Scale,
     neg_mode: NegMode,
-    gamma: f64,          // <-- apply gamma
 ) -> PixelValue {
     if min >= max {
         panic!("min must be < max");
     }
 
-    let mut t: f64 = match scale {
+    let t: f64 = match scale {
         Scale::Linear => {
             if value < min {
                 return match neg_mode {
@@ -122,11 +122,6 @@ pub fn scale_value(
             }
         }
     };
-
-    // Apply gamma correction (only if t is in [0,1])
-    if t < 0.0 { t = 0.0; }
-    if t > 1.0 { t = 1.0; }
-    t = t.powf(1.0 / gamma);
 
     PixelValue::Color(t)
 }
@@ -284,6 +279,7 @@ pub fn plot_mollweide(
             let ipix = ang2pix_ring(nside as i64, theta, lon);
             let val = map[ipix as usize];
 
+            /*
             let px_color = match scale_value(val, minv, maxv, scale, neg_mode, gamma) {
                 PixelValue::Color(t) => {
                     let c = cmap.sample(t);
@@ -293,76 +289,88 @@ pub fn plot_mollweide(
                     bad_color
                 }
             };
+            */
+            let px_color = match scale_value(val, minv, maxv, scale, neg_mode) {
+                PixelValue::Color(t) => {
+                    let t = apply_gamma(t, gamma);
+                    let c = cmap.sample(t);
+                    Rgba([c[0], c[1], c[2], 255])
+                }
+                PixelValue::Bad => bad_color,
+            };
+
             
             img.put_pixel(px, py, px_color);
         }
     }
     if show_colorbar {
-        for py in map_height..height {
-            for px in 0..width {
-                let t = px as f64 / (width - 1) as f64;
-                let color = cmap.sample(t);
+        for px in 0..width {
+            let t_linear = px as f64 / (width - 1) as f64;
+            let t_gamma  = apply_gamma(t_linear, gamma);
+            let color    = cmap.sample(t_gamma);
+            for py in map_height..height {
                 img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
             }
         }
 
-        // ---------------- Colorbar tick marks ----------------
-        // ---------------- Tick scaling ----------------
-        let nticks = 5;        // major ticks
-        let nminor = 5; // minor ticks per major interval
+        // ---------------- Colorbar tick marks (scale-aware) ----------------
+        
+        let nticks = 5;   // major ticks
+        let nminor = 5;   // minor ticks per interval
+        
+        let ticks = compute_colorbar_ticks(
+            minv,
+            maxv,
+            scale,
+            nticks,
+            nminor,
+        );
         
         // Scale tick heights relative to colorbar
-        let major_tick_height = (colorbar_height as f64 * 0.5).round() as u32;
-        let minor_tick_height = (colorbar_height as f64 * 0.3).round() as u32;
-        
-        let major_tick_height = major_tick_height.max(1);
-        let minor_tick_height = minor_tick_height.max(1);
+        let major_tick_height = ((colorbar_height as f64) * 0.5).round().max(1.0) as u32;
+        let minor_tick_height = ((colorbar_height as f64) * 0.3).round().max(1.0) as u32;
         
         // Scale tick widths relative to image width
-        let major_tick_width = ((width as f64) * 0.002).round() as u32; // ~0.2% of width
-        let minor_tick_width = ((width as f64) * 0.001).round() as u32; // ~0.1% of width
-        
-        let major_tick_width = major_tick_width.max(1);
-        let minor_tick_width = minor_tick_width.max(1);
+        let major_tick_width = ((width as f64) * 0.002).round().max(1.0) as u32;
+        let minor_tick_width = ((width as f64) * 0.001).round().max(1.0) as u32;
         
         let tick_bottom = height - 1;
         
-        // Major ticks
-        for i in 0..nticks {
-            let t = i as f64 / (nticks - 1) as f64;
+        // ---------------- Major ticks ----------------
+        for &t in &ticks.major {
             let px = (t * (width - 1) as f64).round() as u32;
+            let tick_top = tick_bottom.saturating_sub(major_tick_height);
         
-            let tick_top = tick_bottom - major_tick_height;
             for dx in 0..major_tick_width {
-                for py in tick_top..=tick_bottom {
-                    let x = px.saturating_add(dx);
-                    if x < width {
-                        img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
-                    }
+                let x = px.saturating_add(dx);
+                if x >= width {
+                    continue;
                 }
-            }
         
-            // Minor ticks between this and next major tick
-            if i + 1 < nticks {
-                let t0 = i as f64 / (nticks - 1) as f64;
-                let t1 = (i + 1) as f64 / (nticks - 1) as f64;
-        
-                for j in 1..nminor {
-                    let tm = t0 + (t1 - t0) * (j as f64 / nminor as f64);
-                    let pxm = (tm * (width - 1) as f64).round() as u32;
-        
-                    let tick_top = tick_bottom - minor_tick_height;
-                    for dx in 0..minor_tick_width {
-                        for py in tick_top..=tick_bottom {
-                            let x = pxm.saturating_add(dx);
-                            if x < width {
-                                img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
-                            }
-                        }
-                    }
+                for py in tick_top..=tick_bottom {
+                    img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
                 }
             }
         }
+        
+        // ---------------- Minor ticks ----------------
+        for &t in &ticks.minor {
+            let px = (t * (width - 1) as f64).round() as u32;
+            let tick_top = tick_bottom.saturating_sub(minor_tick_height);
+        
+            for dx in 0..minor_tick_width {
+                let x = px.saturating_add(dx);
+                if x >= width {
+                    continue;
+                }
+        
+                for py in tick_top..=tick_bottom {
+                    img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                }
+            }
+        }
+
+
 
     }
 
@@ -447,3 +455,201 @@ where
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ColorbarTicks {
+    pub major: Vec<f64>, // normalized [0,1]
+    pub minor: Vec<f64>, // normalized [0,1]
+}
+
+
+fn normalize_value(
+    value: f64,
+    min: f64,
+    max: f64,
+    scale: Scale,
+) -> Option<f64> {
+    match scale_value(value, min, max, scale, NegMode::Unseen) {
+        PixelValue::Color(t) => Some(t),
+        PixelValue::Bad => None,
+    }
+}
+
+pub fn compute_colorbar_ticks(
+    min: f64,
+    max: f64,
+    scale: Scale,
+    nticks: usize,
+    nminor: usize,
+) -> ColorbarTicks {
+    let mut major_vals: Vec<f64> = Vec::new();
+    let mut minor_vals: Vec<f64> = Vec::new();
+
+    match scale {
+        /* ------------------------------------------------------------ */
+        /* Linear                                                       */
+        /* ------------------------------------------------------------ */
+        Scale::Linear => {
+            for i in 0..nticks {
+                let t = i as f64 / (nticks - 1) as f64;
+                major_vals.push(min + t * (max - min));
+            }
+
+            for w in major_vals.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                for j in 1..nminor {
+                    let t = j as f64 / nminor as f64;
+                    minor_vals.push(a + t * (b - a));
+                }
+            }
+        }
+
+        /* ------------------------------------------------------------ */
+        /* Log                                                          */
+        /* ------------------------------------------------------------ */
+        Scale::Log => {
+            let log_min = min.log10().ceil() as i32;
+            let log_max = max.log10().floor() as i32;
+
+            for p in log_min..=log_max {
+                let v = 10f64.powi(p);
+                if v >= min && v <= max {
+                    major_vals.push(v);
+                }
+
+                for m in 2..10 {
+                    let vm = v * m as f64;
+                    if vm > min && vm < max {
+                        minor_vals.push(vm);
+                    }
+                }
+            }
+        }
+
+        /* ------------------------------------------------------------ */
+        /* Asinh                                                        */
+        /* ------------------------------------------------------------ */
+        Scale::Asinh { scale } => {
+            let lin = scale;
+
+            let anchors = [
+                min,
+                -10.0 * lin,
+                -lin,
+                0.0,
+                lin,
+                10.0 * lin,
+                max,
+            ];
+
+            for &v in &anchors {
+                if v >= min && v <= max {
+                    major_vals.push(v);
+                }
+            }
+
+            major_vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            for w in major_vals.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                for j in 1..nminor {
+                    let t = j as f64 / nminor as f64;
+                    minor_vals.push(a + t * (b - a));
+                }
+            }
+        }
+
+        /* ------------------------------------------------------------ */
+        /* Symlog                                                       */
+        /* ------------------------------------------------------------ */
+        Scale::Symlog { linthresh } => {
+            let mut pos = Vec::new();
+            let mut neg = Vec::new();
+
+            let log_max = max.abs().log10().floor() as i32;
+
+            for p in 0..=log_max {
+                let v = 10f64.powi(p);
+                if v >= linthresh {
+                    pos.push(v);
+                    neg.push(-v);
+                }
+            }
+
+            major_vals.extend(neg.iter().rev());
+            major_vals.push(0.0);
+            major_vals.extend(pos.iter());
+
+            major_vals.retain(|&v| v >= min && v <= max);
+
+            for w in major_vals.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                for j in 1..nminor {
+                    let t = j as f64 / nminor as f64;
+                    minor_vals.push(a + t * (b - a));
+                }
+            }
+        }
+
+        /* ------------------------------------------------------------ */
+        /* PlanckLog                                                    */
+        /* ------------------------------------------------------------ */
+        Scale::PlanckLog { linthresh } => {
+            let anchors = [
+                min,
+                -300.0,
+                -100.0,
+                -30.0,
+                0.0,
+                30.0,
+                100.0,
+                300.0,
+                max,
+            ];
+
+            for &v in &anchors {
+                if v >= min && v <= max {
+                    major_vals.push(v);
+                }
+            }
+
+            major_vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            for w in major_vals.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                for j in 1..nminor {
+                    let t = j as f64 / nminor as f64;
+                    minor_vals.push(a + t * (b - a));
+                }
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------ */
+    /* Normalize + filter                                           */
+    /* ------------------------------------------------------------ */
+    let major = major_vals
+        .into_iter()
+        .filter_map(|v| normalize_value(v, min, max, scale))
+        .filter(|&t| t >= 0.0 && t <= 1.0)
+        .collect::<Vec<_>>();
+
+    let minor = minor_vals
+        .into_iter()
+        .filter_map(|v| normalize_value(v, min, max, scale))
+        .filter(|&t| t > 0.0 && t < 1.0)
+        .collect::<Vec<_>>();
+
+    ColorbarTicks { major, minor }
+}
+
+
+#[inline]
+fn apply_gamma(t: f64, gamma: f64) -> f64 {
+    if gamma == 1.0 {
+        t
+    } else {
+        t.clamp(0.0, 1.0).powf(1.0 / gamma)
+    }
+}
+
