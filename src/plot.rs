@@ -2,6 +2,166 @@ use image::{GrayImage, RgbaImage, Luma, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 
+fn load_default_font() -> Font<'static> {
+    static FONT_DATA: &[u8] = include_bytes!(
+        "../assets/fonts/DejaVuSans.ttf"
+    );
+
+    Font::try_from_bytes(FONT_DATA)
+        .expect("Failed to load embedded font")
+}
+
+fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
+    match scale {
+        Scale::Linear => {
+            let mut ticks = Vec::with_capacity(nticks);
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                ticks.push(minv + i as f64 * step);
+            }
+            ticks
+        }
+        Scale::Log => {
+            // Find log10 range
+            let log_min = minv.log10();
+            let log_max = maxv.log10();
+            let mut ticks = Vec::new();
+
+            // Pick integer powers of 10 first
+            let min_pow = log_min.floor() as i32;
+            let max_pow = log_max.ceil() as i32;
+
+            for p in min_pow..=max_pow {
+                let base = 10f64.powi(p);
+                for mult in &[1.0, 2.0, 5.0] {
+                    let val = base * mult;
+                    if val >= minv && val <= maxv {
+                        ticks.push(val);
+                    }
+                }
+            }
+
+            ticks.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            ticks
+        }
+        Scale::Asinh { scale: _ } |
+        Scale::Symlog { linthresh: _ } |
+        Scale::PlanckLog { linthresh: _ } => {
+            // Fall back to linear-style ticks for now
+            let mut ticks = Vec::with_capacity(nticks);
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                ticks.push(minv + i as f64 * step);
+            }
+            ticks
+        }
+    }
+}
+
+
+
+
+pub struct ColorbarTick {
+    pub t: f64,      // normalized position [0,1]
+    pub value: f64,  // data value
+}
+
+
+fn format_tick_label(value: f64, scale: Scale) -> String {
+    match scale {
+        Scale::Linear | Scale::Asinh { .. } | Scale::Symlog { .. } => {
+            if value.abs() >= 1e4 || value.abs() < 1e-3 {
+                format!("{:.1e}", value)
+            } else {
+                format!("{:.3}", value)
+            }
+        }
+        Scale::Log | Scale::PlanckLog { .. } => {
+            // Log scales: show powers of 10 when possible
+            let exp = value.log10().round();
+            if (10f64.powf(exp) - value).abs() / value < 1e-6 {
+                format!("10^{:.0}", exp)
+            } else {
+                format!("{:.2}", value)
+            }
+        }
+    }
+}
+
+fn scale_t_to_value(
+    t: f64,
+    min: f64,
+    max: f64,
+    scale: Scale,
+) -> f64 {
+    match scale {
+        Scale::Linear => {
+            min + t * (max - min)
+        }
+
+        Scale::Log => {
+            let lmin = min.ln();
+            let lmax = max.ln();
+            (lmin + t * (lmax - lmin)).exp()
+        }
+
+        Scale::Asinh { scale } => {
+            let amin = (min / scale).asinh();
+            let amax = (max / scale).asinh();
+            scale * (amin + t * (amax - amin)).sinh()
+        }
+
+        Scale::Symlog { linthresh } => {
+            let sign = if t < 0.5 { -1.0 } else { 1.0 };
+            let tt = (t - 0.5).abs() * 2.0;
+
+            if tt * max.abs() < linthresh {
+                sign * linthresh * tt
+            } else {
+                sign * (linthresh + ((tt * max.abs()) - linthresh).exp())
+            }
+        }
+
+        Scale::PlanckLog { linthresh } => {
+            if t * max < linthresh {
+                t * linthresh
+            } else {
+                linthresh + ((t * max) - linthresh).exp()
+            }
+        }
+    }
+}
+
+
+use imageproc::drawing::draw_text_mut;
+use rusttype::{Font, Scale as FontScale};
+
+fn draw_centered_text(
+    img: &mut RgbaImage,
+    font: &Font,
+    text: &str,
+    center_x: i32,
+    top_y: i32,
+    size: f32,
+) {
+    let scale = FontScale::uniform(size);
+
+    // Estimate text width (rusttype has no layout API)
+    let width_estimate = (text.len() as f32 * size * 0.6) as i32;
+    let x = center_x - width_estimate / 2;
+
+    draw_text_mut(
+        img,
+        Rgba([0, 0, 0, 255]),
+        x,
+        top_y,
+        scale,
+        font,
+        text,
+    );
+}
+
+
 
 #[derive(Clone, Copy)]
 pub enum Scale {
@@ -183,13 +343,46 @@ pub fn plot_mollweide(
 ) {
 
     let map_height = width / 2;
-    let colorbar_height = map_height / 20;
+    let colorbar_height = if show_colorbar {
+        map_height / 20
+    }
+    else
+    {
+        0
+    };
+
+
+    let cbar_pad = if show_colorbar {
+        width / 25
+    }
+    else {
+        0
+    };
+    let label_padding = if show_colorbar {
+        map_height
+    }
+    else {
+        0
+    };
+
+    let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
+    let font = Font::try_from_bytes(font_data as &[u8])
+        .expect("Failed to load font");
+    
+    let label_font_size = (colorbar_height as f32 * 0.35).max(10.0) as f32;
+    //let label_y = (map_height + label_padding) as i32;
+    let label_y = (map_height + colorbar_height + 2) as i32; // 2 px padding
+
+
     let height = if show_colorbar {
-        map_height + colorbar_height
+        map_height + colorbar_height + label_font_size as u32 + label_padding
     }
     else {
         map_height
     };
+    let extra_label_space = if show_colorbar { label_font_size as u32 + 4 } else { 0 };
+    let height = map_height + colorbar_height + extra_label_space;
+
     let npix = map.len();
     let nside = nside_from_npix(npix)
         .expect("Input map is not a valid full-sky HEALPix map");
@@ -304,14 +497,15 @@ pub fn plot_mollweide(
         }
     }
     if show_colorbar {
-        for px in 0..width {
-            let t_linear = px as f64 / (width - 1) as f64;
-            let t_gamma  = apply_gamma(t_linear, gamma);
-            let color    = cmap.sample(t_gamma);
-            for py in map_height..height {
+        for py in map_height..(map_height + colorbar_height) {
+            for px in cbar_pad..width-cbar_pad {
+                let t_linear = px as f64 / (width - 1 - 2*cbar_pad) as f64;
+                let t_gamma  = apply_gamma(t_linear, gamma);
+                let color    = cmap.sample(t_gamma);
                 img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
             }
         }
+
 
         // ---------------- Colorbar tick marks (scale-aware) ----------------
         
@@ -325,6 +519,15 @@ pub fn plot_mollweide(
             nticks,
             nminor,
         );
+        let major_values = compute_major_tick_values(minv, maxv, scale, nticks);
+        
+        let major_positions: Vec<f64> = major_values.iter()
+            .map(|&v| scale_value(v, minv, maxv, scale, neg_mode))
+            .filter_map(|pv| {
+                if let PixelValue::Color(t) = pv { Some(t) } else { None }
+            })
+            .collect();
+
         
         // Scale tick heights relative to colorbar
         let major_tick_height = ((colorbar_height as f64) * 0.5).round().max(1.0) as u32;
@@ -334,28 +537,52 @@ pub fn plot_mollweide(
         let major_tick_width = ((width as f64) * 0.002).round().max(1.0) as u32;
         let minor_tick_width = ((width as f64) * 0.001).round().max(1.0) as u32;
         
-        let tick_bottom = height - 1;
+        let tick_bottom = map_height + colorbar_height - 1;
         
-        // ---------------- Major ticks ----------------
-        for &t in &ticks.major {
-            let px = (t * (width - 1) as f64).round() as u32;
+
+        // ---------------- Major ticks + labels ----------------
+        for (&t, &val) in major_positions.iter().zip(major_values.iter()) {
+            let px = cbar_pad + (t * (width - 1 - 2*cbar_pad) as f64).round() as u32;
             let tick_top = tick_bottom.saturating_sub(major_tick_height);
         
-            for dx in 0..major_tick_width {
-                let x = px.saturating_add(dx);
-                if x >= width {
-                    continue;
-                }
-        
-                for py in tick_top..=tick_bottom {
-                    img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+            // Draw major tick
+            for dx in -1..major_tick_width as i32 +2 {
+                let x = (px as i32 + dx) as u32;
+                if x < width {
+                    for py in tick_top-1..=tick_bottom {
+                        if (dx <= -1) | (dx >= major_tick_width as i32 +1) | (py == tick_top-1) {
+                            img.put_pixel(x, py, Rgba([255,255,255,255]));
+                        }
+                        else{
+                            img.put_pixel(x, py, Rgba([0,0,0,255]));
+                        }
+                    }
                 }
             }
-        }
         
+            // Draw label
+            let label = format_tick_label(val, scale);
+            let text_width_est = (label.len() as f32 * label_font_size * 0.6) as i32;
+            let text_x = px as i32 - text_width_est / 2;
+        
+            draw_text_mut(
+                &mut img,
+                Rgba([0, 0, 0, 255]),
+                text_x,
+                label_y,
+                FontScale::uniform(label_font_size),
+                &font,
+                &label,
+            );
+        }
+
+
+
+        /*        
         // ---------------- Minor ticks ----------------
         for &t in &ticks.minor {
             let px = (t * (width - 1) as f64).round() as u32;
+            let px = cbar_pad  + (t * (width - 1 - 2*cbar_pad) as f64).round() as u32;
             let tick_top = tick_bottom.saturating_sub(minor_tick_height);
         
             for dx in 0..minor_tick_width {
@@ -369,6 +596,38 @@ pub fn plot_mollweide(
                 }
             }
         }
+*/
+
+        // ---------------- Minor ticks ----------------
+        // Interpolate between major ticks
+        for i in 0..major_positions.len() - 1 {
+            let t0 = major_positions[i];
+            let t1 = major_positions[i + 1];
+        
+            for j in 1..nminor {
+                let frac = j as f64 / nminor as f64;
+                let tm = t0 + (t1 - t0) * frac;
+                let pxm = cbar_pad + (tm * (width - 1 - 2*cbar_pad) as f64).round() as u32;
+        
+                let tick_top = tick_bottom.saturating_sub(minor_tick_height);
+                for dx in -1..minor_tick_width as i32 + 2 {
+                    let x = (pxm as i32 + dx) as u32;
+                    if x >= width {
+                        continue;
+                    }
+        
+                    for py in tick_top-1..=tick_bottom {
+                        if (dx <= -1) | (dx >= minor_tick_width as i32 +1) | (py == tick_top-1) {
+                            img.put_pixel(x, py, Rgba([255, 255, 255, 255]));
+                        }
+                        else {
+                            img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                        }
+                    }
+                }
+            }
+        }
+
 
 
 
@@ -594,7 +853,7 @@ pub fn compute_colorbar_ticks(
         /* ------------------------------------------------------------ */
         /* PlanckLog                                                    */
         /* ------------------------------------------------------------ */
-        Scale::PlanckLog { linthresh } => {
+        Scale::PlanckLog { linthresh: _ } => {
             let anchors = [
                 min,
                 -300.0,

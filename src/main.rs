@@ -65,5 +65,5 @@ fn main() {
         neg_mode,
         bad_color_rgba,
     );
-}
 
+}
