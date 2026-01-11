@@ -2,9 +2,12 @@ pub mod plot;
 pub mod healpix;
 pub mod colormap;
 pub mod fits;
+pub mod colorbar;
+pub mod render;
+pub mod scale;
 
 // Re-export useful items
-pub use plot::{plot_mollweide, NegMode, PixelValue, scale_value};
+pub use plot::{plot_mollweide, plot_mollweide_pdf, NegMode, PixelValue, scale_value};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 
@@ -53,11 +56,11 @@ pub struct Args {
     pub cmap: String,
 
     /// Output width in pixels
-    #[arg(short, long, default_value_t = 1600)]
+    #[arg(short, long, default_value_t = 1200)]
     pub width: u32,
 
     /// Output filename
-    #[arg(short, long, default_value = "output.png")]
+    #[arg(short, long, default_value = "output.pdf")]
     pub out: String,
 
     /// Disable map border
@@ -195,7 +198,7 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
 
 
 
-use plot::Scale; // <- Scale comes from plot module
+use crate::scale::Scale; // <- Scale comes from plot module
 
 
 

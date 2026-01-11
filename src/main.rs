@@ -1,8 +1,8 @@
 use clap::Parser;
 use healpix_plotter::{
-    Args, NegMode, plot_mollweide, get_colormap, read_healpix_column,
+    Args, NegMode, plot_mollweide, plot_mollweide_pdf, get_colormap, read_healpix_column,
 };
-use healpix_plotter::plot::Scale;
+use healpix_plotter::scale::Scale;
 use healpix_plotter::{validate_scale_config, resolve_bad_color, BadColor};
 
 fn main() {
@@ -50,7 +50,25 @@ fn main() {
 
     let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Auto)), &cmap, args.transparent);
 
+    /*
     plot_mollweide(
+        &map,
+        args.width,
+        &args.out,
+        args.min,
+        args.max,
+        cmap,
+        !args.no_cbar,
+        args.transparent,
+        !args.no_border,
+        args.gamma,
+        scale,
+        neg_mode,
+        bad_color_rgba,
+    );
+    */
+
+    plot_mollweide_pdf(
         &map,
         args.width,
         &args.out,
