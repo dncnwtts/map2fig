@@ -11,6 +11,64 @@ fn load_default_font() -> Font<'static> {
         .expect("Failed to load embedded font")
 }
 
+/// Format a tick value for the colorbar
+/// - For values < 1000: integer
+/// - For values >= 1000: scientific notation with 10^n
+
+/// Map digits to Unicode superscripts
+fn to_superscript(n: i32) -> String {
+    let map = [
+        ('0', '⁰'), ('1', '¹'), ('2', '²'), ('3', '³'), ('4', '⁴'),
+        ('5', '⁵'), ('6', '⁶'), ('7', '⁷'), ('8', '⁸'), ('9', '⁹'),
+        ('-', '⁻')
+    ].iter().copied().collect::<std::collections::HashMap<_, _>>();
+
+    n.to_string()
+        .chars()
+        .map(|c| *map.get(&c).unwrap_or(&c))
+        .collect()
+}
+
+/// Format a tick label for display on colorbar
+pub fn format_tick_label(value: f64, scale: Scale) -> String {
+    if value.abs() < 1e-12 {
+        "0".to_string()
+    } else {
+        match scale {
+            Scale::Log => {
+                let exp = value.abs().log10().floor() as i32;
+                let base = 10_f64.powi(exp);
+                let coeff = (value / base).round();
+                if (coeff - 1.0).abs() < 1e-12 {
+                    format!("10{}", to_superscript(exp))
+                } else {
+                    format!("{}·10{}", coeff as i64, to_superscript(exp))
+                }
+            }
+            _ => {
+                if value.abs() < 1000.0 {
+                    if (value.fract().abs() < 1e-6) {
+                        format!("{}", value.round() as i64)
+                    } else {
+                        format!("{:.3}", value)
+                    }
+                } else {
+                    let exp = value.abs().log10().floor() as i32;
+                    let base = 10_f64.powi(exp);
+                    let coeff = (value / base).round();
+                    if (coeff - 1.0).abs() < 1e-6 {
+                        format!("10{}", to_superscript(exp))
+                    } else {
+                        format!("{}·10{}", coeff as i64, to_superscript(exp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
 fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
     match scale {
         Scale::Linear => {
@@ -67,26 +125,6 @@ pub struct ColorbarTick {
 }
 
 
-fn format_tick_label(value: f64, scale: Scale) -> String {
-    match scale {
-        Scale::Linear | Scale::Asinh { .. } | Scale::Symlog { .. } => {
-            if value.abs() >= 1e4 || value.abs() < 1e-3 {
-                format!("{:.1e}", value)
-            } else {
-                format!("{:.3}", value)
-            }
-        }
-        Scale::Log | Scale::PlanckLog { .. } => {
-            // Log scales: show powers of 10 when possible
-            let exp = value.log10().round();
-            if (10f64.powf(exp) - value).abs() / value < 1e-6 {
-                format!("10^{:.0}", exp)
-            } else {
-                format!("{:.2}", value)
-            }
-        }
-    }
-}
 
 fn scale_t_to_value(
     t: f64,
@@ -635,7 +673,7 @@ pub fn plot_mollweide(
 
 
     if draw_border {
-        let border_width_px = (width as f64 * 0.004).max(2.0);
+        let border_width_px = (width as f64 * 0.001).max(2.0);
         println!("Border width is {border_width_px}");
         draw_projection_border(
             &mut img,
@@ -715,11 +753,6 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct ColorbarTicks {
-    pub major: Vec<f64>, // normalized [0,1]
-    pub minor: Vec<f64>, // normalized [0,1]
-}
 
 
 fn normalize_value(
@@ -734,173 +767,73 @@ fn normalize_value(
     }
 }
 
+pub struct ColorbarTicks {
+    pub major: Vec<f64>,
+    pub minor: Vec<f64>,
+}
+
 pub fn compute_colorbar_ticks(
-    min: f64,
-    max: f64,
+    minv: f64,
+    maxv: f64,
     scale: Scale,
     nticks: usize,
-    nminor: usize,
+    _nminor: usize,
 ) -> ColorbarTicks {
-    let mut major_vals: Vec<f64> = Vec::new();
-    let mut minor_vals: Vec<f64> = Vec::new();
+    let mut major = Vec::new();
+    let mut minor = Vec::new();
 
     match scale {
-        /* ------------------------------------------------------------ */
-        /* Linear                                                       */
-        /* ------------------------------------------------------------ */
-        Scale::Linear => {
+        Scale::Linear | Scale::Asinh { .. } | Scale::Symlog { .. } | Scale::PlanckLog { .. } => {
+            // Linear spacing
+            let step = (maxv - minv) / (nticks - 1) as f64;
             for i in 0..nticks {
-                let t = i as f64 / (nticks - 1) as f64;
-                major_vals.push(min + t * (max - min));
+                major.push(minv + i as f64 * step);
             }
 
-            for w in major_vals.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                for j in 1..nminor {
-                    let t = j as f64 / nminor as f64;
-                    minor_vals.push(a + t * (b - a));
+            // Minor ticks
+            for i in 0..(nticks - 1) {
+                let start = major[i];
+                let end = major[i + 1];
+                for j in 1.._nminor {
+                    let t = start + (end - start) * (j as f64 / _nminor as f64);
+                    minor.push(t);
                 }
             }
         }
 
-        /* ------------------------------------------------------------ */
-        /* Log                                                          */
-        /* ------------------------------------------------------------ */
         Scale::Log => {
-            let log_min = min.log10().ceil() as i32;
-            let log_max = max.log10().floor() as i32;
+            // Find decades
+            let start_exp = minv.log10().floor() as i32;
+            let end_exp = maxv.log10().ceil() as i32;
 
-            for p in log_min..=log_max {
-                let v = 10f64.powi(p);
-                if v >= min && v <= max {
-                    major_vals.push(v);
+            for exp in start_exp..=end_exp {
+                let base = 10_f64.powi(exp);
+                // Add "1, 2, 5" multiples for major ticks
+                for &m in &[1.0, 2.0, 5.0] {
+                    let tick = m * base;
+                    if tick >= minv && tick <= maxv {
+                        major.push(tick);
+                    }
                 }
 
-                for m in 2..10 {
-                    let vm = v * m as f64;
-                    if vm > min && vm < max {
-                        minor_vals.push(vm);
+                // Minor ticks: all integers not in major
+                for i in 1..10 {
+                    let tick = i as f64 * base;
+                    if tick >= minv && tick <= maxv && !major.contains(&tick) {
+                        minor.push(tick);
                     }
                 }
             }
-        }
 
-        /* ------------------------------------------------------------ */
-        /* Asinh                                                        */
-        /* ------------------------------------------------------------ */
-        Scale::Asinh { scale } => {
-            let lin = scale;
-
-            let anchors = [
-                min,
-                -10.0 * lin,
-                -lin,
-                0.0,
-                lin,
-                10.0 * lin,
-                max,
-            ];
-
-            for &v in &anchors {
-                if v >= min && v <= max {
-                    major_vals.push(v);
-                }
-            }
-
-            major_vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            for w in major_vals.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                for j in 1..nminor {
-                    let t = j as f64 / nminor as f64;
-                    minor_vals.push(a + t * (b - a));
-                }
-            }
-        }
-
-        /* ------------------------------------------------------------ */
-        /* Symlog                                                       */
-        /* ------------------------------------------------------------ */
-        Scale::Symlog { linthresh } => {
-            let mut pos = Vec::new();
-            let mut neg = Vec::new();
-
-            let log_max = max.abs().log10().floor() as i32;
-
-            for p in 0..=log_max {
-                let v = 10f64.powi(p);
-                if v >= linthresh {
-                    pos.push(v);
-                    neg.push(-v);
-                }
-            }
-
-            major_vals.extend(neg.iter().rev());
-            major_vals.push(0.0);
-            major_vals.extend(pos.iter());
-
-            major_vals.retain(|&v| v >= min && v <= max);
-
-            for w in major_vals.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                for j in 1..nminor {
-                    let t = j as f64 / nminor as f64;
-                    minor_vals.push(a + t * (b - a));
-                }
-            }
-        }
-
-        /* ------------------------------------------------------------ */
-        /* PlanckLog                                                    */
-        /* ------------------------------------------------------------ */
-        Scale::PlanckLog { linthresh: _ } => {
-            let anchors = [
-                min,
-                -300.0,
-                -100.0,
-                -30.0,
-                0.0,
-                30.0,
-                100.0,
-                300.0,
-                max,
-            ];
-
-            for &v in &anchors {
-                if v >= min && v <= max {
-                    major_vals.push(v);
-                }
-            }
-
-            major_vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            for w in major_vals.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                for j in 1..nminor {
-                    let t = j as f64 / nminor as f64;
-                    minor_vals.push(a + t * (b - a));
-                }
-            }
+            major.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            minor.sort_by(|a, b| a.partial_cmp(b).unwrap());
         }
     }
 
-    /* ------------------------------------------------------------ */
-    /* Normalize + filter                                           */
-    /* ------------------------------------------------------------ */
-    let major = major_vals
-        .into_iter()
-        .filter_map(|v| normalize_value(v, min, max, scale))
-        .filter(|&t| t >= 0.0 && t <= 1.0)
-        .collect::<Vec<_>>();
-
-    let minor = minor_vals
-        .into_iter()
-        .filter_map(|v| normalize_value(v, min, max, scale))
-        .filter(|&t| t > 0.0 && t < 1.0)
-        .collect::<Vec<_>>();
-
     ColorbarTicks { major, minor }
 }
+
+
 
 
 #[inline]
