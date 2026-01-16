@@ -13,3 +13,6 @@ rand = "0.8"
 clap = { version = "4", features = ["derive"] }
 cairo-rs = { version = "0.19", features = ["pdf"] }
 
+
+[build]
+rustflags = ["-C", "target-cpu=native"]

@@ -5,6 +5,7 @@ pub mod fits;
 pub mod colorbar;
 pub mod render;
 pub mod scale;
+pub mod layout;
 
 // Re-export useful items
 pub use plot::{plot_mollweide, plot_mollweide_pdf, NegMode, PixelValue, scale_value};

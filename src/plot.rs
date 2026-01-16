@@ -2,11 +2,11 @@ use image::{GrayImage, RgbaImage, Luma, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 use crate::colorbar::{compute_colorbar_ticks,format_tick_label};
-use crate::render::{PdfBackend};
-use crate::render::pdf::{draw_projection_border_pdf};
+use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf_gradient,draw_colorbar_pdf_ticks,draw_colorbar_pdf_labels};
 use crate::scale::{Scale};
+use crate::layout::compute_mollweide_layout;
 
-
+/*
 fn load_default_font() -> Font<'static> {
     static FONT_DATA: &[u8] = include_bytes!(
         "../assets/fonts/DejaVuSans.ttf"
@@ -15,6 +15,7 @@ fn load_default_font() -> Font<'static> {
     Font::try_from_bytes(FONT_DATA)
         .expect("Failed to load embedded font")
 }
+*/
 
 
 
@@ -77,6 +78,7 @@ fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) 
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
 
+/*
 fn draw_centered_text(
     img: &mut RgbaImage,
     font: &Font,
@@ -101,6 +103,7 @@ fn draw_centered_text(
         text,
     );
 }
+*/
 
 
 
@@ -257,7 +260,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 
-use crate::healpix::{is_seen, ang2pix_ring, nside_from_npix};
+use crate::healpix::{is_seen, ang2pix_ring, ang2pix_nest, nside_from_npix};
 
 use cairo::{Context, PdfSurface};
 
@@ -283,6 +286,7 @@ pub fn draw_map_pdf_pixels(
     let npix = map.len();
     let nside = nside_from_npix(npix)
         .expect("Input map is not a valid full-sky HEALPix map");
+    println!("Nside is {nside}");
 
     // -----------------------------
     // Determine color scale limits
@@ -385,49 +389,19 @@ pub fn plot_mollweide_pdf(
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
 ) {
-    let map_height = width / 2;
-    let colorbar_height = if show_colorbar {
-        map_height / 20
-    }
-    else
-    {
-        0
-    };
 
-
-    let cbar_pad = if show_colorbar {
-        width / 25
-    }
-    else {
-        0
-    };
-    let label_padding = if show_colorbar {
-        map_height
-    }
-    else {
-        0
-    };
+    let layout = compute_mollweide_layout(width as f64, show_colorbar);
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8])
+    let _font = Font::try_from_bytes(font_data as &[u8])
         .expect("Failed to load font");
     
-    let label_font_size = (colorbar_height as f32 * 0.35).max(10.0) as f32;
     //let label_y = (map_height + label_padding) as i32;
-    let label_y = (map_height + colorbar_height + 2) as i32; // 2 px padding
 
 
-    let height = if show_colorbar {
-        map_height + colorbar_height + label_font_size as u32 + label_padding
-    }
-    else {
-        map_height
-    };
-    let extra_label_space = if show_colorbar { label_font_size as u32 + 4 } else { 0 };
-    let height = map_height + colorbar_height + extra_label_space;
 
     let npix = map.len();
-    let nside = nside_from_npix(npix)
+    let _nside = nside_from_npix(npix)
         .expect("Input map is not a valid full-sky HEALPix map");
 
 
@@ -465,7 +439,7 @@ pub fn plot_mollweide_pdf(
 
 
     println!("map min = {}, max = {}", minv, maxv);
-    let bg = if transparent {
+    let _bg = if transparent {
         Rgba([0, 0, 0, 0])   // fully transparent
     } else {
         Rgba([255, 255, 255, 255])
@@ -476,8 +450,8 @@ pub fn plot_mollweide_pdf(
     use cairo::{Context, ImageSurface, Format};
     
     let surface_pdf = PdfSurface::new(
-        width as f64,
-        height as f64,
+        layout.width as f64,
+        layout.height as f64,
         filename,
     ).expect("Failed to create PDF surface");
     
@@ -490,14 +464,14 @@ pub fn plot_mollweide_pdf(
         cr_pdf.set_source_rgb(1.0, 1.0, 1.0);
     }
     cr_pdf.paint().unwrap();
-    
+   
     // -----------------------------
     // 2. Create raster surface
     // -----------------------------
     let surface_img = ImageSurface::create(
         Format::ARgb32,
-        width as i32,
-        map_height as i32,   // IMPORTANT: map height, not full height
+        layout.map_w as i32,
+        layout.map_h as i32,   // IMPORTANT: map height, not full height
     ).expect("Failed to create image surface");
     
     let cr_img = Context::new(&surface_img).unwrap();
@@ -516,8 +490,8 @@ pub fn plot_mollweide_pdf(
     draw_map_pdf_pixels(
         &cr_img,
         map,
-        width,
-        map_height,
+        layout.map_w as u32,
+        layout.map_h as u32,
         minv,
         maxv,
         cmap,
@@ -533,8 +507,13 @@ pub fn plot_mollweide_pdf(
     // -----------------------------
     // 4. Embed raster into PDF
     // -----------------------------
-    cr_pdf.set_source_surface(&surface_img, 0.0, 0.0);
+    let _ = cr_pdf.set_source_surface(
+        &surface_img,
+        layout.map_x as f64,
+        layout.map_y as f64,
+    );
     cr_pdf.paint().unwrap();
+
 
 
     // Draw vector border ON TOP
@@ -542,11 +521,57 @@ pub fn plot_mollweide_pdf(
         let border_width = (width as f64 * 0.0025).max(1.0);
         draw_projection_border_pdf(
             &cr_pdf,
-            width as f64,
-            map_height as f64,
+            layout.map_x as f64,
+            layout.map_y as f64,
+            layout.map_w as f64,
+            layout.map_h as f64,
             border_width,
         );
     }
+
+    if show_colorbar {
+        let ticks = compute_colorbar_ticks(
+            minv,
+            maxv,
+            scale,
+            5,
+            5, // minor ticks already handled intelligently
+        );
+    
+        draw_colorbar_pdf_gradient(
+            &cr_pdf,
+            layout.cbar_x,
+            layout.cbar_y,
+            layout.cbar_w,
+            layout.cbar_h,
+            cmap,
+            gamma,
+        );
+    
+        draw_colorbar_pdf_ticks(
+            &cr_pdf,
+            minv,
+            maxv,
+            layout.cbar_x,
+            layout.cbar_y,
+            layout.cbar_w,
+            layout.cbar_h,
+            &ticks,
+            scale,
+        );
+    
+        draw_colorbar_pdf_labels(
+            &cr_pdf,
+            layout.cbar_x as f64,
+            layout.cbar_w as f64,
+            layout.label_y as f64,
+            &ticks,
+            minv,
+            maxv,
+            scale,
+        );
+    }
+
 
     
     // -----------------------------
@@ -597,11 +622,11 @@ fn draw_colorbar_pdf(
     cr: &Context,
     width: f64,
     height: f64,
-    minv: Option<f64>,
-    maxv: Option<f64>,
+    _minv: Option<f64>,
+    _maxv: Option<f64>,
     cmap: &Colormap,
     gamma: f64,
-    scale: Scale,
+    _scale: Scale,
 ) {
     let bar_height = height * 0.05;
     let y0 = height - bar_height;
@@ -684,7 +709,7 @@ pub fn plot_mollweide(
     let label_y = (map_height + colorbar_height + 2) as i32; // 2 px padding
 
 
-    let height = if show_colorbar {
+    let _height = if show_colorbar {
         map_height + colorbar_height + label_font_size as u32 + label_padding
     }
     else {
@@ -822,7 +847,7 @@ pub fn plot_mollweide(
         let nticks = 5;   // major ticks
         let nminor = 5;   // minor ticks per interval
         
-        let ticks = compute_colorbar_ticks(
+        let _ticks = compute_colorbar_ticks(
             minv,
             maxv,
             scale,
@@ -860,7 +885,7 @@ pub fn plot_mollweide(
                 let x = (px as i32 + dx) as u32;
                 if x < width {
                     for py in tick_top-1..=tick_bottom {
-                        if (dx <= -1) | (dx >= major_tick_width as i32 +1) | (py == tick_top-1) {
+                        if (dx <= -1) | (dx >= major_tick_width as i32) | (py == tick_top) {
                             img.put_pixel(x, py, Rgba([255,255,255,255]));
                         }
                         else{
