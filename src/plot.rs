@@ -2,7 +2,7 @@ use image::{GrayImage, RgbaImage, Luma, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 use crate::colorbar::{compute_colorbar_ticks,format_tick_label};
-use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf_gradient,draw_colorbar_pdf_ticks,draw_colorbar_pdf_labels};
+use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale};
 use crate::layout::compute_mollweide_layout;
 
@@ -530,45 +530,18 @@ pub fn plot_mollweide_pdf(
     }
 
     if show_colorbar {
-        let ticks = compute_colorbar_ticks(
-            minv,
-            maxv,
-            scale,
-            5,
-            5, // minor ticks already handled intelligently
-        );
-    
-        draw_colorbar_pdf_gradient(
+        draw_colorbar_pdf(
             &cr_pdf,
             layout.cbar_x,
             layout.cbar_y,
             layout.cbar_w,
             layout.cbar_h,
-            cmap,
+            layout.label_y,
+            &cmap,
+            minv,
+            maxv,
+            scale,
             gamma,
-        );
-    
-        draw_colorbar_pdf_ticks(
-            &cr_pdf,
-            minv,
-            maxv,
-            layout.cbar_x,
-            layout.cbar_y,
-            layout.cbar_w,
-            layout.cbar_h,
-            &ticks,
-            scale,
-        );
-    
-        draw_colorbar_pdf_labels(
-            &cr_pdf,
-            layout.cbar_x as f64,
-            layout.cbar_w as f64,
-            layout.label_y as f64,
-            &ticks,
-            minv,
-            maxv,
-            scale,
         );
     }
 
@@ -584,73 +557,6 @@ pub fn plot_mollweide_pdf(
 
 
 
-/*
-fn draw_projection_border_pdf(
-    cr: &Context,
-    map_height: u32,
-    border_width_px: f64,
-    dist_fn: impl Fn(f64, f64) -> f64,
-) {
-    let width = cr.clip_extents().2;
-
-    let xc = (width - 1.0) / 2.0;
-    let yc = (map_height as f64 - 1.0) / 2.0;
-
-    let delta = 2.0 / width;
-    let band = border_width_px * delta * 2.5;
-
-    cr.set_source_rgb(0.0, 0.0, 0.0);
-
-    for py in 0..map_height {
-        for px in 0..width as u32 {
-            let u = 2.0 * (px as f64 - xc) / xc;
-            let v = -(py as f64 - yc) / yc;
-
-            let d = dist_fn(u, v);
-            if d >= 1.0 - band && d <= 1.0 {
-                cr.rectangle(px as f64, py as f64, 1.0, 1.0);
-                cr.fill().unwrap();
-            }
-        }
-    }
-}
-*/
-
-use cairo::LinearGradient;
-
-fn draw_colorbar_pdf(
-    cr: &Context,
-    width: f64,
-    height: f64,
-    _minv: Option<f64>,
-    _maxv: Option<f64>,
-    cmap: &Colormap,
-    gamma: f64,
-    _scale: Scale,
-) {
-    let bar_height = height * 0.05;
-    let y0 = height - bar_height;
-
-    let grad = LinearGradient::new(0.0, y0, width, y0);
-
-    let n = 256;
-    for i in 0..=n {
-        let t = i as f64 / n as f64;
-        let t = apply_gamma(t, gamma);
-        let c = cmap.sample(t);
-
-        grad.add_color_stop_rgb(
-            t,
-            c[0] as f64 / 255.0,
-            c[1] as f64 / 255.0,
-            c[2] as f64 / 255.0,
-        );
-    }
-
-    cr.set_source(&grad).unwrap();
-    cr.rectangle(0.0, y0, width, bar_height);
-    cr.fill().unwrap();
-}
 
 pub trait RenderBackend {
     fn set_color(&mut self, r: u8, g: u8, b: u8, a: u8);
