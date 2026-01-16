@@ -9,6 +9,69 @@ const TWOTHIRD: f64 = 2.0 / 3.0;
 const JRLL: [i64; 12] = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
 const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 
+use std::fs::File;
+use std::io::BufReader;
+
+use fitsrs::{Fits, HDU, card::Value};
+use fitsrs::hdu::header::Header;
+
+#[derive(Debug, Clone, Copy)]
+pub enum HealpixOrdering {
+    Ring,
+    Nested,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HealpixMeta {
+    pub ordering: HealpixOrdering,
+    pub nside: i64,
+}
+
+
+
+pub fn read_healpix_meta(path: &str) -> Option<HealpixMeta> {
+    let f = File::open(path).ok()?;
+    let reader = BufReader::new(f);
+    let mut fits = Fits::from_reader(reader);
+
+    while let Some(Ok(hdu)) = fits.next() {
+        match hdu {
+            HDU::XImage(ref hdu_img) => {
+                if let Some(meta) = extract_meta(hdu_img.get_header()) {
+                    return Some(meta);
+                }
+            }
+            HDU::XBinaryTable(ref hdu_bin) => {
+                if let Some(meta) = extract_meta(hdu_bin.get_header()) {
+                    return Some(meta);
+                }
+            }
+            HDU::XASCIITable(ref hdu_ascii) => {
+                if let Some(meta) = extract_meta(hdu_ascii.get_header()) {
+                    return Some(meta);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
+    let ordering = match header.get("ORDERING") {
+        Some(Value::String { value, .. }) if value == "RING" => HealpixOrdering::Ring,
+        Some(Value::String { value, .. }) if value == "NESTED" => HealpixOrdering::Nested,
+        _ => return None,
+    };
+
+    let nside = match header.get("NSIDE") {
+        Some(Value::Integer { value, .. }) => *value as i64,
+        _ => return None,
+    };
+
+    Some(HealpixMeta { ordering, nside })
+}
 
 
 
@@ -16,6 +79,15 @@ const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 pub fn is_seen(v: f64) -> bool {
     v.is_finite() && v > HPX_UNSEEN
 }
+
+#[inline]
+pub fn ang2pix(meta: HealpixMeta, theta: f64, phi: f64) -> i64 {
+    match meta.ordering {
+        HealpixOrdering::Ring => ang2pix_ring(meta.nside, theta, phi),
+        HealpixOrdering::Nested => ang2pix_nest(meta.nside, theta, phi),
+    }
+}
+
 
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;

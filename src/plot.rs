@@ -5,6 +5,7 @@ use crate::colorbar::{compute_colorbar_ticks,format_tick_label};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale};
 use crate::layout::compute_mollweide_layout;
+use crate::healpix::HealpixMeta;
 
 /*
 fn load_default_font() -> Font<'static> {
@@ -260,7 +261,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 
-use crate::healpix::{is_seen, ang2pix_ring, ang2pix_nest, nside_from_npix};
+use crate::healpix::{is_seen, ang2pix, nside_from_npix};
 
 use cairo::{Context, PdfSurface};
 
@@ -277,6 +278,7 @@ pub fn draw_map_pdf_pixels(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    meta: HealpixMeta,
 ) {
     let map_height = height;
 
@@ -343,7 +345,7 @@ pub fn draw_map_pdf_pixels(
             }
 
             // HEALPix lookup
-            let ipix = ang2pix_ring(nside as i64, theta, lon);
+            let ipix = ang2pix(meta, theta, lon);
             let val = map[ipix as usize];
 
             let rgba = match scale_value(val, minv, maxv, scale, neg_mode) {
@@ -388,6 +390,7 @@ pub fn plot_mollweide_pdf(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    meta: HealpixMeta,
 ) {
 
     let layout = compute_mollweide_layout(width as f64, show_colorbar);
@@ -396,15 +399,6 @@ pub fn plot_mollweide_pdf(
     let _font = Font::try_from_bytes(font_data as &[u8])
         .expect("Failed to load font");
     
-    //let label_y = (map_height + label_padding) as i32;
-
-
-
-    let npix = map.len();
-    let _nside = nside_from_npix(npix)
-        .expect("Input map is not a valid full-sky HEALPix map");
-
-
     let mut values: Vec<f64> = map
         .iter()
         .filter(|&v| is_seen(*v))
@@ -499,6 +493,7 @@ pub fn plot_mollweide_pdf(
         scale,
         neg_mode,
         bad_color,
+        meta,
     );
     
     // CRITICAL
@@ -581,6 +576,7 @@ pub fn plot_mollweide(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    meta: HealpixMeta,
 ) {
 
     let map_height = width / 2;
@@ -623,10 +619,6 @@ pub fn plot_mollweide(
     };
     let extra_label_space = if show_colorbar { label_font_size as u32 + 4 } else { 0 };
     let height = map_height + colorbar_height + extra_label_space;
-
-    let npix = map.len();
-    let nside = nside_from_npix(npix)
-        .expect("Input map is not a valid full-sky HEALPix map");
 
 
     let mut values: Vec<f64> = map
@@ -687,8 +679,6 @@ pub fn plot_mollweide(
         );
     }
 
-    let _npix = map.len() as f64;
-
     for py in 0..map_height {
         for px in 0..width {
             // Mollweide plane coordinates
@@ -721,7 +711,7 @@ pub fn plot_mollweide(
             }
 
             // HEALPix lookup
-            let ipix = ang2pix_ring(nside as i64, theta, lon);
+            let ipix = ang2pix(meta, theta, lon);
             let val = map[ipix as usize];
 
             let px_color = match scale_value(val, minv, maxv, scale, neg_mode) {
@@ -937,19 +927,6 @@ where
 
 
 
-
-
-fn normalize_value(
-    value: f64,
-    min: f64,
-    max: f64,
-    scale: Scale,
-) -> Option<f64> {
-    match scale_value(value, min, max, scale, NegMode::Unseen) {
-        PixelValue::Color(t) => Some(t),
-        PixelValue::Bad => None,
-    }
-}
 
 
 

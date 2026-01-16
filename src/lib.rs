@@ -197,8 +197,6 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
 
 
 
-
-
 use crate::scale::Scale; // <- Scale comes from plot module
 
 
