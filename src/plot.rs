@@ -1,250 +1,16 @@
-use image::{GrayImage, RgbaImage, Luma, Rgba};
+use image::{RgbaImage, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
-use crate::colorbar::{compute_colorbar_ticks,format_tick_label};
+use crate::colorbar::{compute_colorbar_ticks,format_tick_label, compute_major_tick_values};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale};
+use crate::scale::{Scale, scale_value};
 use crate::layout::compute_mollweide_layout;
 use crate::healpix::HealpixMeta;
-
-/*
-fn load_default_font() -> Font<'static> {
-    static FONT_DATA: &[u8] = include_bytes!(
-        "../assets/fonts/DejaVuSans.ttf"
-    );
-
-    Font::try_from_bytes(FONT_DATA)
-        .expect("Failed to load embedded font")
-}
-*/
-
-
-
-
-fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
-    match scale {
-        Scale::Linear => {
-            let mut ticks = Vec::with_capacity(nticks);
-            let step = (maxv - minv) / (nticks - 1) as f64;
-            for i in 0..nticks {
-                ticks.push(minv + i as f64 * step);
-            }
-            ticks
-        }
-        Scale::Log => {
-            // Find log10 range
-            let log_min = minv.log10();
-            let log_max = maxv.log10();
-            let mut ticks = Vec::new();
-
-            // Pick integer powers of 10 first
-            let min_pow = log_min.floor() as i32;
-            let max_pow = log_max.ceil() as i32;
-
-            for p in min_pow..=max_pow {
-                let base = 10f64.powi(p);
-                for mult in &[1.0, 2.0, 5.0] {
-                    let val = base * mult;
-                    if val >= minv && val <= maxv {
-                        ticks.push(val);
-                    }
-                }
-            }
-
-            ticks.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            ticks
-        }
-        Scale::Asinh { scale: _ } |
-        Scale::Symlog { linthresh: _ } |
-        Scale::PlanckLog { linthresh: _ } => {
-            // Fall back to linear-style ticks for now
-            let mut ticks = Vec::with_capacity(nticks);
-            let step = (maxv - minv) / (nticks - 1) as f64;
-            for i in 0..nticks {
-                ticks.push(minv + i as f64 * step);
-            }
-            ticks
-        }
-    }
-}
-
-
-
-
-
-
-
-
-
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-
-/*
-fn draw_centered_text(
-    img: &mut RgbaImage,
-    font: &Font,
-    text: &str,
-    center_x: i32,
-    top_y: i32,
-    size: f32,
-) {
-    let scale = FontScale::uniform(size);
-
-    // Estimate text width (rusttype has no layout API)
-    let width_estimate = (text.len() as f32 * size * 0.6) as i32;
-    let x = center_x - width_estimate / 2;
-
-    draw_text_mut(
-        img,
-        Rgba([0, 0, 0, 255]),
-        x,
-        top_y,
-        scale,
-        font,
-        text,
-    );
-}
-*/
-
-
-
-
-#[derive(Clone, Copy)]
-pub enum NegMode {
-    Zero,
-    Unseen,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PixelValue {
-    Color(f64),
-    Bad,
-}
-
-
-
-pub fn scale_value(
-    value: f64,
-    min: f64,
-    max: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-) -> PixelValue {
-    if min >= max {
-        panic!("min must be < max");
-    }
-
-    let t: f64 = match scale {
-        Scale::Linear => {
-            if value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
-            } else {
-                (value - min) / (max - min)
-            }
-        }
-
-        Scale::Log => {
-            if value <= 0.0 || value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
-            } else {
-                (value.ln() - min.ln()) / (max.ln() - min.ln())
-            }
-        }
-
-        Scale::Asinh { scale } => {
-            let val = (value / scale).asinh();
-            let min_val = (min / scale).asinh();
-            let max_val = (max / scale).asinh();
-
-            if val < min_val {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if val > max_val {
-                1.0
-            } else {
-                (val - min_val) / (max_val - min_val)
-            }
-        }
-
-        Scale::Symlog { linthresh } => {
-            let abs_val = value.abs();
-            let scaled = if abs_val < linthresh {
-                0.5 + 0.5 * (value / linthresh)
-            } else {
-                0.5 + 0.5 * value.signum()
-                    * (linthresh + (abs_val - linthresh).ln())
-                    / (linthresh + (max.abs() - linthresh).ln())
-            };
-
-            if value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
-            } else {
-                scaled
-            }
-        }
-
-        Scale::PlanckLog { linthresh } => {
-            if value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
-            } else {
-                if value.abs() < linthresh {
-                    0.5 + 0.5 * (value / linthresh)
-                } else {
-                    0.5 + 0.5 * value.signum()
-                        * (linthresh + (value.abs() - linthresh).ln())
-                        / (linthresh + (max - linthresh).ln())
-                }
-            }
-        }
-    };
-
-    PixelValue::Color(t)
-}
-
-
-
-pub fn plot_mollweide_oval(width: u32, height: u32, filename: &str) {
-    let mut img = GrayImage::from_pixel(width, height, Luma([255u8])); // white background
-
-    for py in 0..height {
-        for px in 0..width {
-            // Normalize to [-1, 1]
-            let nx = 4.0 * (px as f64 / (width - 1) as f64) - 2.0;
-            let ny = 2.0 * (py as f64 / (height - 1) as f64) - 1.0;
-
-            // Simple ellipse check
-            if nx * nx / 4.0 + ny * ny <= 1.0 {
-                img.put_pixel(px, py, Luma([0u8]));
-            }
-        }
-    }
-
-    img.save(filename).expect("Failed to save PNG");
-}
-
-
+use crate::{PixelValue,NegMode};
+use crate::healpix::{is_seen, ang2pix, nside_from_npix};
+use cairo::{Context, PdfSurface};
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     assert!((0.0..=100.0).contains(&p));
@@ -259,12 +25,6 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
         sorted[i]
     }
 }
-
-
-use crate::healpix::{is_seen, ang2pix, nside_from_npix};
-
-use cairo::{Context, PdfSurface};
-
 
 pub fn draw_map_pdf_pixels(
     cr: &Context,
@@ -550,9 +310,6 @@ pub fn plot_mollweide_pdf(
 }
 
 
-
-
-
 pub trait RenderBackend {
     fn set_color(&mut self, r: u8, g: u8, b: u8, a: u8);
     fn rect(&mut self, x: f64, y: f64, w: f64, h: f64);
@@ -633,10 +390,6 @@ pub fn plot_mollweide(
     }
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    /*
-    let data_min = values.first().copied().unwrap();
-    let data_max = values.last().copied().unwrap();
-    */
 
 
 
@@ -809,25 +562,6 @@ pub fn plot_mollweide(
 
 
 
-        /*        
-        // ---------------- Minor ticks ----------------
-        for &t in &ticks.minor {
-            let px = (t * (width - 1) as f64).round() as u32;
-            let px = cbar_pad  + (t * (width - 1 - 2*cbar_pad) as f64).round() as u32;
-            let tick_top = tick_bottom.saturating_sub(minor_tick_height);
-        
-            for dx in 0..minor_tick_width {
-                let x = px.saturating_add(dx);
-                if x >= width {
-                    continue;
-                }
-        
-                for py in tick_top..=tick_bottom {
-                    img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
-                }
-            }
-        }
-*/
 
         // ---------------- Minor ticks ----------------
         // Interpolate between major ticks
@@ -858,16 +592,7 @@ pub fn plot_mollweide(
                 }
             }
         }
-
-
-
-
     }
-
-
-
-
-
 
     img.save(filename).expect("Failed to save PNG");
 }
@@ -924,11 +649,6 @@ where
         }
     }
 }
-
-
-
-
-
 
 #[inline]
 fn apply_gamma(t: f64, gamma: f64) -> f64 {

@@ -8,13 +8,26 @@ pub mod scale;
 pub mod layout;
 
 // Re-export useful items
-pub use plot::{plot_mollweide, plot_mollweide_pdf, NegMode, PixelValue, scale_value};
+pub use plot::{plot_mollweide, plot_mollweide_pdf};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 
 use clap::Parser;
 use std::str::FromStr;
 use image::Rgba;
+
+#[derive(Clone, Copy)]
+pub enum NegMode {
+    Zero,
+    Unseen,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PixelValue {
+    Color(f64),
+    Bad,
+}
+
 
 
 impl FromStr for BadColor {
