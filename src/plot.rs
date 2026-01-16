@@ -12,19 +12,68 @@ use crate::{PixelValue,NegMode};
 use crate::healpix::{is_seen, ang2pix, nside_from_npix};
 use cairo::{Context, PdfSurface};
 
-fn percentile(sorted: &[f64], p: f64) -> f64 {
-    assert!((0.0..=100.0).contains(&p));
-    let n = sorted.len();
-    let rank = p / 100.0 * (n - 1) as f64;
-    let i = rank.floor() as usize;
-    let frac = rank - i as f64;
+pub fn render_mollweide_pixels<F>(
+    map: &[f64],
+    map_width: u32,
+    map_height: u32,
+    minv: f64,
+    maxv: f64,
+    cmap: &Colormap,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+    mut draw_pixel: F,
+)
+where
+    F: FnMut(u32, u32, Rgba<u8>),
+{
+    for py in 0..map_height {
+        for px in 0..map_width {
+            // Mollweide plane coordinates
+            let x = 2.0 - 4.0 * (px as f64 / (map_width - 1) as f64);
+            let y = 1.0 - 2.0 * (py as f64 / (map_height - 1) as f64);
 
-    if i + 1 < n {
-        sorted[i] * (1.0 - frac) + sorted[i + 1] * frac
-    } else {
-        sorted[i]
+            // Outside Mollweide oval
+            if x * x / 4.0 + y * y > 1.0 {
+                continue;
+            }
+
+            // Inverse Mollweide
+            let theta_aux = y.asin();
+            let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
+            if sin_lat.abs() > 1.0 {
+                continue;
+            }
+
+            let lat = sin_lat.asin();
+            let lon = PI * x / (2.0 * theta_aux.cos());
+
+            let theta = PI / 2.0 - lat;
+            if !(0.0..=PI).contains(&theta) {
+                continue;
+            }
+
+            // HEALPix lookup
+            let ipix = ang2pix(meta, theta, lon);
+            let val = map[ipix as usize];
+
+            let rgba = match scale_value(val, minv, maxv, scale, neg_mode) {
+                PixelValue::Color(t) => {
+                    let t = apply_gamma(t, gamma);
+                    let c = cmap.sample(t);
+                    Rgba([c[0], c[1], c[2], 255])
+                }
+                PixelValue::Bad => bad_color,
+            };
+
+            draw_pixel(px, py, rgba);
+        }
     }
 }
+
+
 
 pub fn draw_map_pdf_pixels(
     cr: &Context,
@@ -74,66 +123,30 @@ pub fn draw_map_pdf_pixels(
         panic!("Invalid color scale: {minv} > {maxv}");
     }
 
-    // -----------------------------
-    // Pixel loop (CRITICAL PART)
-    // -----------------------------
-    for py in 0..map_height {
-        for px in 0..width {
-            // Mollweide plane coordinates (same as PNG)
-            let x = 2.0 - 4.0 * (px as f64 / (width - 1) as f64);
-            let y = 1.0 - 2.0 * (py as f64 / (map_height - 1) as f64);
-
-            // Outside Mollweide oval
-            if x * x / 4.0 + y * y > 1.0 {
-                continue;
-            }
-
-            // Inverse Mollweide projection
-            let theta_aux = y.asin();
-            let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
-
-            if sin_lat.abs() > 1.0 {
-                continue;
-            }
-
-            let lat = sin_lat.asin();
-            let lon = PI * x / (2.0 * theta_aux.cos());
-
-            let theta = PI / 2.0 - lat;
-            if !(0.0..=PI).contains(&theta) {
-                continue;
-            }
-
-            // HEALPix lookup
-            let ipix = ang2pix(meta, theta, lon);
-            let val = map[ipix as usize];
-
-            let rgba = match scale_value(val, minv, maxv, scale, neg_mode) {
-                PixelValue::Color(t) => {
-                    let t = apply_gamma(t, gamma);
-                    let c = cmap.sample(t);
-                    Rgba([c[0], c[1], c[2], 255])
-                }
-                PixelValue::Bad => bad_color,
-            };
-
-            // -----------------------------
-            // Draw ONE EXACT PIXEL
-            // -----------------------------
+    render_mollweide_pixels(
+        map,
+        width,
+        map_height,
+        minv,
+        maxv,
+        cmap,
+        gamma,
+        scale,
+        neg_mode,
+        bad_color,
+        meta,
+        |px, py, rgba| {
             cr.set_source_rgba(
                 rgba[0] as f64 / 255.0,
                 rgba[1] as f64 / 255.0,
                 rgba[2] as f64 / 255.0,
                 rgba[3] as f64 / 255.0,
             );
-
-            // IMPORTANT:
-            // Integer-aligned 1×1 rectangle
-            // This prevents seams / grid artifacts
             cr.rectangle(px as f64, py as f64, 1.0, 1.0);
             cr.fill().unwrap();
-        }
-    }
+        },
+    );
+
 }
 
 pub fn plot_mollweide_pdf(
@@ -432,54 +445,24 @@ pub fn plot_mollweide(
         );
     }
 
-    for py in 0..map_height {
-        for px in 0..width {
-            // Mollweide plane coordinates
-            let x = 2.0 - 4.0 * (px as f64 / (width - 1) as f64);
-            let y = 1.0 - 2.0 * (py as f64 / (map_height - 1) as f64);
+    render_mollweide_pixels(
+        map,
+        width,
+        map_height,
+        minv,
+        maxv,
+        cmap,
+        gamma,
+        scale,
+        neg_mode,
+        bad_color,
+        meta,
+        |px, py, rgba| {
+            img.put_pixel(px, py, rgba);
+        },
+    );
 
 
-            // Outside Mollweide oval
-            if x * x / 4.0 + y * y > 1.0 {
-                continue;
-            }
-
-            // Inverse Mollweide
-            let theta_aux = y.asin(); // θ
-            let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
-
-            // Numerical safety
-            if sin_lat.abs() > 1.0 {
-                continue;
-            }
-
-            let lat = sin_lat.asin();
-            let lon = PI * x / (2.0 * theta_aux.cos());
-
-            // Convert to HEALPix angles
-            let theta = PI / 2.0 - lat; // colatitude
-
-            if !(0.0..=PI).contains(&theta) {
-                continue;
-            }
-
-            // HEALPix lookup
-            let ipix = ang2pix(meta, theta, lon);
-            let val = map[ipix as usize];
-
-            let px_color = match scale_value(val, minv, maxv, scale, neg_mode) {
-                PixelValue::Color(t) => {
-                    let t = apply_gamma(t, gamma);
-                    let c = cmap.sample(t);
-                    Rgba([c[0], c[1], c[2], 255])
-                }
-                PixelValue::Bad => bad_color,
-            };
-
-            
-            img.put_pixel(px, py, px_color);
-        }
-    }
     if show_colorbar {
         for py in map_height..(map_height + colorbar_height) {
             for px in cbar_pad..width-cbar_pad {
@@ -659,3 +642,16 @@ fn apply_gamma(t: f64, gamma: f64) -> f64 {
     }
 }
 
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    assert!((0.0..=100.0).contains(&p));
+    let n = sorted.len();
+    let rank = p / 100.0 * (n - 1) as f64;
+    let i = rank.floor() as usize;
+    let frac = rank - i as f64;
+
+    if i + 1 < n {
+        sorted[i] * (1.0 - frac) + sorted[i + 1] * frac
+    } else {
+        sorted[i]
+    }
+}
