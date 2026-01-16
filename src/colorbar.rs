@@ -1,0 +1,362 @@
+use crate::render::RenderBackend;
+use crate::{Scale};
+use crate::colormap::Colormap;
+use crate::scale::scale_t_to_value;
+use crate::plot::PixelSink;
+use image::Rgba;
+
+
+pub fn draw_colorbar<B: RenderBackend>(
+    backend: &mut B,
+    spec: &ColorbarSpec,
+) {
+    let ColorbarSpec {
+        x,
+        y,
+        width,
+        height,
+        min,
+        max,
+        scale,
+        gamma,
+        cmap,
+        show_ticks,
+        label_font_size,
+    } = *spec;
+
+    // -------------------------
+    // 1. Draw gradient
+    // -------------------------
+    let nsteps = width.max(1.0) as usize;
+
+    for i in 0..nsteps {
+        let t = i as f64 / (nsteps - 1).max(1) as f64;
+
+        // gamma applies ONLY to colormap lookup
+        let t_gamma = apply_gamma(t, gamma);
+
+        let rgb = cmap.sample(t_gamma);
+
+        backend.set_color(rgb[0], rgb[1], rgb[2], 255);
+
+        backend.fill_rect(
+            x + i as f64,
+            y,
+            1.0,
+            height,
+        );
+    }
+
+    // -------------------------
+    // 2. Border
+    // -------------------------
+    backend.set_color(0, 0, 0, 255);
+
+    backend.stroke_line(x, y, x + width, y, 1.0);
+    backend.stroke_line(x, y + height, x + width, y + height, 1.0);
+    backend.stroke_line(x, y, x, y + height, 1.0);
+    backend.stroke_line(x + width, y, x + width, y + height, 1.0);
+
+    if !show_ticks {
+        return;
+    }
+
+    // -------------------------
+    // 3. Ticks
+    // -------------------------
+    let ticks = compute_colorbar_ticks(
+        min,
+        max,
+        scale,
+        5,   // major ticks
+        0,   // minor handled elsewhere
+    );
+
+    let tick_len_major = height * 0.4;
+    let tick_len_minor = height * 0.25;
+
+    let label_y = y + height + label_font_size * 1.4;
+
+    // -------------------------
+    // 4. Minor ticks
+    // -------------------------
+    backend.set_color(0, 0, 0, 255);
+
+    for &t in &ticks.minor {
+        let px = x + t * width;
+
+        backend.stroke_line(
+            px,
+            y + height,
+            px,
+            y + height + tick_len_minor,
+            1.0,
+        );
+    }
+
+    // -------------------------
+    // 5. Major ticks + labels
+    // -------------------------
+    for &t in &ticks.major {
+        let px = x + t * width;
+
+        backend.stroke_line(
+            px,
+            y + height,
+            px,
+            y + height + tick_len_major,
+            1.5,
+        );
+
+        let value = scale_t_to_value(t, min, max, scale);
+        let label = format_tick_label(value, scale);
+
+        let text_x = px - estimate_text_width(&label, label_font_size) / 2.0;
+
+        backend.draw_text(
+            text_x,
+            label_y,
+            label_font_size,
+            &label,
+        );
+    }
+}
+
+#[derive(Clone)]
+pub struct ColorbarSpec {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+
+    pub min: f64,
+    pub max: f64,
+    pub scale: Scale,
+    pub gamma: f64,
+
+    pub cmap: &'static Colormap,
+
+    pub show_ticks: bool,
+    pub label_font_size: f64,
+}
+
+
+fn estimate_text_width(text: &str, size: f64) -> f64 {
+    text.chars().count() as f64 * size * 0.6
+}
+
+pub fn apply_gamma(t: f64, gamma: f64) -> f64 {
+    if gamma == 1.0 {
+        t
+    } else {
+        t.powf(gamma)
+    }
+}
+
+pub struct ColorbarTicks {
+    pub major: Vec<f64>,
+    pub minor: Vec<f64>,
+}
+
+pub fn compute_colorbar_ticks(
+    minv: f64,
+    maxv: f64,
+    scale: Scale,
+    nticks: usize,
+    nminor: usize,
+) -> ColorbarTicks {
+    let mut major = Vec::new();
+    let mut minor = Vec::new();
+
+    match scale {
+        Scale::Linear => {
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                major.push(minv + i as f64 * step);
+            }
+        
+            if nminor > 0 {
+                for i in 0..(nticks - 1) {
+                    let start = major[i];
+                    let end = major[i + 1];
+                    for j in 1..nminor {
+                        let t = start + (end - start) * (j as f64 / nminor as f64);
+                        minor.push(t);
+                    }
+                }
+            }
+        }
+        Scale::Asinh { .. } | Scale::Symlog { .. } | Scale::PlanckLog { .. } => {
+            // Linear spacing
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                major.push(minv + i as f64 * step);
+            }
+
+            // Minor ticks
+            for i in 0..(nticks - 1) {
+                let start = major[i];
+                let end = major[i + 1];
+                for j in 1..nminor {
+                    let t = start + (end - start) * (j as f64 / nminor as f64);
+                    minor.push(t);
+                }
+            }
+        }
+
+        Scale::Log => {
+            // Find decades
+            let start_exp = minv.log10().floor() as i32;
+            let end_exp = maxv.log10().ceil() as i32;
+
+            for exp in start_exp..=end_exp {
+                let base = 10_f64.powi(exp);
+                // Add "1, 2, 5" multiples for major ticks
+                for &m in &[1.0, 2.0, 5.0] {
+                    let tick = m * base;
+                    if tick >= minv && tick <= maxv {
+                        major.push(tick);
+                    }
+                }
+
+                // Minor ticks: all integers not in major
+                for i in 1..10 {
+                    let tick = i as f64 * base;
+                    if tick >= minv && tick <= maxv && !major.contains(&tick) {
+                        minor.push(tick);
+                    }
+                }
+            }
+
+            major.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            minor.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
+    }
+
+    ColorbarTicks { major, minor }
+}
+
+
+/// Format a tick label for display on colorbar
+pub fn format_tick_label(value: f64, scale: Scale) -> String {
+    if value.abs() < 1e-12 {
+        "0".to_string()
+    } else {
+        match scale {
+            Scale::Log => {
+                let exp = value.abs().log10().floor() as i32;
+                let base = 10_f64.powi(exp);
+                let coeff = (value / base).round();
+                if (coeff - 1.0).abs() < 1e-12 {
+                    format!("10{}", to_superscript(exp))
+                } else {
+                    format!("{}·10{}", coeff as i64, to_superscript(exp))
+                }
+            }
+            _ => {
+                if value.abs() < 1000.0 {
+                    if value.fract().abs() < 1e-6 {
+                        format!("{}", value.round() as i64)
+                    } else {
+                        format!("{:.3}", value)
+                    }
+                } else {
+                    let exp = value.abs().log10().floor() as i32;
+                    let base = 10_f64.powi(exp);
+                    let coeff = (value / base).round();
+                    if (coeff - 1.0).abs() < 1e-6 {
+                        format!("10{}", to_superscript(exp))
+                    } else {
+                        format!("{}·10{}", coeff as i64, to_superscript(exp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Convert integer to Unicode superscript string
+fn to_superscript(n: i32) -> String {
+    let map = [
+        ('0', '⁰'), ('1', '¹'), ('2', '²'), ('3', '³'), ('4', '⁴'),
+        ('5', '⁵'), ('6', '⁶'), ('7', '⁷'), ('8', '⁸'), ('9', '⁹'),
+        ('-', '⁻')
+    ].iter().copied().collect::<std::collections::HashMap<_, _>>();
+
+    n.to_string().chars()
+        .map(|c| *map.get(&c).unwrap_or(&c))
+        .collect()
+}
+
+
+pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
+    match scale {
+        Scale::Linear => {
+            let mut ticks = Vec::with_capacity(nticks);
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                ticks.push(minv + i as f64 * step);
+            }
+            ticks
+        }
+        Scale::Log => {
+            // Find log10 range
+            let log_min = minv.log10();
+            let log_max = maxv.log10();
+            let mut ticks = Vec::new();
+
+            // Pick integer powers of 10 first
+            let min_pow = log_min.floor() as i32;
+            let max_pow = log_max.ceil() as i32;
+
+            for p in min_pow..=max_pow {
+                let base = 10f64.powi(p);
+                for mult in &[1.0, 2.0, 5.0] {
+                    let val = base * mult;
+                    if val >= minv && val <= maxv {
+                        ticks.push(val);
+                    }
+                }
+            }
+
+            ticks.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            ticks
+        }
+        Scale::Asinh { scale: _ } |
+        Scale::Symlog { linthresh: _ } |
+        Scale::PlanckLog { linthresh: _ } => {
+            // Fall back to linear-style ticks for now
+            let mut ticks = Vec::with_capacity(nticks);
+            let step = (maxv - minv) / (nticks - 1) as f64;
+            for i in 0..nticks {
+                ticks.push(minv + i as f64 * step);
+            }
+            ticks
+        }
+    }
+}
+
+pub fn render_colorbar_gradient(
+    x0: u32,
+    y0: u32,
+    width: u32,
+    height: u32,
+    cmap: &Colormap,
+    gamma: f64,
+    sink: &mut dyn PixelSink,
+) {
+    for py in 0..height {
+        for px in 0..width {
+            let t_linear = px as f64 / (width - 1) as f64;
+            let t = apply_gamma(t_linear, gamma);
+            let c = cmap.sample(t);
+
+            sink.draw_pixel(
+                x0 + px,
+                y0 + py,
+                Rgba([c[0], c[1], c[2], 255]),
+            );
+        }
+    }
+}
+

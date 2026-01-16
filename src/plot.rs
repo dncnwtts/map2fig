@@ -1,7 +1,7 @@
 use image::{RgbaImage, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
-use crate::colorbar::{compute_colorbar_ticks,format_tick_label, compute_major_tick_values};
+use crate::colorbar::{compute_colorbar_ticks,format_tick_label, compute_major_tick_values, render_colorbar_gradient};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale, scale_value};
 use crate::layout::compute_mollweide_layout;
@@ -12,6 +12,7 @@ use crate::{PixelValue,NegMode};
 use crate::healpix::{is_seen, ang2pix, nside_from_npix};
 use cairo::{Context, PdfSurface};
 
+/*
 pub fn render_mollweide_pixels<F>(
     map: &[f64],
     map_width: u32,
@@ -29,6 +30,21 @@ pub fn render_mollweide_pixels<F>(
 where
     F: FnMut(u32, u32, Rgba<u8>),
 {
+*/
+pub fn render_mollweide_pixels(
+    map: &[f64],
+    map_width: u32,
+    map_height: u32,
+    minv: f64,
+    maxv: f64,
+    cmap: &Colormap,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+    sink: &mut dyn PixelSink,
+) {
     for py in 0..map_height {
         for px in 0..map_width {
             // Mollweide plane coordinates
@@ -68,9 +84,13 @@ where
                 PixelValue::Bad => bad_color,
             };
 
-            draw_pixel(px, py, rgba);
+            sink.draw_pixel(px, py, rgba);
         }
     }
+}
+
+pub trait PixelSink {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>);
 }
 
 
@@ -89,6 +109,23 @@ pub fn draw_map_pdf_pixels(
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
+    struct PdfPixelSink<'a> {
+        cr: &'a Context,
+    }
+    
+    impl<'a> PixelSink for PdfPixelSink<'a> {
+        fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+            self.cr.set_source_rgba(
+                rgba[0] as f64 / 255.0,
+                rgba[1] as f64 / 255.0,
+                rgba[2] as f64 / 255.0,
+                rgba[3] as f64 / 255.0,
+            );
+            self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
+            self.cr.fill().unwrap();
+        }
+    }
+
     let map_height = height;
 
     // -----------------------------
@@ -122,7 +159,9 @@ pub fn draw_map_pdf_pixels(
     if minv > maxv {
         panic!("Invalid color scale: {minv} > {maxv}");
     }
-
+    
+    let mut sink = PdfPixelSink { cr };
+    
     render_mollweide_pixels(
         map,
         width,
@@ -135,17 +174,9 @@ pub fn draw_map_pdf_pixels(
         neg_mode,
         bad_color,
         meta,
-        |px, py, rgba| {
-            cr.set_source_rgba(
-                rgba[0] as f64 / 255.0,
-                rgba[1] as f64 / 255.0,
-                rgba[2] as f64 / 255.0,
-                rgba[3] as f64 / 255.0,
-            );
-            cr.rectangle(px as f64, py as f64, 1.0, 1.0);
-            cr.fill().unwrap();
-        },
+        &mut sink,
     );
+
 
 }
 
@@ -349,6 +380,16 @@ pub fn plot_mollweide(
     meta: HealpixMeta,
 ) {
 
+    struct PngSink<'a> {
+        img: &'a mut RgbaImage,
+    }
+    
+    impl<'a> PixelSink for PngSink<'a> {
+        fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+            self.img.put_pixel(x, y, rgba);
+        }
+    }
+
     let map_height = width / 2;
     let colorbar_height = if show_colorbar {
         map_height / 20
@@ -445,6 +486,8 @@ pub fn plot_mollweide(
         );
     }
 
+    let mut sink = PngSink { img: &mut img };
+    
     render_mollweide_pixels(
         map,
         width,
@@ -457,21 +500,23 @@ pub fn plot_mollweide(
         neg_mode,
         bad_color,
         meta,
-        |px, py, rgba| {
-            img.put_pixel(px, py, rgba);
-        },
+        &mut sink,
     );
 
 
+
     if show_colorbar {
-        for py in map_height..(map_height + colorbar_height) {
-            for px in cbar_pad..width-cbar_pad {
-                let t_linear = px as f64 / (width - 1 - 2*cbar_pad) as f64;
-                let t_gamma  = apply_gamma(t_linear, gamma);
-                let color    = cmap.sample(t_gamma);
-                img.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
-            }
-        }
+        let mut sink = PngSink { img: &mut img };
+        
+        render_colorbar_gradient(
+            cbar_pad,
+            map_height,
+            width - 2 * cbar_pad,
+            colorbar_height,
+            cmap,
+            gamma,
+            &mut sink,
+        );
 
 
         // ---------------- Colorbar tick marks (scale-aware) ----------------
