@@ -12,25 +12,6 @@ use crate::{PixelValue,NegMode};
 use crate::healpix::{is_seen, ang2pix, nside_from_npix};
 use cairo::{Context, PdfSurface};
 
-/*
-pub fn render_mollweide_pixels<F>(
-    map: &[f64],
-    map_width: u32,
-    map_height: u32,
-    minv: f64,
-    maxv: f64,
-    cmap: &Colormap,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
-    mut draw_pixel: F,
-)
-where
-    F: FnMut(u32, u32, Rgba<u8>),
-{
-*/
 pub fn render_mollweide_pixels(
     map: &[f64],
     map_width: u32,
@@ -161,6 +142,9 @@ pub fn draw_map_pdf_pixels(
     }
     
     let mut sink = PdfPixelSink { cr };
+    cr.set_antialias(cairo::Antialias::None);
+    cr.set_operator(cairo::Operator::Source);
+
     
     render_mollweide_pixels(
         map,

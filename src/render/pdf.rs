@@ -240,17 +240,23 @@ pub fn draw_colorbar_pdf(
             5,
             5, // minor ticks already handled intelligently
         );
-        let mut sink = PdfPixelSink { cr };
-        cr.set_antialias(cairo::Antialias::None);
-        cr.set_operator(cairo::Operator::Source);
+
+        let surf = ImageSurface::create(
+            Format::ARgb32,
+            cbar_w as i32,
+            cbar_h as i32,
+        ).unwrap();
+        
+        let surf_cr = cairo::Context::new(&surf).unwrap();
+        surf_cr.set_operator(cairo::Operator::Source);
+        surf_cr.set_antialias(cairo::Antialias::None);
 
 
-
-        struct PdfPixelSink<'a> {
+        struct CairoImageSink<'a> {
             cr: &'a Context,
         }
         
-        impl<'a> PixelSink for PdfPixelSink<'a> {
+        impl<'a> PixelSink for CairoImageSink<'a> {
             fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
                 self.cr.set_source_rgba(
                     rgba[0] as f64 / 255.0,
@@ -263,16 +269,21 @@ pub fn draw_colorbar_pdf(
             }
         }
 
+        let mut sink = CairoImageSink { cr: &surf_cr };
 
         render_colorbar_gradient(
-            cbar_x as u32,
-            cbar_y as u32,
+            0,
+            0,
             cbar_w as u32,
             cbar_h as u32,
             cmap,
             gamma,
             &mut sink,
         );
+
+        cr.set_source_surface(&surf, cbar_x, cbar_y);
+        cr.paint().unwrap();
+
     
         draw_colorbar_pdf_ticks(
             &cr,
