@@ -2,7 +2,7 @@ use crate::render::RenderBackend;
 use crate::{Scale};
 use crate::colormap::Colormap;
 use crate::scale::scale_t_to_value;
-use crate::plot::PixelSink;
+use crate::PixelSink;
 use image::Rgba;
 
 

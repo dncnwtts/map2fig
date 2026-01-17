@@ -8,9 +8,35 @@ use crate::layout::compute_mollweide_layout;
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-use crate::{PixelValue,NegMode};
+use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink};
 use crate::healpix::{is_seen, ang2pix, nside_from_npix};
-use cairo::{Context, PdfSurface};
+use cairo::{Context, PdfSurface, ImageSurface, Format};
+
+
+pub fn rasterize_to_surface<F>(
+    width: u32,
+    height: u32,
+    render: F,
+) -> ImageSurface
+where
+    F: FnOnce(&mut dyn PixelSink),
+{
+    let surf = ImageSurface::create(
+        Format::ARgb32,
+        width as i32,
+        height as i32,
+    ).unwrap();
+
+    let cr = Context::new(&surf).unwrap();
+    cr.set_operator(cairo::Operator::Source);
+    cr.set_antialias(cairo::Antialias::None);
+
+    let mut sink = CairoRasterSink { cr: &cr };
+    render(&mut sink);
+
+    surf
+}
+
 
 pub fn render_mollweide_pixels(
     map: &[f64],
@@ -68,10 +94,6 @@ pub fn render_mollweide_pixels(
             sink.draw_pixel(px, py, rgba);
         }
     }
-}
-
-pub trait PixelSink {
-    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>);
 }
 
 

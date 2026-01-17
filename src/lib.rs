@@ -53,6 +53,30 @@ impl FromStr for BadColor {
     }
 }
 
+use cairo::Context;
+pub struct CairoRasterSink<'a> {
+    cr: &'a Context,
+}
+
+pub trait PixelSink {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>);
+}
+
+
+impl<'a> PixelSink for CairoRasterSink<'a> {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+        self.cr.set_source_rgba(
+            rgba[0] as f64 / 255.0,
+            rgba[1] as f64 / 255.0,
+            rgba[2] as f64 / 255.0,
+            rgba[3] as f64 / 255.0,
+        );
+        self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
+        let _ = self.cr.fill();
+    }
+}
+
+
 /// Simple HEALPix Mollweide plotter
 #[derive(Parser, Debug)]
 #[command(author, version, about)]

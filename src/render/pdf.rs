@@ -5,8 +5,7 @@ use crate::scale::{value_to_t};
 use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{compute_colorbar_ticks, render_colorbar_gradient};
-use crate::plot::PixelSink;
-use image::Rgba;
+use crate::plot::rasterize_to_surface;
 
 
 pub struct PdfBackend<'a> {
@@ -252,39 +251,22 @@ pub fn draw_colorbar_pdf(
         surf_cr.set_antialias(cairo::Antialias::None);
 
 
-        struct CairoImageSink<'a> {
-            cr: &'a Context,
-        }
+
+        let surf = rasterize_to_surface(cbar_w as u32, cbar_h as u32, |sink| {
+            render_colorbar_gradient(
+                0,
+                0,
+                cbar_w as u32,
+                cbar_h as u32,
+                cmap,
+                gamma,
+                sink,
+            );
+        });
         
-        impl<'a> PixelSink for CairoImageSink<'a> {
-            fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
-                self.cr.set_source_rgba(
-                    rgba[0] as f64 / 255.0,
-                    rgba[1] as f64 / 255.0,
-                    rgba[2] as f64 / 255.0,
-                    rgba[3] as f64 / 255.0,
-                );
-                self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
-                self.cr.fill().unwrap();
-            }
-        }
-
-        let mut sink = CairoImageSink { cr: &surf_cr };
-
-        render_colorbar_gradient(
-            0,
-            0,
-            cbar_w as u32,
-            cbar_h as u32,
-            cmap,
-            gamma,
-            &mut sink,
-        );
-
-        cr.set_source_surface(&surf, cbar_x, cbar_y);
+        let _ = cr.set_source_surface(&surf, cbar_x, cbar_y);
         cr.paint().unwrap();
 
-    
         draw_colorbar_pdf_ticks(
             &cr,
             minv,
