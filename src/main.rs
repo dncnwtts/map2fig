@@ -1,11 +1,10 @@
 use clap::Parser;
 use healpix_plotter::{
-    Args, NegMode, plot_mollweide, plot_mollweide_pdf, get_colormap, read_healpix_column,
+    Args, NegMode, plot_mollweide_auto, get_colormap, read_healpix_column,
     validate_scale_config, resolve_bad_color, BadColor,
 };
 use healpix_plotter::scale::Scale;
 use healpix_plotter::healpix::read_healpix_meta;
-use std::path::Path;
 
 
 
@@ -57,59 +56,22 @@ fn main() {
 
     let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Auto)), &cmap, args.transparent);
 
-    let output_path = Path::new(&args.out);
-    
-    let ext = output_path
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-
-    match ext.as_str() {
-        "png" => {
-            plot_mollweide(
-                &map,
-                args.width,
-                &args.out,
-                args.min,
-                args.max,
-                &cmap,
-                !args.no_cbar,
-                args.transparent,
-                !args.no_border,
-                args.gamma,
-                scale,
-                neg_mode,
-                bad_color_rgba,
-                meta
-            );
-        }
-        "pdf" => {
-            plot_mollweide_pdf(
-                &map,
-                args.width,
-                &args.out,
-                args.min,
-                args.max,
-                cmap,
-                !args.no_cbar,
-                args.transparent,
-                !args.no_border,
-                args.gamma,
-                scale,
-                neg_mode,
-                bad_color_rgba,
-                meta,
-            );
-        }
-        _ => {
-            eprintln!(
-                "Unsupported output format: .{} (expected .png or .pdf)",
-                ext
-            );
-            std::process::exit(1);
-        }
-    }
+    plot_mollweide_auto(
+        &map,
+        args.width,
+        &args.out,
+        args.min,
+        args.max,
+        &cmap,
+        !args.no_cbar,
+        args.transparent,
+        !args.no_border,
+        args.gamma,
+        scale,
+        neg_mode,
+        bad_color_rgba,
+        meta,
+    );
 
 
 

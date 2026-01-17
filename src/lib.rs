@@ -8,13 +8,13 @@ pub mod scale;
 pub mod layout;
 
 // Re-export useful items
-pub use plot::{plot_mollweide, plot_mollweide_pdf};
+pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 
 use clap::Parser;
 use std::str::FromStr;
-use image::Rgba;
+use image::{Rgba, RgbaImage};
 
 #[derive(Clone, Copy)]
 pub enum NegMode {
@@ -75,6 +75,36 @@ impl<'a> PixelSink for CairoRasterSink<'a> {
         let _ = self.cr.fill();
     }
 }
+
+
+struct PngSink<'a> {
+    img: &'a mut RgbaImage,
+}
+
+impl<'a> PixelSink for PngSink<'a> {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+        self.img.put_pixel(x, y, rgba);
+    }
+}
+
+
+struct CairoImageSink<'a> {
+    cr: &'a Context,
+}
+
+impl<'a> PixelSink for CairoImageSink<'a> {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+        self.cr.set_source_rgba(
+            rgba[0] as f64 / 255.0,
+            rgba[1] as f64 / 255.0,
+            rgba[2] as f64 / 255.0,
+            rgba[3] as f64 / 255.0,
+        );
+        self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
+        self.cr.fill().unwrap();
+    }
+}
+
 
 
 /// Simple HEALPix Mollweide plotter

@@ -8,9 +8,10 @@ use crate::layout::compute_mollweide_layout;
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink};
-use crate::healpix::{is_seen, ang2pix, nside_from_npix};
+use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
+use crate::healpix::{is_seen, ang2pix};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
+use std::path::Path;
 
 
 pub fn rasterize_to_surface<F>(
@@ -96,96 +97,6 @@ pub fn render_mollweide_pixels(
     }
 }
 
-
-
-pub fn draw_map_pdf_pixels(
-    cr: &Context,
-    map: &[f64],
-    width: u32,
-    height: u32,
-    minv: f64,
-    maxv: f64,
-    cmap: &Colormap,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
-) {
-    struct PdfPixelSink<'a> {
-        cr: &'a Context,
-    }
-    
-    impl<'a> PixelSink for PdfPixelSink<'a> {
-        fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
-            self.cr.set_source_rgba(
-                rgba[0] as f64 / 255.0,
-                rgba[1] as f64 / 255.0,
-                rgba[2] as f64 / 255.0,
-                rgba[3] as f64 / 255.0,
-            );
-            self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
-            self.cr.fill().unwrap();
-        }
-    }
-
-    let map_height = height;
-
-    // -----------------------------
-    // HEALPix setup
-    // -----------------------------
-    let npix = map.len();
-    let nside = nside_from_npix(npix)
-        .expect("Input map is not a valid full-sky HEALPix map");
-    println!("Nside is {nside}");
-
-    // -----------------------------
-    // Determine color scale limits
-    // -----------------------------
-    let mut values: Vec<f64> = map
-        .iter()
-        .filter(|&v| is_seen(*v))
-        .copied()
-        .collect();
-
-    if values.is_empty() {
-        panic!("Map contains no valid HEALPix values");
-    }
-
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-
-    if gamma <= 0.0 {
-        panic!("Gamma must be > 0");
-    }
-
-    if minv > maxv {
-        panic!("Invalid color scale: {minv} > {maxv}");
-    }
-    
-    let mut sink = PdfPixelSink { cr };
-    cr.set_antialias(cairo::Antialias::None);
-    cr.set_operator(cairo::Operator::Source);
-
-    
-    render_mollweide_pixels(
-        map,
-        width,
-        map_height,
-        minv,
-        maxv,
-        cmap,
-        gamma,
-        scale,
-        neg_mode,
-        bad_color,
-        meta,
-        &mut sink,
-    );
-
-
-}
-
 pub fn plot_mollweide_pdf(
     map: &[f64],
     width: u32,
@@ -205,10 +116,6 @@ pub fn plot_mollweide_pdf(
 
     let layout = compute_mollweide_layout(width as f64, show_colorbar);
 
-    let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
-    let _font = Font::try_from_bytes(font_data as &[u8])
-        .expect("Failed to load font");
-    
     let mut values: Vec<f64> = map
         .iter()
         .filter(|&v| is_seen(*v))
@@ -243,15 +150,8 @@ pub fn plot_mollweide_pdf(
 
 
     println!("map min = {}, max = {}", minv, maxv);
-    let _bg = if transparent {
-        Rgba([0, 0, 0, 0])   // fully transparent
-    } else {
-        Rgba([255, 255, 255, 255])
-    };
-    
     
 
-    use cairo::{Context, ImageSurface, Format};
     
     let surface_pdf = PdfSurface::new(
         layout.width as f64,
@@ -261,7 +161,7 @@ pub fn plot_mollweide_pdf(
     
     let cr_pdf = Context::new(&surface_pdf).unwrap();
     
-    // Optional background
+    // Background
     if transparent {
         cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
     } else {
@@ -287,12 +187,10 @@ pub fn plot_mollweide_pdf(
         cr_img.set_source_rgb(1.0, 1.0, 1.0);
     }
     cr_img.paint().unwrap();
-    
-    // -----------------------------
-    // 3. Draw map pixels
-    // -----------------------------
-    draw_map_pdf_pixels(
-        &cr_img,
+
+/*
+    let mut sink = PdfPixelSink { cr: &cr_img };
+    render_mollweide_pixels(
         map,
         layout.map_w as u32,
         layout.map_h as u32,
@@ -304,10 +202,29 @@ pub fn plot_mollweide_pdf(
         neg_mode,
         bad_color,
         meta,
+        &mut sink,
     );
-    
+*/
+    let mut sink = CairoImageSink { cr: &cr_img };
+
+    render_mollweide_pixels(
+        map,
+        layout.map_w as u32,
+        layout.map_h as u32,
+        minv,
+        maxv,
+        cmap,
+        gamma,
+        scale,
+        neg_mode,
+        bad_color,
+        meta,
+        &mut sink,
+    );
+
     // CRITICAL
     surface_img.flush();
+
     
     // -----------------------------
     // 4. Embed raster into PDF
@@ -369,7 +286,7 @@ pub trait RenderBackend {
 }
 
 
-pub fn plot_mollweide(
+pub fn plot_mollweide_png(
     map: &[f64],
     width: u32,
     filename: &str,
@@ -386,15 +303,6 @@ pub fn plot_mollweide(
     meta: HealpixMeta,
 ) {
 
-    struct PngSink<'a> {
-        img: &'a mut RgbaImage,
-    }
-    
-    impl<'a> PixelSink for PngSink<'a> {
-        fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
-            self.img.put_pixel(x, y, rgba);
-        }
-    }
 
     let map_height = width / 2;
     let colorbar_height = if show_colorbar {
@@ -706,3 +614,74 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
         sorted[i]
     }
 }
+
+
+
+pub fn plot_mollweide_auto(
+    map: &[f64],
+    width: u32,
+    filename: &str,
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    cmap: &Colormap,
+    show_colorbar: bool,
+    transparent: bool,
+    draw_border: bool,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+) {
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    match ext.as_str() {
+        "png" => {
+            plot_mollweide_png(
+                map,
+                width,
+                filename,
+                minv,
+                maxv,
+                cmap,
+                show_colorbar,
+                transparent,
+                draw_border,
+                gamma,
+                scale,
+                neg_mode,
+                bad_color,
+                meta,
+            );
+        }
+        "pdf" => {
+            plot_mollweide_pdf(
+                map,
+                width,
+                filename,
+                minv,
+                maxv,
+                cmap,
+                show_colorbar,
+                transparent,
+                draw_border,
+                gamma,
+                scale,
+                neg_mode,
+                bad_color,
+                meta,
+            );
+        }
+        _ => {
+            panic!(
+                "Unsupported output format: .{} (expected .png or .pdf)",
+                ext
+            );
+        }
+    }
+}
+
