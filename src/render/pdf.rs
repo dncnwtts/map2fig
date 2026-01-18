@@ -6,6 +6,7 @@ use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks,compute_colorb
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
+use crate::layout::{MollweideLayout,ColorbarLayout};
 
 
 pub struct PdfBackend<'a> {
@@ -153,32 +154,27 @@ pub fn draw_colorbar_pdf_ticks(
     cr: &Context,
     minv: f64,
     maxv: f64,
-    cbar_x: f64,
-    cbar_y: f64,
-    width: f64,
-    cbar_height: f64,
+    layout: ColorbarLayout,
     ticks: &ColorbarTicks,
     scale: Scale,
 ) {
-    let y0 = cbar_y + cbar_height;
-    let major_len = cbar_height * 0.4;
-    let minor_len = cbar_height * 0.2;
+    let y0 = layout.y + layout.h;
+    let major_len = layout.major_tick_height;
+    let minor_len = layout.minor_tick_height;
 
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_line_width(1.0);
 
     // Minor ticks
     for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
-        let x = t * (width - 1.0) + cbar_x;
-        println!("{x}");
+        let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
         cr.line_to(x, y0 - minor_len);
     }
 
     // Major ticks
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
-        let x = t * width + cbar_x;
-        println!("{x}");
+        let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
         cr.line_to(x, y0 - major_len);
     }
@@ -188,9 +184,7 @@ pub fn draw_colorbar_pdf_ticks(
 
 pub fn draw_colorbar_pdf_labels(
     cr: &Context,
-    cbar_x: f64,
-    width: f64,
-    label_y: f64,
+    layout: ColorbarLayout,
     ticks: &ColorbarTicks,
     minv: f64,
     maxv: f64,
@@ -201,13 +195,13 @@ pub fn draw_colorbar_pdf_labels(
 
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let label = format_tick_label(val, scale);
-        let x = t * width + cbar_x;
+        let x = t * layout.w + layout.x;
 
         // Center text
         let ext = cr.text_extents(&label).unwrap();
         let tx = x - ext.width() / 2.0;
 
-        cr.move_to(tx, label_y);
+        cr.move_to(tx, layout.tick_label_pad);
         cr.show_text(&label).unwrap();
     }
 }
@@ -215,11 +209,7 @@ pub fn draw_colorbar_pdf_labels(
 
 pub fn draw_colorbar_pdf(
     cr: &Context,
-    cbar_x: f64,
-    cbar_y: f64,
-    cbar_w: f64,
-    cbar_h: f64,
-    label_y: f64,
+    cb_layout: ColorbarLayout,
     cmap: &Colormap,
     minv: f64,
     maxv: f64,
@@ -240,8 +230,8 @@ pub fn draw_colorbar_pdf(
 
         let surf = ImageSurface::create(
             Format::ARgb32,
-            cbar_w as i32,
-            cbar_h as i32,
+            cb_layout.w as i32,
+            cb_layout.h as i32,
         ).unwrap();
         
         let surf_cr = cairo::Context::new(&surf).unwrap();
@@ -250,38 +240,33 @@ pub fn draw_colorbar_pdf(
 
 
 
-        let surf = rasterize_to_surface(cbar_w as u32, cbar_h as u32, |sink| {
+        let surf = rasterize_to_surface(cb_layout.w as u32, cb_layout.h as u32, |sink| {
             render_colorbar_gradient(
                 0,
                 0,
-                cbar_w as u32,
-                cbar_h as u32,
+                cb_layout.w as u32,
+                cb_layout.h as u32,
                 cmap,
                 gamma,
                 sink,
             );
         });
         
-        let _ = cr.set_source_surface(&surf, cbar_x, cbar_y);
+        let _ = cr.set_source_surface(&surf, cb_layout.x, cb_layout.y);
         cr.paint().unwrap();
 
         draw_colorbar_pdf_ticks(
             &cr,
             minv,
             maxv,
-            cbar_x,
-            cbar_y,
-            cbar_w,
-            cbar_h,
+            cb_layout,
             &ticks,
             scale,
         );
     
         draw_colorbar_pdf_labels(
             &cr,
-            cbar_x,
-            cbar_w,
-            label_y,
+            cb_layout,
             &ticks,
             minv,
             maxv,

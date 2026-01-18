@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct MollweideLayout {
     pub width: f64,
     pub height: f64,
@@ -13,12 +13,12 @@ pub struct MollweideLayout {
     pub cbar_w: f64,
     pub cbar_h: f64,
 
-    pub label_y: f64,
     pub cbar_pad: f64,
     pub border_width_px: f64,
 }
 
 
+#[derive(Debug, Clone, Copy)]
 pub struct ColorbarLayout {
     pub x: f64,
     pub y: f64,
@@ -28,6 +28,11 @@ pub struct ColorbarLayout {
     pub tick_bottom: f64,
     pub major_tick_height: f64,
     pub minor_tick_height: f64,
+    pub major_tick_width: f64,
+    pub minor_tick_width: f64,
+
+    pub tick_font_size: f64,
+    pub tick_label_pad: f64,
 }
 
 
@@ -73,25 +78,28 @@ pub fn compute_mollweide_layout(
         cbar_w: width - 2.0 * outer_pad,
         cbar_h,
 
-        label_y: cbar_y + cbar_h + label_pad,
-        
         cbar_pad,
         border_width_px:  (width as f64 * 0.01).max(2.0),
     },
-    compute_cbar_layout(width)
+    compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad)
     )
 }
 
 
-fn compute_cbar_layout(width: f64) -> ColorbarLayout {
+fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pad:f64) -> ColorbarLayout {
     ColorbarLayout {
-        x: width,
-        y: width,
-        w: width,
-        h: width,
+        x: cbar_x,
+        y: cbar_y,
+        w: cbar_w,
+        h: cbar_h,
 
-        tick_bottom: width,
-        major_tick_height: width,
-        minor_tick_height: width,
+        tick_bottom: cbar_y + cbar_h,
+        major_tick_height: (cbar_h * 0.5).round().max(1.0),
+        minor_tick_height: (cbar_h * 0.3).round().max(1.0),
+        major_tick_width: (cbar_w * 0.002).round().max(1.0),
+        minor_tick_width: (cbar_w * 0.001).round().max(1.0),
+
+        tick_font_size: (cbar_h * 0.3).max(10.0),
+        tick_label_pad: cbar_h + cbar_y + label_pad,
     }
 }

@@ -291,11 +291,7 @@ pub fn plot_mollweide_pdf(
     if show_colorbar {
         draw_colorbar_pdf(
             &cr_pdf,
-            layout.cbar_x as f64,
-            layout.cbar_y as f64,
-            layout.cbar_w as f64,
-            layout.cbar_h as f64,
-            layout.label_y as f64,
+            cb_layout,
             &cmap,
             scale_params.minv,
             scale_params.maxv,
@@ -347,7 +343,6 @@ pub fn plot_mollweide_png(
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
     let font = Font::try_from_bytes(font_data as &[u8])
         .expect("Failed to load font");
-    let label_font_size = (layout.cbar_h * 0.35).max(10.0) as f32;
 
 
     let mut values: Vec<f64> = map
@@ -422,14 +417,14 @@ pub fn plot_mollweide_png(
         );
 
         // Scale tick heights relative to colorbar
-        let major_tick_height = (layout.cbar_h * 0.5).round().max(1.0) as u32;
-        let minor_tick_height = (layout.cbar_h * 0.3).round().max(1.0) as u32;
+        let major_tick_height = cb_layout.major_tick_height as u32;
+        let minor_tick_height = cb_layout.minor_tick_height as u32;
         
         // Scale tick widths relative to image width
-        let major_tick_width = (layout.width * 0.002).round().max(1.0) as u32;
-        let minor_tick_width = (layout.width * 0.001).round().max(1.0) as u32;
+        let major_tick_width = cb_layout.major_tick_width as u32;
+        let minor_tick_width = cb_layout.minor_tick_width as u32;
         
-        let tick_bottom = (layout.cbar_y + layout.cbar_h) as u32 - 1;
+        let tick_bottom = cb_layout.tick_bottom as u32;
 
 
         // ---------------- Major ticks + labels ----------------
@@ -438,7 +433,7 @@ pub fn plot_mollweide_png(
             let px = (layout.cbar_pad + (t * layout.cbar_w).round()) as u32;
             for dx in 0..major_tick_width as i32 {
                 let x = (px as i32 + dx) as u32;
-                if x < width {
+                if x < layout.width as u32 {
                     for py in tick_top-1..=tick_bottom {
                         img.put_pixel(x, py, Rgba([0,0,0,255]));
                     }
@@ -447,7 +442,8 @@ pub fn plot_mollweide_png(
         
             // Draw label
             let label = format_tick_label(val, scale);
-            let text_width_est = (label.len() as f32 * label_font_size * 0.6) as i32;
+            let text_width_est = (label.len() as f32 * 
+                cb_layout.tick_font_size as f32 * 0.6) as i32;
             let text_x = px as i32 - text_width_est / 2;
         
             draw_text_mut(
@@ -456,8 +452,8 @@ pub fn plot_mollweide_png(
                 text_x,
                 // The two label calculations make a significant difference here.
                 // Different units maybe?
-                layout.label_y as i32,
-                FontScale::uniform(label_font_size),
+                cb_layout.tick_label_pad as i32,
+                FontScale::uniform(cb_layout.tick_font_size as f32),
                 &font,
                 &label,
             );
@@ -470,7 +466,6 @@ pub fn plot_mollweide_png(
         // ---------------- Minor ticks ----------------
         let tick_top = tick_bottom.saturating_sub(minor_tick_height);
         for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
-            // let px = (layout.cbar_pad + (t * (layout.cbar_w - 1.0 - 2.0*layout.cbar_pad) as f64).round()) as u32;
             let px = (layout.cbar_pad + (t * layout.cbar_w).round()) as u32;
         
             for dx in 0..minor_tick_width as i32 {
