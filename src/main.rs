@@ -45,7 +45,12 @@ fn main() {
 
     let meta = read_healpix_meta(&args.fits)
         .expect("Could not determine HEALPix ordering / NSIDE");
-    let map = read_healpix_column(&args.fits, args.col);
+
+    let mut map = read_healpix_column(&args.fits, args.col);
+    for v in &mut map {
+        *v *= args.scale;
+    }
+
 
     let neg_mode = match args.neg_mode.as_str() {
         "zero" => NegMode::Zero,

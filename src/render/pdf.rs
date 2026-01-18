@@ -1,12 +1,11 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
-use crate::{Colormap, Scale, PixelValue, NegMode};
-use crate::scale::{value_to_t,scale_value};
+use crate::{Colormap, Scale, NegMode};
 use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks,compute_colorbar_tick_positions};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
-use crate::layout::{MollweideLayout,ColorbarLayout};
+use crate::layout::{ColorbarLayout};
 
 
 pub struct PdfBackend<'a> {
@@ -152,8 +151,6 @@ pub fn draw_colorbar_pdf_gradient(
 
 pub fn draw_colorbar_pdf_ticks(
     cr: &Context,
-    minv: f64,
-    maxv: f64,
     layout: ColorbarLayout,
     ticks: &ColorbarTicks,
     scale: Scale,
@@ -166,14 +163,14 @@ pub fn draw_colorbar_pdf_ticks(
     cr.set_line_width(1.0);
 
     // Minor ticks
-    for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
+    for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
         cr.line_to(x, y0 - minor_len);
     }
 
     // Major ticks
-    for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
+    for (&t, &_val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
         cr.line_to(x, y0 - major_len);
@@ -186,8 +183,6 @@ pub fn draw_colorbar_pdf_labels(
     cr: &Context,
     layout: ColorbarLayout,
     ticks: &ColorbarTicks,
-    minv: f64,
-    maxv: f64,
     scale: Scale,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
@@ -257,8 +252,6 @@ pub fn draw_colorbar_pdf(
 
         draw_colorbar_pdf_ticks(
             &cr,
-            minv,
-            maxv,
             cb_layout,
             &ticks,
             scale,
@@ -268,8 +261,6 @@ pub fn draw_colorbar_pdf(
             &cr,
             cb_layout,
             &ticks,
-            minv,
-            maxv,
             scale,
         );
 

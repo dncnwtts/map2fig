@@ -1,128 +1,9 @@
-use crate::render::RenderBackend;
 use crate::{Scale,NegMode};
 use crate::colormap::Colormap;
-use crate::scale::{scale_t_to_value,scale_value};
+use crate::scale::{scale_value};
 use crate::{PixelSink,PixelValue};
 use image::Rgba;
 
-
-pub fn draw_colorbar<B: RenderBackend>(
-    backend: &mut B,
-    spec: &ColorbarSpec,
-) {
-    let ColorbarSpec {
-        x,
-        y,
-        width,
-        height,
-        min,
-        max,
-        scale,
-        gamma,
-        cmap,
-        show_ticks,
-        label_font_size,
-    } = *spec;
-
-    // -------------------------
-    // 1. Draw gradient
-    // -------------------------
-    let nsteps = width.max(1.0) as usize;
-
-    for i in 0..nsteps {
-        let t = i as f64 / (nsteps - 1).max(1) as f64;
-
-        // gamma applies ONLY to colormap lookup
-        let t_gamma = apply_gamma(t, gamma);
-
-        let rgb = cmap.sample(t_gamma);
-
-        backend.set_color(rgb[0], rgb[1], rgb[2], 255);
-
-        backend.fill_rect(
-            x + i as f64,
-            y,
-            1.0,
-            height,
-        );
-    }
-
-    // -------------------------
-    // 2. Border
-    // -------------------------
-    backend.set_color(0, 0, 0, 255);
-
-    backend.stroke_line(x, y, x + width, y, 1.0);
-    backend.stroke_line(x, y + height, x + width, y + height, 1.0);
-    backend.stroke_line(x, y, x, y + height, 1.0);
-    backend.stroke_line(x + width, y, x + width, y + height, 1.0);
-
-    if !show_ticks {
-        return;
-    }
-
-    // -------------------------
-    // 3. Ticks
-    // -------------------------
-    /*
-    let ticks = compute_colorbar_ticks(
-        min,
-        max,
-        scale,
-        5,   // major ticks
-        0,   // minor handled elsewhere
-    );
-
-    let tick_len_major = height * 0.4;
-    let tick_len_minor = height * 0.25;
-
-    let label_y = y + height + label_font_size * 1.4;
-
-    // -------------------------
-    // 4. Minor ticks
-    // -------------------------
-    backend.set_color(0, 0, 0, 255);
-
-    for &t in &ticks.minor {
-        let px = x + t * width;
-
-        backend.stroke_line(
-            px,
-            y + height,
-            px,
-            y + height + tick_len_minor,
-            1.0,
-        );
-    }
-
-    // -------------------------
-    // 5. Major ticks + labels
-    // -------------------------
-    for &t in &ticks.major {
-        let px = x + t * width;
-
-        backend.stroke_line(
-            px,
-            y + height,
-            px,
-            y + height + tick_len_major,
-            1.5,
-        );
-
-        let value = scale_t_to_value(t, min, max, scale);
-        let label = format_tick_label(value, scale);
-
-        let text_x = px - estimate_text_width(&label, label_font_size) / 2.0;
-
-        backend.draw_text(
-            text_x,
-            label_y,
-            label_font_size,
-            &label,
-        );
-    }
-    */
-}
 
 #[derive(Clone)]
 pub struct ColorbarSpec {
@@ -143,9 +24,6 @@ pub struct ColorbarSpec {
 }
 
 
-fn estimate_text_width(text: &str, size: f64) -> f64 {
-    text.chars().count() as f64 * size * 0.6
-}
 
 pub fn apply_gamma(t: f64, gamma: f64) -> f64 {
     if gamma == 1.0 {
@@ -264,7 +142,6 @@ fn log_minor_ticks(major: &[f64]) -> Vec<f64> {
         }
 
         let log_a = a.log10();
-        let log_b = b.log10();
 
         let base = 10f64.powf(log_a.floor());
 

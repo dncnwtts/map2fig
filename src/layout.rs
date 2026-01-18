@@ -2,6 +2,7 @@
     pub width: f64,
     pub height: f64,
 
+    pub map_pad: f64,
     pub map_x: f64,
     pub map_y: f64,
     pub map_w: f64,
@@ -40,9 +41,11 @@ pub fn compute_mollweide_layout(
     show_colorbar: bool,
 ) -> (MollweideLayout, ColorbarLayout) {
     let outer_pad = 24.0;      // margin around everything
-    let map_pad   = 8.0;       // breathing room for border AA
     let cbar_pad  = 16.0;      // space between map and colorbar
     let label_pad = 14.0;      // space for text descenders
+
+    let border_width_px = (width as f64 * 0.005).max(2.0);
+    let map_pad = border_width_px.ceil() + 2.0;
 
     let map_w = width - 2.0 * outer_pad;
     let map_h = map_w / 2.0;
@@ -67,6 +70,7 @@ pub fn compute_mollweide_layout(
         width,
         height,
 
+        map_pad,
         map_x,
         map_y,
         map_w: width - 2.0 * outer_pad,
@@ -78,7 +82,7 @@ pub fn compute_mollweide_layout(
         cbar_h,
 
         cbar_pad,
-        border_width_px:  (width as f64 * 0.01).max(2.0),
+        border_width_px,
     },
     compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad)
     )

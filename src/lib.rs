@@ -187,6 +187,11 @@ pub struct Args {
 
     #[arg(long)]
     pub planck_log: bool,
+
+
+    /// Factor that multiplies the data itself for unit conversions.
+    #[arg(long, default_value_t = 1.0)]
+    pub scale: f64,
 }
 
 

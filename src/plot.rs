@@ -1,10 +1,10 @@
 use image::{RgbaImage, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
-use crate::colorbar::{format_tick_label, compute_major_tick_values, render_colorbar_gradient, compute_colorbar_tick_positions};
+use crate::colorbar::{format_tick_label, render_colorbar_gradient, compute_colorbar_tick_positions,apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale, scale_value};
-use crate::layout::compute_mollweide_layout;
+use crate::layout::{compute_mollweide_layout,MollweideLayout};
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
@@ -60,8 +60,7 @@ pub fn compute_mollweide_scale(
 
 pub fn render_mollweide_to_sink<S: PixelSink>(
     map: &[f64],
-    map_w: u32,
-    map_h: u32,
+    layout: MollweideLayout,
     scale_params: &MollweideScale,
     cmap: &Colormap,
     gamma: f64,
@@ -73,8 +72,7 @@ pub fn render_mollweide_to_sink<S: PixelSink>(
 ) {
     render_mollweide_pixels(
         map,
-        map_w,
-        map_h,
+        layout,
         scale_params.minv,
         scale_params.maxv,
         cmap,
@@ -116,8 +114,7 @@ where
 
 pub fn render_mollweide_pixels(
     map: &[f64],
-    map_width: u32,
-    map_height: u32,
+    layout: MollweideLayout,
     minv: f64,
     maxv: f64,
     cmap: &Colormap,
@@ -128,11 +125,11 @@ pub fn render_mollweide_pixels(
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
 ) {
-    for py in 0..map_height {
-        for px in 0..map_width {
+    for py in 0..layout.map_h as u32 {
+        for px in 0..layout.map_w as u32 {
             // Mollweide plane coordinates
-            let x = 2.0 - 4.0 * (px as f64 / (map_width - 1) as f64);
-            let y = 1.0 - 2.0 * (py as f64 / (map_height - 1) as f64);
+            let x = 2.0 - 4.0 * (px as f64 / (layout.map_w - 1.0));
+            let y = 1.0 - 2.0 * (py as f64 / (layout.map_h - 1.0));
 
             // Outside Mollweide oval
             if x * x / 4.0 + y * y > 1.0 {
@@ -167,7 +164,7 @@ pub fn render_mollweide_pixels(
                 PixelValue::Bad => bad_color,
             };
 
-            sink.draw_pixel(px, py, rgba);
+            sink.draw_pixel(px + layout.map_pad as u32, py + layout.map_pad as u32, rgba);
         }
     }
 }
@@ -226,8 +223,8 @@ pub fn plot_mollweide_pdf(
     // -----------------------------
     let surface_img = ImageSurface::create(
         Format::ARgb32,
-        layout.map_w as i32,
-        layout.map_h as i32,   // IMPORTANT: map height, not full height
+        (layout.map_w + 2.0*layout.map_pad) as i32,
+        (layout.map_h + 2.0*layout.map_pad) as i32,
     ).expect("Failed to create image surface");
     
     let cr_img = Context::new(&surface_img).unwrap();
@@ -246,8 +243,7 @@ pub fn plot_mollweide_pdf(
     
     render_mollweide_to_sink(
         map,
-        layout.map_w as u32,
-        layout.map_h as u32,
+        layout,
         &scale_params,
         cmap,
         gamma,
@@ -268,8 +264,8 @@ pub fn plot_mollweide_pdf(
     // -----------------------------
     let _ = cr_pdf.set_source_surface(
         &surface_img,
-        layout.map_x as f64,
-        layout.map_y as f64,
+        layout.map_x - layout.map_pad,
+        layout.map_y - layout.map_pad,
     );
     cr_pdf.paint().unwrap();
 
@@ -280,11 +276,11 @@ pub fn plot_mollweide_pdf(
         let border_width = (width as f64 * 0.0025).max(1.0);
         draw_projection_border_pdf(
             &cr_pdf,
-            layout.map_x as f64,
-            layout.map_y as f64,
-            layout.map_w as f64,
-            layout.map_h as f64,
-            border_width,
+            layout.map_x,
+            layout.map_y,
+            layout.map_w,
+            layout.map_h,
+            layout.border_width_px,
         );
     }
 
@@ -400,7 +396,7 @@ pub fn plot_mollweide_png(
         border_surf.flush();
     
         let stride = border_surf.stride() as usize;
-        let mut data = border_surf.data().unwrap();
+        let data = border_surf.data().unwrap();
    
         for y in 0..surf_h as usize {
             for x in 0..surf_w as usize {
@@ -426,14 +422,13 @@ pub fn plot_mollweide_png(
    
     let mut sink = PngSink { 
         img: &mut img, 
-        x0: layout.map_x as u32,
-        y0: layout.map_y as u32,
+        x0: (layout.map_x - layout.map_pad) as u32,
+        y0: (layout.map_y - layout.map_pad) as u32,
     };
     
     render_mollweide_to_sink(
         map,
-        layout.map_w as u32,
-        layout.map_h as u32,
+        layout,
         &scale_params,
         cmap,
         gamma,
@@ -519,7 +514,7 @@ pub fn plot_mollweide_png(
  
         // ---------------- Minor ticks ----------------
         let tick_top = tick_bottom.saturating_sub(minor_tick_height);
-        for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
+        for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
             let px = (layout.cbar_pad + (t * layout.cbar_w).round()) as u32;
         
             for dx in 0..minor_tick_width as i32 {
@@ -538,67 +533,6 @@ pub fn plot_mollweide_png(
     img.save(filename).expect("Failed to save PNG");
 }
 
-
-pub fn draw_projection_border<F>(
-    img: &mut RgbaImage,
-    map_height: u32,
-    border_color: Rgba<u8>,
-    line_width_px: f64,
-    dist_fn: F,
-)
-where
-    F: Fn(f64, f64) -> f64,
-{
-    let nx = img.width() as f64;
-    let ny = map_height as f64;
-
-    let xc = (nx - 1.0) / 2.0;
-    let yc = (ny - 1.0) / 2.0;
-
-    // Normalized pixel size in "projection space"
-    let delta = 2.0 / nx;
-
-    // Convert pixel width → normalized distance
-    let half_width = 0.5 * line_width_px * delta;
-
-    for py in 0..map_height {
-        for px in 0..img.width() {
-            // Normalized coordinates (same as your existing code)
-            let u = 2.0 * (px as f64 - xc) / xc;
-            let v = -(py as f64 - yc) / yc;
-
-            let d = dist_fn(u, v);
-
-            // Signed distance from the ideal boundary (d = 1)
-            let dist = (d - 1.0).abs();
-
-            if dist <= half_width {
-                // Linear coverage (anti-alias)
-                let mut alpha = 1.0 - dist / half_width;
-
-                // Optional perceptual tweak (comment out if unwanted)
-                alpha = alpha.powf(0.8);
-
-                let a = (alpha * 255.0).round() as u8;
-
-                if a > 0 {
-                    let mut c = border_color;
-                    c[3] = a;
-                    img.put_pixel(px, py, c);
-                }
-            }
-        }
-    }
-}
-
-#[inline]
-fn apply_gamma(t: f64, gamma: f64) -> f64 {
-    if gamma == 1.0 {
-        t
-    } else {
-        t.clamp(0.0, 1.0).powf(1.0 / gamma)
-    }
-}
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     assert!((0.0..=100.0).contains(&p));
