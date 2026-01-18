@@ -73,11 +73,10 @@ impl<'a> RenderBackend for PdfBackend<'a> {
 
 pub fn draw_projection_border_pdf(
     cr: &Context,
-    layout: MollweideLayout,
-    //map_x: f64,
-    //map_y: f64,
-    //map_width: f64,
-    //map_height: f64,
+    map_x: f64,
+    map_y: f64,
+    map_width: f64,
+    map_height: f64,
     line_width_px: f64,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
@@ -89,8 +88,8 @@ pub fn draw_projection_border_pdf(
     // Mollweide coordinates:
     // x ∈ [-2, 2]
     // y ∈ [-1, 1]
-    let to_px = |x: f64| laoyt.map_x + (x + 2.0) * 0.25 * layout.map_w;
-    let to_py = |y: f64| laoyt.map_y + (1.0 - y) * 0.5 * layout.map_h;
+    let to_px = |x: f64| map_x + (x + 2.0) * 0.25 * map_width;
+    let to_py = |y: f64| map_y + (1.0 - y) * 0.5 * map_height;
 
     for i in 0..=n {
         let t = 2.0 * PI * (i as f64 / n as f64);

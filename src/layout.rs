@@ -1,5 +1,4 @@
-#[derive(Debug, Clone, Copy)]
-pub struct MollweideLayout {
+#[derive(Debug, Clone, Copy)] pub struct MollweideLayout {
     pub width: f64,
     pub height: f64,
 

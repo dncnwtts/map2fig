@@ -367,18 +367,68 @@ pub fn plot_mollweide_png(
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
     if draw_border {
-        draw_projection_border(
-            &mut img,
-            layout.map_h as u32,
-            Rgba([0, 0, 0, 255]),
-            layout.border_width_px,
-            |u, v| (u * u) / 4.0 + v * v,
-        );
+        use cairo::{ImageSurface, Context, Format};
+
+        // Creating a padded surface
+        let pad = layout.border_width_px.ceil() as i32; 
+        let surf_w = layout.map_w as i32 + 2 * pad;
+        let surf_h = layout.map_h as i32 + 2 * pad;
+    
+        let mut border_surf = ImageSurface::create(
+            Format::ARgb32,
+            surf_w,
+            surf_h,
+        ).unwrap();
+    
+        {
+            let border_cr = Context::new(&border_surf).unwrap();
+    
+            border_cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+            border_cr.paint().unwrap();
+    
+            draw_projection_border_pdf(
+                &border_cr,
+                pad as f64,
+                pad as f64,
+                layout.map_w,
+                layout.map_h,
+                layout.border_width_px,
+            );
+            // border_cr dropped here
+        }
+    
+        border_surf.flush();
+    
+        let stride = border_surf.stride() as usize;
+        let mut data = border_surf.data().unwrap();
+   
+        for y in 0..surf_h as usize {
+            for x in 0..surf_w as usize {
+                let idx = y * stride + x * 4;
+                let a = data[idx + 3];
+                if a == 0 { continue; }
+    
+                let r = data[idx + 2];
+                let g = data[idx + 1];
+                let b = data[idx + 0];
+    
+                img.put_pixel(
+                    layout.map_x as u32 + x as u32 - pad as u32,
+                    layout.map_y as u32 + y as u32 - pad as u32,
+                    Rgba([r, g, b, a]),
+                );
+            }
+        }
     }
 
+
     let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
-    
-    let mut sink = PngSink { img: &mut img };
+   
+    let mut sink = PngSink { 
+        img: &mut img, 
+        x0: layout.map_x as u32,
+        y0: layout.map_y as u32,
+    };
     
     render_mollweide_to_sink(
         map,
@@ -395,11 +445,15 @@ pub fn plot_mollweide_png(
     );
 
     if show_colorbar {
-        let mut sink = PngSink { img: &mut img };
+        let mut sink = PngSink { 
+            img: &mut img,
+            x0: layout.cbar_pad as u32,
+            y0: layout.cbar_y as u32,
+        };
         
         render_colorbar_gradient(
-            layout.cbar_pad as u32,
-            layout.cbar_y as u32,
+            0,
+            0,
             layout.cbar_w as u32,
             layout.cbar_h as u32,
             cmap,

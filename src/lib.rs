@@ -76,14 +76,20 @@ impl<'a> PixelSink for CairoRasterSink<'a> {
     }
 }
 
-
-struct PngSink<'a> {
-    img: &'a mut RgbaImage,
+pub struct PngSink<'a> {
+    pub img: &'a mut RgbaImage,
+    pub x0: u32,
+    pub y0: u32,
 }
 
 impl<'a> PixelSink for PngSink<'a> {
-    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
-        self.img.put_pixel(x, y, rgba);
+    fn draw_pixel(&mut self, x: u32, y: u32, color: Rgba<u8>) {
+        let ix = self.x0 + x;
+        let iy = self.y0 + y;
+
+        if ix < self.img.width() && iy < self.img.height() {
+            self.img.put_pixel(ix, iy, color);
+        }
     }
 }
 
