@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub struct FigureLayout {
+pub struct MollweideLayout {
     pub width: f64,
     pub height: f64,
 
@@ -14,12 +14,27 @@ pub struct FigureLayout {
     pub cbar_h: f64,
 
     pub label_y: f64,
+    pub cbar_pad: f64,
+    pub border_width_px: f64,
 }
+
+
+pub struct ColorbarLayout {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+
+    pub tick_bottom: f64,
+    pub major_tick_height: f64,
+    pub minor_tick_height: f64,
+}
+
 
 pub fn compute_mollweide_layout(
     width: f64,
     show_colorbar: bool,
-) -> FigureLayout {
+) -> (MollweideLayout, ColorbarLayout) {
     let outer_pad = 24.0;      // margin around everything
     let map_pad   = 8.0;       // breathing room for border AA
     let cbar_pad  = 16.0;      // space between map and colorbar
@@ -44,7 +59,7 @@ pub fn compute_mollweide_layout(
 
     let cbar_y = map_y + map_h + map_pad + cbar_pad;
 
-    FigureLayout {
+    (MollweideLayout {
         width,
         height,
 
@@ -59,6 +74,24 @@ pub fn compute_mollweide_layout(
         cbar_h,
 
         label_y: cbar_y + cbar_h + label_pad,
-    }
+        
+        cbar_pad,
+        border_width_px:  (width as f64 * 0.01).max(2.0),
+    },
+    compute_cbar_layout(width)
+    )
 }
 
+
+fn compute_cbar_layout(width: f64) -> ColorbarLayout {
+    ColorbarLayout {
+        x: width,
+        y: width,
+        w: width,
+        h: width,
+
+        tick_bottom: width,
+        major_tick_height: width,
+        minor_tick_height: width,
+    }
+}

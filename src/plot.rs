@@ -1,7 +1,7 @@
 use image::{RgbaImage, Rgba};
 use std::f64::consts::PI;
 use crate::colormap::{Colormap};
-use crate::colorbar::{compute_colorbar_ticks,format_tick_label, compute_major_tick_values, render_colorbar_gradient};
+use crate::colorbar::{format_tick_label, compute_major_tick_values, render_colorbar_gradient, compute_colorbar_tick_positions};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale, scale_value};
 use crate::layout::compute_mollweide_layout;
@@ -12,6 +12,81 @@ use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink}
 use crate::healpix::{is_seen, ang2pix};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
+
+pub struct MollweideScale {
+    pub minv: f64,
+    pub maxv: f64,
+}
+
+pub fn compute_mollweide_scale(
+    map: &[f64],
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    scale: Scale,
+    gamma: f64,
+) -> MollweideScale {
+    let mut values: Vec<f64> = map
+        .iter()
+        .filter(|v| is_seen(**v))
+        .copied()
+        .collect();
+
+    if values.is_empty() {
+        panic!("Map contains no valid HEALPix values");
+    }
+
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let (minv, maxv) = match (minv, maxv) {
+        (Some(lo), Some(hi)) => (lo, hi),
+        _ => (
+            percentile(&values, 5.0),
+            percentile(&values, 95.0),
+        ),
+    };
+
+    if gamma <= 0.0 {
+        panic!("Gamma must be > 0");
+    }
+
+    if minv > maxv {
+        panic!("Invalid color scale: {minv} > {maxv}");
+    }
+
+    println!("map min = {}, max = {}", minv, maxv);
+
+    MollweideScale { minv, maxv }
+}
+
+pub fn render_mollweide_to_sink<S: PixelSink>(
+    map: &[f64],
+    map_w: u32,
+    map_h: u32,
+    scale_params: &MollweideScale,
+    cmap: &Colormap,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+    sink: &mut S,
+) {
+    render_mollweide_pixels(
+        map,
+        map_w,
+        map_h,
+        scale_params.minv,
+        scale_params.maxv,
+        cmap,
+        gamma,
+        scale,
+        neg_mode,
+        bad_color,
+        meta,
+        sink,
+    );
+}
+
 
 
 pub fn rasterize_to_surface<F>(
@@ -114,7 +189,7 @@ pub fn plot_mollweide_pdf(
     meta: HealpixMeta,
 ) {
 
-    let layout = compute_mollweide_layout(width as f64, show_colorbar);
+    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
 
     let mut values: Vec<f64> = map
         .iter()
@@ -130,29 +205,6 @@ pub fn plot_mollweide_pdf(
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
 
-
-    let (minv, maxv) = match (minv, maxv) {
-        (Some(lo), Some(hi)) => (lo, hi),
-        _ => {
-            let lo = percentile(&values, 5.0);
-            let hi = percentile(&values, 95.0);
-            (lo, hi)
-        }
-    };
-
-    if gamma <= 0.0 {
-        panic!("Gamma must be > 0");
-    }
-    
-    if minv > maxv {
-        panic!("Invalid color scale: {minv} > {maxv}");
-    }
-
-
-    println!("map min = {}, max = {}", minv, maxv);
-    
-
-    
     let surface_pdf = PdfSurface::new(
         layout.width as f64,
         layout.height as f64,
@@ -188,31 +240,15 @@ pub fn plot_mollweide_pdf(
     }
     cr_img.paint().unwrap();
 
-/*
-    let mut sink = PdfPixelSink { cr: &cr_img };
-    render_mollweide_pixels(
-        map,
-        layout.map_w as u32,
-        layout.map_h as u32,
-        minv,
-        maxv,
-        cmap,
-        gamma,
-        scale,
-        neg_mode,
-        bad_color,
-        meta,
-        &mut sink,
-    );
-*/
+    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
+    
     let mut sink = CairoImageSink { cr: &cr_img };
-
-    render_mollweide_pixels(
+    
+    render_mollweide_to_sink(
         map,
         layout.map_w as u32,
         layout.map_h as u32,
-        minv,
-        maxv,
+        &scale_params,
         cmap,
         gamma,
         scale,
@@ -221,6 +257,7 @@ pub fn plot_mollweide_pdf(
         meta,
         &mut sink,
     );
+
 
     // CRITICAL
     surface_img.flush();
@@ -254,14 +291,15 @@ pub fn plot_mollweide_pdf(
     if show_colorbar {
         draw_colorbar_pdf(
             &cr_pdf,
-            layout.cbar_x,
-            layout.cbar_y,
-            layout.cbar_w,
-            layout.cbar_h,
-            layout.label_y,
+            layout.cbar_x as f64,
+            layout.cbar_y as f64,
+            layout.cbar_w as f64,
+            layout.cbar_h as f64,
+            layout.label_y as f64,
             &cmap,
-            minv,
-            maxv,
+            scale_params.minv,
+            scale_params.maxv,
+            neg_mode,
             scale,
             gamma,
         );
@@ -303,47 +341,13 @@ pub fn plot_mollweide_png(
     meta: HealpixMeta,
 ) {
 
+    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
 
-    let map_height = width / 2;
-    let colorbar_height = if show_colorbar {
-        map_height / 20
-    }
-    else
-    {
-        0
-    };
-
-
-    let cbar_pad = if show_colorbar {
-        width / 25
-    }
-    else {
-        0
-    };
-    let label_padding = if show_colorbar {
-        map_height
-    }
-    else {
-        0
-    };
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
     let font = Font::try_from_bytes(font_data as &[u8])
         .expect("Failed to load font");
-    
-    let label_font_size = (colorbar_height as f32 * 0.35).max(10.0) as f32;
-    //let label_y = (map_height + label_padding) as i32;
-    let label_y = (map_height + colorbar_height + 2) as i32; // 2 px padding
-
-
-    let _height = if show_colorbar {
-        map_height + colorbar_height + label_font_size as u32 + label_padding
-    }
-    else {
-        map_height
-    };
-    let extra_label_space = if show_colorbar { label_font_size as u32 + 4 } else { 0 };
-    let height = map_height + colorbar_height + extra_label_space;
+    let label_font_size = (layout.cbar_h * 0.35).max(10.0) as f32;
 
 
     let mut values: Vec<f64> = map
@@ -359,55 +363,33 @@ pub fn plot_mollweide_png(
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-
-
-    let (minv, maxv) = match (minv, maxv) {
-        (Some(lo), Some(hi)) => (lo, hi),
-        _ => {
-            let lo = percentile(&values, 5.0);
-            let hi = percentile(&values, 95.0);
-            (lo, hi)
-        }
-    };
-
-    if gamma <= 0.0 {
-        panic!("Gamma must be > 0");
-    }
-    
-    if minv > maxv {
-        panic!("Invalid color scale: {minv} > {maxv}");
-    }
-
-
-    println!("map min = {}, max = {}", minv, maxv);
     let bg = if transparent {
         Rgba([0, 0, 0, 0])   // fully transparent
     } else {
         Rgba([255, 255, 255, 255])
     };
     
-    let mut img = RgbaImage::from_pixel(width, height, bg);
+    let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
     if draw_border {
-        let border_width_px = (width as f64 * 0.01).max(2.0);
-        println!("Border width is {border_width_px}");
         draw_projection_border(
             &mut img,
-            map_height,
+            layout.map_h as u32,
             Rgba([0, 0, 0, 255]),
-            border_width_px,
+            layout.border_width_px,
             |u, v| (u * u) / 4.0 + v * v,
         );
     }
 
+    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
+    
     let mut sink = PngSink { img: &mut img };
     
-    render_mollweide_pixels(
+    render_mollweide_to_sink(
         map,
-        width,
-        map_height,
-        minv,
-        maxv,
+        layout.map_w as u32,
+        layout.map_h as u32,
+        &scale_params,
         cmap,
         gamma,
         scale,
@@ -417,71 +399,48 @@ pub fn plot_mollweide_png(
         &mut sink,
     );
 
-
-
     if show_colorbar {
         let mut sink = PngSink { img: &mut img };
         
         render_colorbar_gradient(
-            cbar_pad,
-            map_height,
-            width - 2 * cbar_pad,
-            colorbar_height,
+            layout.cbar_pad as u32,
+            layout.cbar_y as u32,
+            layout.cbar_w as u32,
+            layout.cbar_h as u32,
             cmap,
             gamma,
             &mut sink,
         );
 
-
-        // ---------------- Colorbar tick marks (scale-aware) ----------------
-        
-        let nticks = 5;   // major ticks
-        let nminor = 5;   // minor ticks per interval
-        
-        let _ticks = compute_colorbar_ticks(
-            minv,
-            maxv,
+        let ticks = compute_colorbar_tick_positions(
+            scale_params.minv,
+            scale_params.maxv,
             scale,
-            nticks,
-            nminor,
+            neg_mode,
+            5,
+            5,
         );
-        let major_values = compute_major_tick_values(minv, maxv, scale, nticks);
-        
-        let major_positions: Vec<f64> = major_values.iter()
-            .map(|&v| scale_value(v, minv, maxv, scale, neg_mode))
-            .filter_map(|pv| {
-                if let PixelValue::Color(t) = pv { Some(t) } else { None }
-            })
-            .collect();
 
-        
         // Scale tick heights relative to colorbar
-        let major_tick_height = ((colorbar_height as f64) * 0.5).round().max(1.0) as u32;
-        let minor_tick_height = ((colorbar_height as f64) * 0.3).round().max(1.0) as u32;
+        let major_tick_height = (layout.cbar_h * 0.5).round().max(1.0) as u32;
+        let minor_tick_height = (layout.cbar_h * 0.3).round().max(1.0) as u32;
         
         // Scale tick widths relative to image width
-        let major_tick_width = ((width as f64) * 0.002).round().max(1.0) as u32;
-        let minor_tick_width = ((width as f64) * 0.001).round().max(1.0) as u32;
+        let major_tick_width = (layout.width * 0.002).round().max(1.0) as u32;
+        let minor_tick_width = (layout.width * 0.001).round().max(1.0) as u32;
         
-        let tick_bottom = map_height + colorbar_height - 1;
-        
+        let tick_bottom = (layout.cbar_y + layout.cbar_h) as u32 - 1;
+
 
         // ---------------- Major ticks + labels ----------------
-        for (&t, &val) in major_positions.iter().zip(major_values.iter()) {
-            let px = cbar_pad + (t * (width - 1 - 2*cbar_pad) as f64).round() as u32;
-            let tick_top = tick_bottom.saturating_sub(major_tick_height);
-        
-            // Draw major tick
-            for dx in -1..major_tick_width as i32 +2 {
+        let tick_top = tick_bottom.saturating_sub(major_tick_height);
+        for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
+            let px = (layout.cbar_pad + (t * layout.cbar_w).round()) as u32;
+            for dx in 0..major_tick_width as i32 {
                 let x = (px as i32 + dx) as u32;
                 if x < width {
                     for py in tick_top-1..=tick_bottom {
-                        if (dx <= -1) | (dx >= major_tick_width as i32) | (py == tick_top) {
-                            img.put_pixel(x, py, Rgba([255,255,255,255]));
-                        }
-                        else{
-                            img.put_pixel(x, py, Rgba([0,0,0,255]));
-                        }
+                        img.put_pixel(x, py, Rgba([0,0,0,255]));
                     }
                 }
             }
@@ -495,7 +454,9 @@ pub fn plot_mollweide_png(
                 &mut img,
                 Rgba([0, 0, 0, 255]),
                 text_x,
-                label_y,
+                // The two label calculations make a significant difference here.
+                // Different units maybe?
+                layout.label_y as i32,
                 FontScale::uniform(label_font_size),
                 &font,
                 &label,
@@ -505,36 +466,25 @@ pub fn plot_mollweide_png(
 
 
 
+ 
         // ---------------- Minor ticks ----------------
-        // Interpolate between major ticks
-        for i in 0..major_positions.len() - 1 {
-            let t0 = major_positions[i];
-            let t1 = major_positions[i + 1];
+        let tick_top = tick_bottom.saturating_sub(minor_tick_height);
+        for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
+            // let px = (layout.cbar_pad + (t * (layout.cbar_w - 1.0 - 2.0*layout.cbar_pad) as f64).round()) as u32;
+            let px = (layout.cbar_pad + (t * layout.cbar_w).round()) as u32;
         
-            for j in 1..nminor {
-                let frac = j as f64 / nminor as f64;
-                let tm = t0 + (t1 - t0) * frac;
-                let pxm = cbar_pad + (tm * (width - 1 - 2*cbar_pad) as f64).round() as u32;
-        
-                let tick_top = tick_bottom.saturating_sub(minor_tick_height);
-                for dx in -1..minor_tick_width as i32 + 2 {
-                    let x = (pxm as i32 + dx) as u32;
-                    if x >= width {
-                        continue;
-                    }
-        
+            for dx in 0..minor_tick_width as i32 {
+                let x = (px as i32 + dx) as u32;
+                if x < width {
                     for py in tick_top-1..=tick_bottom {
-                        if (dx <= -1) | (dx >= minor_tick_width as i32 +1) | (py == tick_top-1) {
-                            img.put_pixel(x, py, Rgba([255, 255, 255, 255]));
-                        }
-                        else {
-                            img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
-                        }
+                        img.put_pixel(x, py, Rgba([0,0,0,255]));
                     }
                 }
             }
         }
     }
+
+
 
     img.save(filename).expect("Failed to save PNG");
 }

@@ -1,8 +1,8 @@
 use crate::render::RenderBackend;
-use crate::{Scale};
+use crate::{Scale,NegMode};
 use crate::colormap::Colormap;
-use crate::scale::scale_t_to_value;
-use crate::PixelSink;
+use crate::scale::{scale_t_to_value,scale_value};
+use crate::{PixelSink,PixelValue};
 use image::Rgba;
 
 
@@ -64,6 +64,7 @@ pub fn draw_colorbar<B: RenderBackend>(
     // -------------------------
     // 3. Ticks
     // -------------------------
+    /*
     let ticks = compute_colorbar_ticks(
         min,
         max,
@@ -120,6 +121,7 @@ pub fn draw_colorbar<B: RenderBackend>(
             &label,
         );
     }
+    */
 }
 
 #[derive(Clone)]
@@ -154,88 +156,50 @@ pub fn apply_gamma(t: f64, gamma: f64) -> f64 {
 }
 
 pub struct ColorbarTicks {
-    pub major: Vec<f64>,
-    pub minor: Vec<f64>,
+    pub major_values: Vec<f64>,
+    pub major_positions: Vec<f64>,
+    pub minor_values: Vec<f64>,
+    pub minor_positions: Vec<f64>,
 }
-
-pub fn compute_colorbar_ticks(
+pub fn compute_colorbar_tick_positions(
     minv: f64,
     maxv: f64,
     scale: Scale,
+    neg_mode: NegMode,
     nticks: usize,
-    nminor: usize,
+    n_minor: usize,
 ) -> ColorbarTicks {
-    let mut major = Vec::new();
-    let mut minor = Vec::new();
+    let major_values = compute_major_tick_values(minv, maxv, scale, nticks);
 
-    match scale {
-        Scale::Linear => {
-            let step = (maxv - minv) / (nticks - 1) as f64;
-            for i in 0..nticks {
-                major.push(minv + i as f64 * step);
+    let major_positions = major_values
+        .iter()
+        .filter_map(|&v| {
+            match scale_value(v, minv, maxv, scale, neg_mode) {
+                PixelValue::Color(t) => Some(t),
+                _ => None,
             }
-        
-            if nminor > 0 {
-                for i in 0..(nticks - 1) {
-                    let start = major[i];
-                    let end = major[i + 1];
-                    for j in 1..nminor {
-                        let t = start + (end - start) * (j as f64 / nminor as f64);
-                        minor.push(t);
-                    }
-                }
+        })
+        .collect();
+
+    let minor_values = compute_minor_tick_values(&major_values, scale, n_minor);
+
+    let minor_positions = minor_values
+        .iter()
+        .filter_map(|&v| {
+            match scale_value(v, minv, maxv, scale, neg_mode) {
+                PixelValue::Color(t) => Some(t),
+                _ => None,
             }
-        }
-        Scale::Asinh { .. } | Scale::Symlog { .. } | Scale::PlanckLog { .. } => {
-            // Linear spacing
-            let step = (maxv - minv) / (nticks - 1) as f64;
-            for i in 0..nticks {
-                major.push(minv + i as f64 * step);
-            }
+        })
+        .collect();
 
-            // Minor ticks
-            for i in 0..(nticks - 1) {
-                let start = major[i];
-                let end = major[i + 1];
-                for j in 1..nminor {
-                    let t = start + (end - start) * (j as f64 / nminor as f64);
-                    minor.push(t);
-                }
-            }
-        }
-
-        Scale::Log => {
-            // Find decades
-            let start_exp = minv.log10().floor() as i32;
-            let end_exp = maxv.log10().ceil() as i32;
-
-            for exp in start_exp..=end_exp {
-                let base = 10_f64.powi(exp);
-                // Add "1, 2, 5" multiples for major ticks
-                for &m in &[1.0, 2.0, 5.0] {
-                    let tick = m * base;
-                    if tick >= minv && tick <= maxv {
-                        major.push(tick);
-                    }
-                }
-
-                // Minor ticks: all integers not in major
-                for i in 1..10 {
-                    let tick = i as f64 * base;
-                    if tick >= minv && tick <= maxv && !major.contains(&tick) {
-                        minor.push(tick);
-                    }
-                }
-            }
-
-            major.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            minor.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        }
+    ColorbarTicks {
+        major_values,
+        major_positions,
+        minor_values,
+        minor_positions,
     }
-
-    ColorbarTicks { major, minor }
 }
-
 
 /// Format a tick label for display on colorbar
 pub fn format_tick_label(value: f64, scale: Scale) -> String {
@@ -287,6 +251,72 @@ fn to_superscript(n: i32) -> String {
         .map(|c| *map.get(&c).unwrap_or(&c))
         .collect()
 }
+
+fn log_minor_ticks(major: &[f64]) -> Vec<f64> {
+    let mut minors = Vec::new();
+
+    for pair in major.windows(2) {
+        let a = pair[0];
+        let b = pair[1];
+
+        if a <= 0.0 || b <= 0.0 {
+            continue;
+        }
+
+        let log_a = a.log10();
+        let log_b = b.log10();
+
+        let base = 10f64.powf(log_a.floor());
+
+        for mult in [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0] {
+            let v = base * mult;
+            if v > a && v < b {
+                minors.push(v);
+            }
+        }
+    }
+
+    minors
+}
+
+
+fn linear_minor_ticks(major: &[f64], n_minor: usize) -> Vec<f64> {
+    let mut minors = Vec::new();
+
+    for pair in major.windows(2) {
+        let a = pair[0];
+        let b = pair[1];
+        let step = (b - a) / (n_minor + 1) as f64;
+
+        for i in 1..=n_minor {
+            minors.push(a + step * i as f64);
+        }
+    }
+
+    minors
+}
+
+
+fn compute_minor_tick_values(
+    major_values: &[f64],
+    scale: Scale,
+    n_minor: usize,
+) -> Vec<f64> {
+    match scale {
+        Scale::Linear
+        | Scale::Asinh { .. }
+        | Scale::Symlog { .. }
+        | Scale::PlanckLog { .. } => {
+            linear_minor_ticks(major_values, n_minor)
+        }
+
+        Scale::Log => {
+            log_minor_ticks(major_values)
+        }
+    }
+}
+
+
 
 
 pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {

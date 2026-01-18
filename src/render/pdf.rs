@@ -1,10 +1,10 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
-use crate::{Colormap, Scale};
-use crate::scale::{value_to_t};
-use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks};
+use crate::{Colormap, Scale, PixelValue, NegMode};
+use crate::scale::{value_to_t,scale_value};
+use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks,compute_colorbar_tick_positions};
 use std::f64::consts::PI;
-use crate::colorbar::{compute_colorbar_ticks, render_colorbar_gradient};
+use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
 
 
@@ -149,7 +149,6 @@ pub fn draw_colorbar_pdf_gradient(
     cr.paint().unwrap();
 }
 
-
 pub fn draw_colorbar_pdf_ticks(
     cr: &Context,
     minv: f64,
@@ -169,21 +168,19 @@ pub fn draw_colorbar_pdf_ticks(
     cr.set_line_width(1.0);
 
     // Minor ticks
-    for &val in &ticks.minor {
-        if let Some(t) = value_to_t(val, minv, maxv, scale) {
-            let x = t * (width - 1.0) + cbar_x;
-            cr.move_to(x, y0);
-            cr.line_to(x, y0 - minor_len);
-        }
+    for (&t, &val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
+        let x = t * (width - 1.0) + cbar_x;
+        println!("{x}");
+        cr.move_to(x, y0);
+        cr.line_to(x, y0 - minor_len);
     }
 
     // Major ticks
-    for &val in &ticks.major {
-        if let Some(t) = value_to_t(val, minv, maxv, scale) {
-            let x = t * width + cbar_x;
-            cr.move_to(x, y0);
-            cr.line_to(x, y0 - major_len);
-        }
+    for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
+        let x = t * width + cbar_x;
+        println!("{x}");
+        cr.move_to(x, y0);
+        cr.line_to(x, y0 - major_len);
     }
 
     cr.stroke().unwrap();
@@ -202,19 +199,16 @@ pub fn draw_colorbar_pdf_labels(
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_font_size(11.0);
 
-    for &val in &ticks.major {
-        if let Some(t) = value_to_t(val, minv, maxv, scale) {
-            let label = format_tick_label(val, scale);
-            let x = t * width + cbar_x;
+    for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
+        let label = format_tick_label(val, scale);
+        let x = t * width + cbar_x;
 
-            // Center text
-            let ext = cr.text_extents(&label).unwrap();
-            let tx = x - ext.width() / 2.0;
+        // Center text
+        let ext = cr.text_extents(&label).unwrap();
+        let tx = x - ext.width() / 2.0;
 
-            cr.move_to(tx, label_y);
-            cr.show_text(&label).unwrap();
-        }
-
+        cr.move_to(tx, label_y);
+        cr.show_text(&label).unwrap();
     }
 }
 
@@ -229,16 +223,20 @@ pub fn draw_colorbar_pdf(
     cmap: &Colormap,
     minv: f64,
     maxv: f64,
+    negmode: NegMode,
     scale: Scale,
     gamma: f64,
 ) {
-        let ticks = compute_colorbar_ticks(
+
+        let ticks = compute_colorbar_tick_positions(
             minv,
             maxv,
             scale,
+            negmode, // or pass explicitly
             5,
-            5, // minor ticks already handled intelligently
+            5,
         );
+
 
         let surf = ImageSurface::create(
             Format::ARgb32,
