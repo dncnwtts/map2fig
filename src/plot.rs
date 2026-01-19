@@ -12,6 +12,7 @@ use crate::healpix::{is_seen, sample_healpix};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
 use crate::projection::Projection;
+use crate::render::raster::RasterGrid;
 
 pub struct MollweideScale {
     pub minv: f64,
@@ -600,41 +601,35 @@ pub fn render_projection_to_sink(
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
 ) {
-    for py in 0..layout.map_h as u32 {
-        for px in 0..layout.map_w as u32 {
-
-            let u = px as f64 / (layout.map_w - 1.0);
-            let v = py as f64 / (layout.map_h - 1.0);
-
-            let (lon, lat) = match proj.inverse(u, v) {
-                Some(p) => p,
-                None => continue,
-            };
-
+    let grid = RasterGrid {
+        map_w: layout.map_w as u32,
+        map_h: layout.map_h as u32,
+        pad: layout.map_pad as u32,
+    };
+    
+    for (px, py, u, v) in grid.iter() {
+        if let Some((lon, lat)) = proj.inverse(u, v) {
             let theta = std::f64::consts::PI / 2.0 - lat;
-
-            let val = match sample_healpix(map, meta, theta, lon) {
-                Some(v) => v,
-                None => continue,
-            };
-
-            let rgba = map_to_color(
-                val,
-                scale_params.minv,
-                scale_params.maxv,
-                cmap,
-                scale,
-                neg_mode,
-                gamma,
-                bad_color,
-            );
-
-            sink.draw_pixel(
-                px + layout.map_pad as u32,
-                py + layout.map_pad as u32,
-                rgba,
-            );
+            if let Some(val) = sample_healpix(map, meta, theta, lon) {
+                let rgba = map_to_color(
+                    val,
+                    scale_params.minv,
+                    scale_params.maxv,
+                    cmap,
+                    scale,
+                    neg_mode,
+                    gamma,
+                    bad_color,
+                );
+    
+                sink.draw_pixel(
+                    px + grid.pad,
+                    py + grid.pad,
+                    rgba,
+                );
+            }
         }
     }
+
 }
 

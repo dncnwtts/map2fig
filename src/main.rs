@@ -46,6 +46,7 @@ fn main() {
     let meta = read_healpix_meta(&args.fits)
         .expect("Could not determine HEALPix ordering / NSIDE");
 
+    println!("Reading fits file");
     let mut map = read_healpix_column(&args.fits, args.col);
     for v in &mut map {
         *v *= args.scale;
@@ -61,6 +62,7 @@ fn main() {
 
     let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Auto)), &cmap, args.transparent);
 
+    println!("Making Mollweide figure.");
     plot_mollweide_auto(
         &map,
         args.width,

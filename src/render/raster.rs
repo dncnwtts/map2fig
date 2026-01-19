@@ -116,17 +116,23 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RasterGrid {
-    pub width: u32,
-    pub height: u32,
+    pub map_w: u32,
+    pub map_h: u32,
+    pub pad: u32,
 }
 
 impl RasterGrid {
-    #[inline]
-    pub fn pixel_to_uv(&self, x: u32, y: u32) -> (f64, f64) {
-        (
-            (x as f64 + 0.5) / self.width as f64,
-            (y as f64 + 0.5) / self.height as f64,
-        )
+    pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> {
+        let w = self.map_w;
+        let h = self.map_h;
+
+        (0..h).flat_map(move |py| {
+            (0..w).map(move |px| {
+                let u = px as f64 / (w - 1) as f64;
+                let v = py as f64 / (h - 1) as f64;
+                (px, py, u, v)
+            })
+        })
     }
 }
 
