@@ -6,6 +6,8 @@ pub mod colorbar;
 pub mod render;
 pub mod scale;
 pub mod layout;
+pub mod projection;
+pub mod mollweide;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};

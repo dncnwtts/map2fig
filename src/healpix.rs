@@ -459,6 +459,28 @@ pub fn nside_from_npix(npix: usize) -> Result<i64, String> {
     Ok(nside)
 }
 
+
+pub fn sample_healpix(
+    map: &[f64],
+    meta: HealpixMeta,
+    theta: f64, // colatitude [0, pi]
+    lon: f64,   // longitude [-pi, pi] (or [0, 2pi], depending on your convention)
+) -> Option<f64> {
+    if !(0.0..=std::f64::consts::PI).contains(&theta) {
+        return None;
+    }
+
+    let ipix = ang2pix(meta, theta, lon) as usize;
+    let val = map[ipix];
+
+    if is_seen(val) {
+        Some(val)
+    } else {
+        None
+    }
+}
+
+
 #[cfg(test)]
 fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
     let cosd = theta1.cos() * theta2.cos()

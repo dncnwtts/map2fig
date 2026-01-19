@@ -1,5 +1,4 @@
 use image::{RgbaImage, Rgba};
-use std::f64::consts::PI;
 use crate::colormap::{Colormap};
 use crate::colorbar::{format_tick_label, render_colorbar_gradient, compute_colorbar_tick_positions,apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
@@ -9,9 +8,10 @@ use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
 use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
-use crate::healpix::{is_seen, ang2pix};
+use crate::healpix::{is_seen, sample_healpix};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
+use crate::projection::Projection;
 
 pub struct MollweideScale {
     pub minv: f64,
@@ -58,7 +58,7 @@ pub fn compute_mollweide_scale(
     MollweideScale { minv, maxv }
 }
 
-pub fn render_mollweide_to_sink<S: PixelSink>(
+pub fn render_mollweide_pixels(
     map: &[f64],
     layout: MollweideLayout,
     scale_params: &MollweideScale,
@@ -68,22 +68,26 @@ pub fn render_mollweide_to_sink<S: PixelSink>(
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
-    sink: &mut S,
+    sink: &mut dyn PixelSink,
 ) {
-    render_mollweide_pixels(
+    use crate::mollweide::MollweideProjection;
+    let proj = MollweideProjection;
+
+    render_projection_to_sink(
         map,
-        layout,
-        scale_params.minv,
-        scale_params.maxv,
+        &proj,
+        &layout,
+        &scale_params,
         cmap,
-        gamma,
         scale,
         neg_mode,
+        gamma,
         bad_color,
         meta,
         sink,
     );
 }
+
 
 
 
@@ -111,63 +115,6 @@ where
     surf
 }
 
-
-pub fn render_mollweide_pixels(
-    map: &[f64],
-    layout: MollweideLayout,
-    minv: f64,
-    maxv: f64,
-    cmap: &Colormap,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
-    sink: &mut dyn PixelSink,
-) {
-    for py in 0..layout.map_h as u32 {
-        for px in 0..layout.map_w as u32 {
-            // Mollweide plane coordinates
-            let x = 2.0 - 4.0 * (px as f64 / (layout.map_w - 1.0));
-            let y = 1.0 - 2.0 * (py as f64 / (layout.map_h - 1.0));
-
-            // Outside Mollweide oval
-            if x * x / 4.0 + y * y > 1.0 {
-                continue;
-            }
-
-            // Inverse Mollweide
-            let theta_aux = y.asin();
-            let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
-            if sin_lat.abs() > 1.0 {
-                continue;
-            }
-
-            let lat = sin_lat.asin();
-            let lon = PI * x / (2.0 * theta_aux.cos());
-
-            let theta = PI / 2.0 - lat;
-            if !(0.0..=PI).contains(&theta) {
-                continue;
-            }
-
-            // HEALPix lookup
-            let ipix = ang2pix(meta, theta, lon);
-            let val = map[ipix as usize];
-
-            let rgba = match scale_value(val, minv, maxv, scale, neg_mode) {
-                PixelValue::Color(t) => {
-                    let t = apply_gamma(t, gamma);
-                    let c = cmap.sample(t);
-                    Rgba([c[0], c[1], c[2], 255])
-                }
-                PixelValue::Bad => bad_color,
-            };
-
-            sink.draw_pixel(px + layout.map_pad as u32, py + layout.map_pad as u32, rgba);
-        }
-    }
-}
 
 pub fn plot_mollweide_pdf(
     map: &[f64],
@@ -240,8 +187,8 @@ pub fn plot_mollweide_pdf(
     let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
     
     let mut sink = CairoImageSink { cr: &cr_img };
-    
-    render_mollweide_to_sink(
+    render_mollweide_pixels(
+    //render_projection_to_sink(
         map,
         layout,
         &scale_params,
@@ -273,7 +220,6 @@ pub fn plot_mollweide_pdf(
 
     // Draw vector border ON TOP
     if draw_border {
-        let border_width = (width as f64 * 0.0025).max(1.0);
         draw_projection_border_pdf(
             &cr_pdf,
             layout.map_x,
@@ -426,7 +372,8 @@ pub fn plot_mollweide_png(
         y0: (layout.map_y - layout.map_pad) as u32,
     };
     
-    render_mollweide_to_sink(
+    render_mollweide_pixels(
+    //render_projection_to_sink(
         map,
         layout,
         &scale_params,
@@ -613,6 +560,79 @@ pub fn plot_mollweide_auto(
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",
                 ext
+            );
+        }
+    }
+}
+
+
+pub fn map_to_color(
+    val: f64,
+    minv: f64,
+    maxv: f64,
+    cmap: &Colormap,
+    scale: Scale,
+    neg_mode: NegMode,
+    gamma: f64,
+    bad_color: Rgba<u8>,
+) -> Rgba<u8> {
+    match scale_value(val, minv, maxv, scale, neg_mode) {
+        PixelValue::Color(t) => {
+            let t = apply_gamma(t, gamma);
+            let c = cmap.sample(t);
+            Rgba([c[0], c[1], c[2], 255])
+        }
+        PixelValue::Bad => bad_color,
+    }
+}
+
+
+pub fn render_projection_to_sink(
+    map: &[f64],
+    proj: &dyn Projection,
+    layout: &MollweideLayout,
+    scale_params: &MollweideScale,
+    cmap: &Colormap,
+    scale: Scale,
+    neg_mode: NegMode,
+    gamma: f64,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+    sink: &mut dyn PixelSink,
+) {
+    for py in 0..layout.map_h as u32 {
+        for px in 0..layout.map_w as u32 {
+
+            let u = px as f64 / (layout.map_w - 1.0);
+            let v = py as f64 / (layout.map_h - 1.0);
+
+            let (lon, lat) = match proj.inverse(u, v) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            let theta = std::f64::consts::PI / 2.0 - lat;
+
+            let val = match sample_healpix(map, meta, theta, lon) {
+                Some(v) => v,
+                None => continue,
+            };
+
+            let rgba = map_to_color(
+                val,
+                scale_params.minv,
+                scale_params.maxv,
+                cmap,
+                scale,
+                neg_mode,
+                gamma,
+                bad_color,
+            );
+
+            sink.draw_pixel(
+                px + layout.map_pad as u32,
+                py + layout.map_pad as u32,
+                rgba,
             );
         }
     }

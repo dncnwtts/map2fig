@@ -113,3 +113,20 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 }
 
 
+
+#[derive(Debug, Clone, Copy)]
+pub struct RasterGrid {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl RasterGrid {
+    #[inline]
+    pub fn pixel_to_uv(&self, x: u32, y: u32) -> (f64, f64) {
+        (
+            (x as f64 + 0.5) / self.width as f64,
+            (y as f64 + 0.5) / self.height as f64,
+        )
+    }
+}
+
