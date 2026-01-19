@@ -1,5 +1,6 @@
 use crate::PixelValue;
 use crate::NegMode;
+use crate::healpix::is_seen;
 
 pub fn scale_t_to_value(
     t: f64,
@@ -101,6 +102,20 @@ pub fn scale_value(
     if min >= max {
         panic!("min must be < max");
     }
+
+
+    if !is_seen(value) {
+        return PixelValue::Bad;
+    }
+
+    if value < min {
+        return PixelValue::Underflow;
+    }
+
+    if value > max {
+        return PixelValue::Overflow;
+    }
+
 
     let t: f64 = match scale {
         Scale::Linear => {

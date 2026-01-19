@@ -24,11 +24,13 @@ pub enum NegMode {
     Unseen,
 }
 
-#[derive(Clone, Copy, Debug)]
 pub enum PixelValue {
-    Color(f64),
-    Bad,
+    Color(f64),      // normalized [0,1]
+    Underflow,       // < minv but finite
+    Overflow,        // > maxv but finite
+    Bad,             // NaN, UNSEEN, masked
 }
+
 
 
 
@@ -38,7 +40,8 @@ impl FromStr for BadColor {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_lowercase();
         match s.as_str() {
-            "auto" => Ok(BadColor::Auto),
+            "under" => Ok(BadColor::Underflow),
+            "over"  => Ok(BadColor::Overflow),
             "gray" | "grey" => Ok(BadColor::Gray),
             _ => {
                 let parts: Vec<_> = s.split(',').collect();
@@ -225,8 +228,9 @@ impl FromStr for RgbaArg {
 /// Bad color option
 #[derive(Clone, Debug)]
 pub enum BadColor {
-    Auto,
     Gray,
+    Underflow,
+    Overflow,
     Rgba(u8, u8, u8, u8),
 }
 
@@ -239,11 +243,16 @@ pub fn generate_index_map(nside: i64) -> Vec<f64> {
 
 
 pub fn resolve_bad_color(bad: Option<BadColor>, cmap: &Colormap, transparent: bool) -> Rgba<u8> {
-    match bad.unwrap_or(BadColor::Auto) {
-        BadColor::Auto => {
+    match bad.unwrap_or(BadColor::Gray) {
+        BadColor::Underflow => {
             let c = cmap.under();
             Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
         }
+        BadColor::Overflow => {
+            let c = cmap.over();
+            Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
+        }
+
         BadColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
         BadColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
     }
@@ -313,7 +322,6 @@ mod tests {
     /// ----------------------------
     #[test]
     fn test_bad_color_parse() {
-        assert!(matches!(BadColor::from_str("auto").unwrap(), BadColor::Auto));
         assert!(matches!(BadColor::from_str("gray").unwrap(), BadColor::Gray));
         assert!(matches!(BadColor::from_str("grey").unwrap(), BadColor::Gray));
         assert!(matches!(
@@ -390,8 +398,6 @@ mod tests {
     fn test_resolve_bad_color() {
         let cmap = get_colormap("viridis");
     
-        let auto_color = resolve_bad_color(Some(BadColor::Auto), cmap, false);
-        assert_eq!(auto_color.0[3], 255);
     
         let gray_color = resolve_bad_color(Some(BadColor::Gray), cmap, false);
         assert_eq!(gray_color, Rgba([128,128,128,255]));

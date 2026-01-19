@@ -59,8 +59,7 @@ fn main() {
         _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
     };
 
-
-    let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Auto)), &cmap, args.transparent);
+    let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Gray)), &cmap, args.transparent);
 
     println!("Making Mollweide figure.");
     plot_mollweide_auto(

@@ -473,11 +473,7 @@ pub fn sample_healpix(
     let ipix = ang2pix(meta, theta, lon) as usize;
     let val = map[ipix];
 
-    if is_seen(val) {
-        Some(val)
-    } else {
-        None
-    }
+    Some(val)
 }
 
 

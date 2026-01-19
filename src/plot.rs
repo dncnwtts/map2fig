@@ -583,9 +583,20 @@ pub fn map_to_color(
             let c = cmap.sample(t);
             Rgba([c[0], c[1], c[2], 255])
         }
-        PixelValue::Bad => bad_color,
+        PixelValue::Bad => {
+            bad_color
+        }
+        PixelValue::Underflow => {
+            let c = cmap.sample(0.0);
+            Rgba([c[0], c[1], c[2], 255])
+        }
+        PixelValue::Overflow => {
+            let c = cmap.sample(1.0);
+            Rgba([c[0], c[1], c[2], 255])
+        }
     }
 }
+
 
 
 pub fn render_projection_to_sink(
