@@ -1,7 +1,7 @@
 use clap::Parser;
 use healpix_plotter::{
     Args, NegMode, plot_mollweide_auto, get_colormap, read_healpix_column,
-    validate_scale_config, resolve_bad_color, BadColor,
+    validate_scale_config, resolve_input_color, InputColor,
 };
 use healpix_plotter::scale::Scale;
 use healpix_plotter::healpix::read_healpix_meta;
@@ -59,7 +59,9 @@ fn main() {
         _ => panic!("--neg-mode must be 'zero' or 'unseen'"),
     };
 
-    let bad_color_rgba = resolve_bad_color(Some(args.bad_color.unwrap_or(BadColor::Gray)), &cmap, args.transparent);
+    let bad_color_rgba = resolve_input_color(Some(args.bad_color.unwrap_or(InputColor::Gray)), &cmap, args.transparent);
+
+    let bg_color_rgba = resolve_input_color(Some(args.bg_color.unwrap_or(InputColor::Transparent)), &cmap, args.transparent);
 
     println!("Making Mollweide figure.");
     plot_mollweide_auto(
@@ -76,6 +78,7 @@ fn main() {
         scale,
         neg_mode,
         bad_color_rgba,
+        bg_color_rgba,
         meta,
     );
 

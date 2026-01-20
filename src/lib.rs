@@ -36,15 +36,15 @@ pub enum PixelValue {
 
 
 
-impl FromStr for BadColor {
+impl FromStr for InputColor {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_lowercase();
         match s.as_str() {
-            "under" => Ok(BadColor::Underflow),
-            "over"  => Ok(BadColor::Overflow),
-            "gray" | "grey" => Ok(BadColor::Gray),
+            "under" => Ok(InputColor::Underflow),
+            "over"  => Ok(InputColor::Overflow),
+            "gray" | "grey" => Ok(InputColor::Gray),
             _ => {
                 let parts: Vec<_> = s.split(',').collect();
                 if parts.len() != 4 {
@@ -52,7 +52,7 @@ impl FromStr for BadColor {
                 }
                 let vals: Result<Vec<u8>, _> = parts.iter().map(|x| x.parse()).collect();
                 match vals {
-                    Ok(v) => Ok(BadColor::Rgba(v[0], v[1], v[2], v[3])),
+                    Ok(v) => Ok(InputColor::Rgba(v[0], v[1], v[2], v[3])),
                     Err(_) => Err("RGBA values must be 0–255".into())
                 }
             }
@@ -190,11 +190,14 @@ pub struct Args {
 
     /// Bad pixel color: auto, gray, or r,g,b,a
     #[arg(long)]
-    pub bad_color: Option<BadColor>,
+    pub bad_color: Option<InputColor>,
+
+    /// Background pixel color: transparent, gray, or r,g,b,a
+    #[arg(long)]
+    pub bg_color: Option<InputColor>,
 
     #[arg(long)]
     pub planck_log: bool,
-
 
     /// Factor that multiplies the data itself for unit conversions.
     #[arg(long, default_value_t = 1.0)]
@@ -229,10 +232,11 @@ impl FromStr for RgbaArg {
 
 /// Bad color option
 #[derive(Clone, Debug)]
-pub enum BadColor {
+pub enum InputColor {
     Gray,
     Underflow,
     Overflow,
+    Transparent,
     Rgba(u8, u8, u8, u8),
 }
 
@@ -244,19 +248,20 @@ pub fn generate_index_map(nside: i64) -> Vec<f64> {
 }
 
 
-pub fn resolve_bad_color(bad: Option<BadColor>, cmap: &Colormap, transparent: bool) -> Rgba<u8> {
-    match bad.unwrap_or(BadColor::Gray) {
-        BadColor::Underflow => {
+pub fn resolve_input_color(bad: Option<InputColor>, cmap: &Colormap, transparent: bool) -> Rgba<u8> {
+    match bad.unwrap_or(InputColor::Gray) {
+        InputColor::Underflow => {
             let c = cmap.under();
             Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
         }
-        BadColor::Overflow => {
+        InputColor::Overflow => {
             let c = cmap.over();
             Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
         }
 
-        BadColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
-        BadColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
+        InputColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
+        InputColor::Transparent => Rgba([0, 0,0,0]),
+        InputColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
     }
 }
 
@@ -320,15 +325,15 @@ mod tests {
     }
 
     /// ----------------------------
-    /// Test BadColor parsing
+    /// Test InputColor parsing
     /// ----------------------------
     #[test]
     fn test_bad_color_parse() {
-        assert!(matches!(BadColor::from_str("gray").unwrap(), BadColor::Gray));
-        assert!(matches!(BadColor::from_str("grey").unwrap(), BadColor::Gray));
+        assert!(matches!(InputColor::from_str("gray").unwrap(), InputColor::Gray));
+        assert!(matches!(InputColor::from_str("grey").unwrap(), InputColor::Gray));
         assert!(matches!(
-            BadColor::from_str("255,128,0,255").unwrap(),
-            BadColor::Rgba(255,128,0,255)
+            InputColor::from_str("255,128,0,255").unwrap(),
+            InputColor::Rgba(255,128,0,255)
         ));
     }
 
@@ -394,18 +399,18 @@ mod tests {
     
     
     /// ----------------------------
-    /// Test resolve_bad_color returns correct RGBA
+    /// Test resolve_input_color returns correct RGBA
     /// ----------------------------
     #[test]
-    fn test_resolve_bad_color() {
+    fn test_resolve_input_color() {
         let cmap = get_colormap("viridis");
     
     
-        let gray_color = resolve_bad_color(Some(BadColor::Gray), cmap, false);
+        let gray_color = resolve_input_color(Some(InputColor::Gray), cmap, false);
         assert_eq!(gray_color, Rgba([128,128,128,255]));
     
-        let custom_color = BadColor::Rgba(10,20,30,40);
-        let c = resolve_bad_color(Some(custom_color), cmap, false);
+        let custom_color = InputColor::Rgba(10,20,30,40);
+        let c = resolve_input_color(Some(custom_color), cmap, false);
         assert_eq!(c, Rgba([10,20,30,40]));
     }
     /// ----------------------------

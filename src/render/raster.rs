@@ -118,7 +118,8 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 pub struct RasterGrid {
     pub width: u32,
     pub height: u32,
-    pub buffer: Vec<Rgba<u8>>, // owns the pixels
+    pub buffer: Vec<Rgba<u8>>,
+    pub valid: Vec<bool>,
 }
 
 impl RasterGrid {
@@ -127,6 +128,7 @@ impl RasterGrid {
         if x < self.width && y < self.height {
             let idx = (y * self.width + x) as usize;
             self.buffer[idx] = Rgba(rgba);
+            self.valid[idx] = true;
         }
     }
 
@@ -135,8 +137,21 @@ impl RasterGrid {
         if x < self.width && y < self.height {
             let idx = (y * self.width + x) as usize;
             self.buffer[idx] = color;
+            self.valid[idx] = true;
         }
     }
+
+    pub fn set_valid(&mut self, x: u32, y: u32, validity: bool) {
+        let idx = (y * self.width + x) as usize;
+        self.valid[idx] = validity;
+    }
+
+    #[inline]
+    pub fn is_valid(&self, x: u32, y: u32) -> bool {
+        let idx = (y * self.width + x) as usize;
+        self.valid[idx]
+    }
+
 
     /// Get as Rgba<u8>
     pub fn get_pixel(&self, x: u32, y: u32) -> Rgba<u8> {
@@ -153,10 +168,12 @@ impl RasterGrid {
         p
     }
     pub fn new(width: u32, height: u32) -> Self {
+        let len = (width * height) as usize;
         Self {
             width,
             height,
-            buffer: vec![Rgba([0, 0, 0, 0]); (width * height) as usize],
+            buffer: vec![Rgba([0, 0, 0, 0]); len],
+            valid: vec![false; len],
         }
     }
     pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> + use<> {
@@ -180,108 +197,11 @@ impl RasterGrid {
     pub fn norm_y(&self, y: u32) -> f64 {
         y as f64 / (self.height - 1) as f64
     }
+
+
 }
 
 
-// impl RasterGrid {
-//     /// Create a new RasterGrid initialized to transparent
-//     pub fn new(width: u32, height: u32) -> Self {
-//         Self {
-//             width,
-//             height,
-//             buffer: vec![Rgba([0, 0, 0, 0]); (width * height) as usize],
-//         }
-//     }
-// 
-//     /// Set a pixel in the grid
-//     pub fn set_pixel(&mut self, x: u32, y: u32, color: Rgba<u8>) {
-//         if x < self.width && y < self.height {
-//             let idx = (y * self.width + x) as usize;
-//             self.buffer[idx] = color;
-//         }
-//     }
-// 
-//     /// Optional: get a pixel
-//     pub fn get_pixel(&self, x: u32, y: u32) -> Rgba<u8> {
-//         if x < self.width && y < self.height {
-//             self.buffer[(y * self.width + x) as usize]
-//         } else {
-//             Rgba([0, 0, 0, 0])
-//         }
-//     }
-// 
-//     pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> {
-//         let w = self.width;
-//         let h = self.height;
-// 
-//         (0..h).flat_map(move |py| {
-//             (0..w).map(move |px| {
-//                 let u = px as f64 / (w - 1) as f64;
-//                 let v = py as f64 / (h - 1) as f64;
-//                 (px, py, u, v)
-//             })
-//         })
-//     }
-// }
-
-
-// #[derive(Debug)]
-// pub struct RasterGrid {
-//     pub width: u32,
-//     pub height: u32,
-//     pub buffer: Vec<[u8; 4]>,
-// }
-// 
-// 
-// impl RasterGrid {
-//     // pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> {
-//     pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> + use<> {
-//         let w = self.width;
-//         let h = self.height;
-// 
-//         (0..h).flat_map(move |py| {
-//             (0..w).map(move |px| {
-//                 let u = px as f64 / (w - 1) as f64;
-//                 let v = py as f64 / (h - 1) as f64;
-//                 (px, py, u, v)
-//             })
-//         })
-//     }
-// 
-//     pub fn new(width: u32, height: u32) -> Self {
-//         let npix = (width * height) as usize;
-// 
-//         Self {
-//             width,
-//             height,
-//             buffer: vec![[0, 0, 0, 0]; npix], // transparent RGBA
-//         }
-//     }
-// 
-//     #[inline]
-//     pub fn put_pixel(&mut self, x: u32, y: u32, rgba: [u8; 4]) {
-//         if x >= self.width || y >= self.height {
-//             return;
-//         }
-//         let idx = (y * self.width + x) as usize;
-//         self.buffer[idx] = rgba;
-//     }
-// }
-
-
-// impl PixelSource for RasterGrid {
-//     fn width(&self) -> u32 {
-//         self.width
-//     }
-// 
-//     fn height(&self) -> u32 {
-//         self.height
-//     }
-// 
-//     fn get_pixel(&self, x: u32, y: u32) -> [u8; 4] {
-//         self.buffer[(y * self.width + x) as usize]
-//     }
-// }
 
 impl PixelSource for RasterGrid {
     fn width(&self) -> u32 {

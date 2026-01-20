@@ -69,6 +69,7 @@ pub fn render_mollweide_pixels(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
     debug_overlay: Option<DebugOverlay>, // new optional parameter
@@ -77,6 +78,13 @@ pub fn render_mollweide_pixels(
     let proj = MollweideProjection;
 
     let mut grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
+
+    if let Some(overlay) = debug_overlay {
+        if overlay.show_background {
+            fill_grid_background(&mut grid);
+        }
+    }
+
 
     render_projection_to_grid(
         map,
@@ -88,6 +96,7 @@ pub fn render_mollweide_pixels(
         neg_mode,
         gamma,
         bad_color,
+        bg_color,
         meta,
     );
 
@@ -142,6 +151,7 @@ pub fn plot_mollweide_pdf(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
 
@@ -169,13 +179,20 @@ pub fn plot_mollweide_pdf(
     
     let cr_pdf = Context::new(&surface_pdf).unwrap();
     
-    // Background
+    // // Background
+    // if transparent {
+    //     cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+    // } else {
+    //     cr_pdf.set_source_rgb(1.0, 1.0, 1.0);
+    // }
+    // cr_pdf.paint().unwrap();
+    // Clear raster background ONLY if requested
     if transparent {
+        cr_pdf.set_operator(cairo::Operator::Source);
         cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-    } else {
-        cr_pdf.set_source_rgb(1.0, 1.0, 1.0);
+        cr_pdf.paint().unwrap();
     }
-    cr_pdf.paint().unwrap();
+
    
     // -----------------------------
     // 2. Create raster surface
@@ -214,22 +231,11 @@ pub fn plot_mollweide_pdf(
         scale,
         neg_mode,
         bad_color,
+        bg_color,
         meta,
         &mut sink,
         debug_overlay, // pass the optional overlay
     );
-    // render_mollweide_pixels(
-    //     map,
-    //     layout,
-    //     &scale_params,
-    //     cmap,
-    //     gamma,
-    //     scale,
-    //     neg_mode,
-    //     bad_color,
-    //     meta,
-    //     &mut sink,
-    // );
 
 
     // CRITICAL
@@ -307,6 +313,7 @@ pub fn plot_mollweide_png(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
 
@@ -331,13 +338,40 @@ pub fn plot_mollweide_png(
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    let bg = if transparent {
-        Rgba([0, 0, 0, 0])   // fully transparent
-    } else {
-        Rgba([255, 255, 255, 255])
-    };
+    let bg = Rgba([0, 0, 0, 0]); // ALWAYS transparent
     
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
+
+
+
+    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
+   
+    let mut sink = PngSink { 
+        img: &mut img, 
+        x0: layout.map_x as u32,
+        y0: layout.map_y as u32,
+    };
+
+    let debug_overlay = if cfg!(feature = "debug_overlay") {
+        Some(DebugOverlay::grid_only())
+    } else {
+        None
+    };
+    
+    render_mollweide_pixels(
+        map,
+        layout,
+        &scale_params,
+        cmap,
+        gamma,
+        scale,
+        neg_mode,
+        bad_color,
+        bg_color,
+        meta,
+        &mut sink,
+        debug_overlay, // pass the optional overlay
+    );
 
     if draw_border {
         use cairo::{ImageSurface, Context, Format};
@@ -358,13 +392,15 @@ pub fn plot_mollweide_png(
     
             border_cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             border_cr.paint().unwrap();
+
+            let half = layout.border_width_px / 2.0;
     
             draw_projection_border_pdf(
                 &border_cr,
-                pad as f64,
-                pad as f64,
-                layout.map_w,
-                layout.map_h,
+                pad as f64 - half,
+                pad as f64 - half,
+                layout.map_w + 2.0 * half,
+                layout.map_h + 2.0 * half,
                 layout.border_width_px,
             );
             // border_cr dropped here
@@ -393,50 +429,7 @@ pub fn plot_mollweide_png(
             }
         }
     }
-
-
-    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
-   
-    let mut sink = PngSink { 
-        img: &mut img, 
-        x0: layout.map_x as u32,
-        y0: layout.map_y as u32,
-    };
-
-    let debug_overlay = if cfg!(feature = "debug_overlay") {
-        Some(DebugOverlay::grid_only())
-    } else {
-        None
-    };
     
-    render_mollweide_pixels(
-        map,
-        layout,
-        &scale_params,
-        cmap,
-        gamma,
-        scale,
-        neg_mode,
-        bad_color,
-        meta,
-        &mut sink,
-        debug_overlay, // pass the optional overlay
-    );
-
-    
-    // render_mollweide_pixels(
-    //     map,
-    //     layout,
-    //     &scale_params,
-    //     cmap,
-    //     gamma,
-    //     scale,
-    //     neg_mode,
-    //     bad_color,
-    //     meta,
-    //     &mut sink,
-    // );
-
     if show_colorbar {
         let mut sink = PngSink { 
             img: &mut img,
@@ -562,6 +555,7 @@ pub fn plot_mollweide_auto(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
     let ext = Path::new(filename)
@@ -586,6 +580,7 @@ pub fn plot_mollweide_auto(
                 scale,
                 neg_mode,
                 bad_color,
+                bg_color,
                 meta,
             );
         }
@@ -604,6 +599,7 @@ pub fn plot_mollweide_auto(
                 scale,
                 neg_mode,
                 bad_color,
+                bg_color,
                 meta,
             );
         }
@@ -661,11 +657,6 @@ pub fn render_projection_to_sink(
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
 ) {
-    //let grid = RasterGrid {
-    //    width: layout.map_w as u32,
-    //    height: layout.map_h as u32,
-    //    pixels: new(layout
-    //};
     let grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
 
 
@@ -754,11 +745,13 @@ pub fn render_projection_to_grid(
     neg_mode: NegMode,
     gamma: f64,
     bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
     for (px, py, u, v) in grid.iter() {
         // Convert normalized coordinates [0,1] -> projection
         if let Some((lon, lat)) = proj.inverse(u, v) {
+            grid.set_valid(px, py, true);
             let theta = std::f64::consts::PI / 2.0 - lat;
 
             // Sample the HEALPix map at this point
@@ -773,45 +766,10 @@ pub fn render_projection_to_grid(
             // Write into the grid
             grid.set_pixel(px, py, rgba);
         } else {
-            // Outside the valid projection domain -> mark as bad
-            grid.set_pixel(px, py, bad_color);
+            grid.set_valid(px, py, false);
         }
     }
 }
-// pub fn render_projection_to_grid(
-//     map: &[f64],
-//     proj: &dyn Projection,
-//     grid: &mut RasterGrid,
-//     scale_params: &MollweideScale,
-//     cmap: &Colormap,
-//     scale: Scale,
-//     neg_mode: NegMode,
-//     gamma: f64,
-//     bad_color: Rgba<u8>,
-//     meta: HealpixMeta,
-// ) {
-//     for (px, py, u, v) in grid.iter() {
-//         if let Some((lon, lat)) = proj.inverse(u, v) {
-//             let theta = std::f64::consts::PI / 2.0 - lat;
-// 
-//             if let Some(val) = sample_healpix(map, meta, theta, lon) {
-//                 let rgba = map_to_color(
-//                     val,
-//                     scale_params.minv,
-//                     scale_params.maxv,
-//                     cmap,
-//                     scale,
-//                     neg_mode,
-//                     gamma,
-//                     bad_color,
-//                 );
-// 
-//                 let idx = (py * grid.width + px) as usize;
-//                 grid.buffer[idx] = rgba.0;
-//             }
-//         }
-//     }
-// }
 
 pub fn blit_grid_to_sink(
     grid: &RasterGrid,
@@ -821,40 +779,26 @@ pub fn blit_grid_to_sink(
 ) {
     for y in 0..grid.height {
         for x in 0..grid.width {
-            let p = grid.get_pixel(x, y);
-            if p[3] == 0 {
+            // if p[3] == 0 {
+            //     continue;
+            // }
+            if !grid.is_valid(x, y) {
                 continue;
+            } else {
+                let p = grid.get_pixel(x, y);
+                sink.draw_pixel(x0 + x, y0 + y, p);
             }
-            sink.draw_pixel(x0 + x, y0 + y, p);
         }
     }
 }
 
-// pub fn blit_grid_to_sink(
-//     grid: &RasterGrid,
-//     sink: &mut dyn PixelSink,
-//     x0: u32,
-//     y0: u32,
-// ) {
-//     for y in 0..grid.height {
-//         for x in 0..grid.width {
-//             let idx = (y * grid.width + x) as usize;
-//             let p = grid.buffer[idx];
-// 
-//             if p[3] == 0 {
-//                 continue;
-//             }
-// 
-//             sink.draw_pixel(x0 + x, y0 + y, Rgba(p));
-//         }
-//     }
-// }
 
 #[derive(Clone, Copy, Debug)]
 pub struct DebugOverlay {
     pub enabled: bool,
     pub show_grid_box: bool,
     pub show_center: bool,
+    pub show_background: bool,
 }
 
 impl DebugOverlay {
@@ -863,6 +807,7 @@ impl DebugOverlay {
             enabled: false,
             show_grid_box: false,
             show_center: false,
+            show_background: false,
         }
     }
 
@@ -871,6 +816,16 @@ impl DebugOverlay {
             enabled: true,
             show_grid_box: true,
             show_center: true,
+            show_background: false,
+        }
+    }
+
+    pub fn with_background() -> Self {
+        Self {
+            enabled: true,
+            show_grid_box: true,
+            show_center: true,
+            show_background: true,
         }
     }
 }
@@ -942,6 +897,16 @@ pub fn draw_debug_overlay_raster(
         }
         for dy in cy.saturating_sub(10)..=(cy + 10).min(h - 1) {
             grid.set_pixel_array(cx, dy, red);
+        }
+    }
+}
+
+fn fill_grid_background(grid: &mut RasterGrid) {
+    let bg = Rgba([220, 220, 220, 255]); // your current gray
+
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            grid.set_pixel(x, y, bg);
         }
     }
 }
