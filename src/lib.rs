@@ -345,25 +345,27 @@ mod tests {
     /// ----------------------------
     #[test]
     fn test_scale_value_transformations() {
+        use crate::scale::scale_value;
+
         let min = 1.0;
         let max = 100.0;
     
         // Linear scale
-        let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero, 1.0);
+        let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert!((c - 0.4949).abs() < 1e-3),
             _ => panic!(),
         }
     
         // Log scale
-        let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero, 1.0);
+        let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert!((c - 0.5).abs() < 1e-3),
             _ => panic!(),
         }
     
         // Asinh scale
-        let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero, 1.0);
+        let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert!(c > 0.0 && c < 1.0),
             _ => panic!(),
@@ -375,22 +377,23 @@ mod tests {
     /// ----------------------------
     #[test]
     fn test_neg_mode_behavior() {
+        use crate::scale::scale_value;
         let min = 1.0;
         let max = 10.0;
     
         // Linear scale with Zero mode
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
     
         // Linear scale with Unseen mode
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
         assert!(matches!(t, PixelValue::Bad));
     
         // Check overflow still maps to 1.0
-        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, 1.0);
+        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 1.0),
             _ => panic!(),
@@ -418,15 +421,18 @@ mod tests {
     /// ----------------------------
     #[test]
     fn test_plot_small_map() {
+        use crate::healpix::{HealpixMeta, HealpixOrdering};
         let map = generate_index_map(1); // 12 pixels
         let cmap = get_colormap("viridis");
         let bad_color = Rgba([128, 128, 128, 255]);
         let neg_mode = NegMode::Zero;
+
+        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
     
         let scale = Scale::Linear;
     
         // Should not panic
-        plot_mollweide(
+        plot_mollweide_png(
             &map,
             100,
             "test.png",
@@ -440,6 +446,8 @@ mod tests {
             scale,
             neg_mode,
             bad_color,
+            bad_color,
+            meta,
         );
     }
     
@@ -447,25 +455,26 @@ mod tests {
     
     #[test]
     fn test_linear_scale_clamping() {
+        use crate::scale::scale_value;
         let min = 0.0;
         let max = 10.0;
     
         // Linear + NegMode::Zero → clamp to 0.0
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
     
         // Linear + NegMode::Unseen → Bad
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
         assert!(
             matches!(t, PixelValue::Bad),
             "Linear + NegMode::Unseen should return Bad"
         );
     
         // Above max clamps to 1.0 (never Bad)
-        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, 1.0);
+        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 1.0),
             _ => panic!("Values above max should clamp, not mark Bad"),
@@ -475,24 +484,26 @@ mod tests {
     
     #[test]
     fn test_log_scale_neg_mode() {
+        use crate::scale::scale_value;
         let min = 1.0;
         let max = 100.0;
     
         // NegMode::Zero → maps to Color(0.0)
-        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Zero, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Zero);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Log + NegMode::Zero should return Color(0.0)"),
         }
     
         // NegMode::Unseen → Bad
-        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Unseen, 1.0);
+        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Unseen);
         assert!(matches!(t, PixelValue::Bad));
     }
     
     
     #[test]
     fn test_symlog_symmetry() {
+        use crate::scale::scale_value;
         let min = -100.0;
         let max = 100.0;
         let linthresh = 10.0;
@@ -503,7 +514,6 @@ mod tests {
             max,
             Scale::Symlog { linthresh },
             NegMode::Unseen,
-            1.0,
         );
     
         let neg = scale_value(
@@ -512,7 +522,6 @@ mod tests {
             max,
             Scale::Symlog { linthresh },
             NegMode::Unseen,
-            1.0,
         );
     
         match (pos, neg) {
@@ -525,6 +534,7 @@ mod tests {
     
     #[test]
     fn test_asinh_monotonic() {
+        use crate::scale::scale_value;
         let min = 0.0;
         let max = 100.0;
     
@@ -534,7 +544,6 @@ mod tests {
             max,
             Scale::Asinh { scale: 10.0 },
             NegMode::Unseen,
-            1.0,
         );
     
         let t2 = scale_value(
@@ -543,7 +552,6 @@ mod tests {
             max,
             Scale::Asinh { scale: 10.0 },
             NegMode::Unseen,
-            1.0,
         );
     
         match (t1, t2) {
@@ -571,6 +579,7 @@ mod tests {
     
     #[test]
     fn test_plot_extreme_options() {
+        use crate::healpix::{HealpixMeta, HealpixOrdering};
         let map = generate_index_map(1);
         let cmap = get_colormap("plasma");
         let bad_color = Rgba([255, 0, 255, 255]);
@@ -578,8 +587,10 @@ mod tests {
         let scale = Scale::Symlog {
             linthresh: 10.0,
         };
+
+        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
     
-        plot_mollweide(
+        plot_mollweide_png(
             &map,
             64,
             "test_extreme.png",
@@ -593,6 +604,8 @@ mod tests {
             scale,
             NegMode::Unseen,
             bad_color,
+            bad_color,
+            meta,
         );
     }
     
@@ -616,7 +629,7 @@ mod tests {
     /// ----------------------------
     #[test]
     fn test_log_scale_rejects_nonpositive_min() {
-        use crate::plot::Scale;
+        use scale::Scale;
         use crate::validate_scale_config;
     
         let max = Some(100.0);

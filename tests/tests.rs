@@ -1,12 +1,11 @@
 use std::str::FromStr;
 
 use healpix_plotter::{
-    BadColor, NegMode, PixelValue,
+    InputColor, NegMode, PixelValue,
     RgbaArg, generate_index_map, 
-    scale_value
 };
 
-use healpix_plotter::plot::Scale; // <- Scale comes from plot module
+use healpix_plotter::scale::{Scale, scale_value};
 
 
 
@@ -24,15 +23,15 @@ fn test_rgbaarg_from_str() {
 }
 
 /// ----------------------------
-/// Test BadColor parsing
+/// Test InputColor parsing
 /// ----------------------------
 #[test]
 fn test_bad_color_parse() {
-    assert!(matches!(BadColor::from_str("auto").unwrap(), BadColor::Auto));
-    assert!(matches!(BadColor::from_str("gray").unwrap(), BadColor::Gray));
-    assert!(matches!(BadColor::from_str("grey").unwrap(), BadColor::Gray));
-    assert!(matches!(BadColor::from_str("255,128,0,255").unwrap(),
-        BadColor::Rgba(255,128,0,255)));
+    assert!(matches!(InputColor::from_str("transparent").unwrap(), InputColor::Transparent));
+    assert!(matches!(InputColor::from_str("gray").unwrap(), InputColor::Gray));
+    assert!(matches!(InputColor::from_str("grey").unwrap(), InputColor::Gray));
+    assert!(matches!(InputColor::from_str("255,128,0,255").unwrap(),
+        InputColor::Rgba(255,128,0,255)));
 }
 
 /// ----------------------------
@@ -53,21 +52,21 @@ fn test_scale_value_transformations() {
     let max = 100.0;
 
     // Linear scale
-    let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero, 1.0);
+    let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero);
     match t {
         PixelValue::Color(c) => assert!((c - 0.4949).abs() < 1e-3),
         _ => panic!(),
     }
 
     // Log scale
-    let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero, 1.0);
+    let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero);
     match t {
         PixelValue::Color(c) => assert!((c - 0.5).abs() < 1e-3),
         _ => panic!(),
     }
 
     // Asinh scale
-    let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero, 1.0);
+    let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero);
     match t {
         PixelValue::Color(c) => assert!(c > 0.0 && c < 1.0),
         _ => panic!(),
@@ -83,23 +82,25 @@ fn test_neg_mode_behavior() {
     let max = 10.0;
 
     // Negative value with Zero mode
-    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, 1.0);
+    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero);
     match t {
         PixelValue::Color(c) => assert_eq!(c, 0.0),
         _ => panic!(),
     }
 
     // Negative value with Unseen mode
-    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen, 1.0);
+    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
     assert!(matches!(t, PixelValue::Bad));
 }
 
 #[test]
 fn test_plot_smoke() {
+    use healpix_plotter::healpix::{HealpixMeta, HealpixOrdering};
     let map = healpix_plotter::generate_index_map(1);
     let cmap = healpix_plotter::get_colormap("viridis");
+    let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
 
-    healpix_plotter::plot_mollweide(
+    healpix_plotter::plot_mollweide_png(
         &map,
         32,
         "smoke.png",
@@ -110,9 +111,11 @@ fn test_plot_smoke() {
         true,
         false,
         1.0,
-        healpix_plotter::plot::Scale::Linear,
+        healpix_plotter::scale::Scale::Linear,
         healpix_plotter::NegMode::Zero,
         image::Rgba([0, 0, 0, 0]),
+        image::Rgba([0, 0, 0, 0]),
+        meta,
     );
 }
 
