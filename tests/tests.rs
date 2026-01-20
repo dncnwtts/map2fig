@@ -87,9 +87,6 @@ fn test_neg_mode_behavior() {
         _ => panic!(),
     }
 
-    // Negative value with Unseen mode
-    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
-    assert!(matches!(t, PixelValue::Bad));
 }
 
 #[test]

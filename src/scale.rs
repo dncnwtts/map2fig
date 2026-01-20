@@ -109,39 +109,30 @@ pub fn scale_value(
         return PixelValue::Bad;
     }
     
-    // Underflow relative to min (still global)
-    if value < min {
-        return match neg_mode {
-            NegMode::Zero => PixelValue::Color(0.0),
-            NegMode::Unseen => PixelValue::Bad,
-        };
-    }
-    
-    // Overflow clamps
-    if value > max {
-        return PixelValue::Color(1.0);
-    }
-    
     let t = match scale {
         Scale::Linear => {
-            if value < 0.0 {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
+            if value <= min {
+                0.0
+            } else if value >= max {
+                1.0
+            } else {
+                (value - min) / (max - min)
             }
-            (value - min) / (max - min)
         }
-    
+
         Scale::Log => {
-            if value <= 0.0 {
+            if value <= 0.0 || value < min {
                 return match neg_mode {
                     NegMode::Zero => PixelValue::Color(0.0),
                     NegMode::Unseen => PixelValue::Bad,
                 };
+            } else if value >= max {
+                1.0
+            } else {
+                (value.ln() - min.ln()) / (max.ln() - min.ln())
             }
-            (value.ln() - min.ln()) / (max.ln() - min.ln())
         }
+
     
         Scale::Asinh { scale } => {
             let val = (value / scale).asinh();
@@ -183,3 +174,14 @@ pub fn scale_value(
     PixelValue::Color(t.clamp(0.0, 1.0))
 
 }
+
+
+#[test]
+fn linear_underflow_always_saturates() {
+    let t = scale_value(-5.0, 0.0, 10.0, Scale::Linear, NegMode::Unseen);
+    match t {
+        PixelValue::Color(c) => assert_eq!(c, 0.0),
+        _ => panic!("Linear underflow should saturate, not go Bad"),
+    }
+}
+

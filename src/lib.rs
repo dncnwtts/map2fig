@@ -388,10 +388,6 @@ mod tests {
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
     
-        // Linear scale with Unseen mode
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
-        assert!(matches!(t, PixelValue::Bad));
-    
         // Check overflow still maps to 1.0
         let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen);
         match t {
@@ -465,13 +461,6 @@ mod tests {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
-    
-        // Linear + NegMode::Unseen → Bad
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Unseen);
-        assert!(
-            matches!(t, PixelValue::Bad),
-            "Linear + NegMode::Unseen should return Bad"
-        );
     
         // Above max clamps to 1.0 (never Bad)
         let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen);
