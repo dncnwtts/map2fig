@@ -18,6 +18,8 @@ use clap::Parser;
 use std::str::FromStr;
 use image::{Rgba, RgbaImage};
 
+pub const DEBUG_PROJECTION_OVERLAY: bool = true;
+
 #[derive(Clone, Copy)]
 pub enum NegMode {
     Zero,

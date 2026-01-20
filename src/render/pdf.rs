@@ -1,11 +1,14 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
-use crate::{Colormap, Scale, NegMode};
+use crate::{Colormap, Scale, NegMode,CairoImageSink};
 use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks,compute_colorbar_tick_positions};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
 use crate::layout::{ColorbarLayout};
+use crate::render::target::{RenderTarget,PixelSource};
+use crate::PixelSink;
+
 
 
 pub struct PdfBackend<'a> {
@@ -265,3 +268,39 @@ pub fn draw_colorbar_pdf(
         );
 
 }
+
+pub struct PdfRenderTarget<'a> {
+    pub cr: &'a cairo::Context,
+}
+
+impl RenderTarget for PdfRenderTarget<'_> {
+    fn blit_raster(
+        &mut self,
+        raster: &dyn PixelSource,
+        x: f64,
+        y: f64,
+    ) {
+        let surface = ImageSurface::create(
+            cairo::Format::ARgb32,
+            raster.width() as i32,
+            raster.height() as i32,
+        ).unwrap();
+
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            let mut sink = CairoImageSink { cr: &cr };
+
+            for py in 0..raster.height() {
+                for px in 0..raster.width() {
+                    let [r, g, b, a] = raster.get_pixel(px, py);
+                    sink.draw_pixel(px, py, image::Rgba([r, g, b, a]));
+                }
+            }
+        }
+
+        surface.flush();
+        self.cr.set_source_surface(&surface, x, y);
+        self.cr.paint().unwrap();
+    }
+}
+

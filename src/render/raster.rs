@@ -2,6 +2,7 @@ use image::{Rgba, RgbaImage};
 use rusttype::{Font};
 
 use crate::render::RenderBackend;
+use crate::render::target::PixelSource;
 
 pub struct RasterBackend<'a> {
     pub img: &'a mut RgbaImage,
@@ -114,17 +115,19 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct RasterGrid {
-    pub map_w: u32,
-    pub map_h: u32,
-    pub pad: u32,
+    pub width: u32,
+    pub height: u32,
+    pub buffer: Vec<[u8; 4]>,
 }
 
+
 impl RasterGrid {
-    pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> {
-        let w = self.map_w;
-        let h = self.map_h;
+    // pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> {
+    pub fn iter(&self) -> impl Iterator<Item = (u32, u32, f64, f64)> + use<> {
+        let w = self.width;
+        let h = self.height;
 
         (0..h).flat_map(move |py| {
             (0..w).map(move |px| {
@@ -133,6 +136,49 @@ impl RasterGrid {
                 (px, py, u, v)
             })
         })
+    }
+    #[inline]
+    pub fn norm_x(&self, x: u32) -> f64 {
+        x as f64 / (self.width - 1) as f64
+    }
+
+    #[inline]
+    pub fn norm_y(&self, y: u32) -> f64 {
+        y as f64 / (self.height - 1) as f64
+    }
+
+    pub fn new(width: u32, height: u32) -> Self {
+        let npix = (width * height) as usize;
+
+        Self {
+            width,
+            height,
+            buffer: vec![[0, 0, 0, 0]; npix], // transparent RGBA
+        }
+    }
+
+    #[inline]
+    pub fn put_pixel(&mut self, x: u32, y: u32, rgba: [u8; 4]) {
+        if x >= self.width || y >= self.height {
+            return;
+        }
+        let idx = (y * self.width + x) as usize;
+        self.buffer[idx] = rgba;
+    }
+}
+
+
+impl PixelSource for RasterGrid {
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> [u8; 4] {
+        self.buffer[(y * self.width + x) as usize]
     }
 }
 

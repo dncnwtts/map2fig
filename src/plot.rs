@@ -14,6 +14,7 @@ use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
 
+
 pub struct MollweideScale {
     pub minv: f64,
     pub maxv: f64,
@@ -74,19 +75,32 @@ pub fn render_mollweide_pixels(
     use crate::mollweide::MollweideProjection;
     let proj = MollweideProjection;
 
-    render_projection_to_sink(
+    let mut grid = RasterGrid::new(
+        layout.map_w as u32,
+        layout.map_h as u32,
+    );
+
+    render_projection_to_grid(
         map,
         &proj,
-        &layout,
-        &scale_params,
+        &mut grid,
+        scale_params,
         cmap,
         scale,
         neg_mode,
         gamma,
         bad_color,
         meta,
-        sink,
     );
+
+    draw_debug_overlay_raster(
+        &mut grid,
+        DebugOverlay::grid_only(),
+    );
+
+
+    blit_grid_to_sink(&grid, sink, 0, 0);
+
 }
 
 
@@ -189,7 +203,6 @@ pub fn plot_mollweide_pdf(
     
     let mut sink = CairoImageSink { cr: &cr_img };
     render_mollweide_pixels(
-    //render_projection_to_sink(
         map,
         layout,
         &scale_params,
@@ -212,11 +225,10 @@ pub fn plot_mollweide_pdf(
     // -----------------------------
     let _ = cr_pdf.set_source_surface(
         &surface_img,
-        layout.map_x - layout.map_pad,
-        layout.map_y - layout.map_pad,
+        layout.map_x,
+        layout.map_y,
     );
     cr_pdf.paint().unwrap();
-
 
 
     // Draw vector border ON TOP
@@ -260,6 +272,8 @@ pub trait RenderBackend {
     fn stroke_path(&mut self);
     fn fill_path(&mut self);
     fn draw_text(&mut self, x: f64, y: f64, text: &str, size: f64);
+    fn stroke_line(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, _width: f64);
+    fn draw_line(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, _width: f64);
 }
 
 
@@ -369,12 +383,11 @@ pub fn plot_mollweide_png(
    
     let mut sink = PngSink { 
         img: &mut img, 
-        x0: (layout.map_x - layout.map_pad) as u32,
-        y0: (layout.map_y - layout.map_pad) as u32,
+        x0: layout.map_x as u32,
+        y0: layout.map_y as u32,
     };
     
     render_mollweide_pixels(
-    //render_projection_to_sink(
         map,
         layout,
         &scale_params,
@@ -598,7 +611,6 @@ pub fn map_to_color(
 }
 
 
-
 pub fn render_projection_to_sink(
     map: &[f64],
     proj: &dyn Projection,
@@ -612,15 +624,63 @@ pub fn render_projection_to_sink(
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
 ) {
-    let grid = RasterGrid {
-        map_w: layout.map_w as u32,
-        map_h: layout.map_h as u32,
-        pad: layout.map_pad as u32,
-    };
-    
+    //let grid = RasterGrid {
+    //    width: layout.map_w as u32,
+    //    height: layout.map_h as u32,
+    //    pixels: new(layout
+    //};
+    let grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
+
+
+    for py in 0..grid.height {
+        for px in 0..grid.width {
+            let (theta, lon) = match proj.pixel_to_ang(px, py, &grid) {
+                Some(v) => v,
+                None => continue,
+            };
+
+            let val = match sample_healpix(map, meta, theta, lon) {
+                Some(v) => v,
+                None => continue,
+            };
+
+            let rgba = map_to_color(
+                val,
+                scale_params.minv,
+                scale_params.maxv,
+                cmap,
+                scale,
+                neg_mode,
+                gamma,
+                bad_color,
+            );
+
+            sink.draw_pixel(
+                px,
+                py,
+                rgba,
+            );
+        }
+    }
+}
+
+
+pub fn render_projection_to_grid(
+    map: &[f64],
+    proj: &dyn Projection,
+    grid: &mut RasterGrid,
+    scale_params: &MollweideScale,
+    cmap: &Colormap,
+    scale: Scale,
+    neg_mode: NegMode,
+    gamma: f64,
+    bad_color: Rgba<u8>,
+    meta: HealpixMeta,
+) {
     for (px, py, u, v) in grid.iter() {
         if let Some((lon, lat)) = proj.inverse(u, v) {
             let theta = std::f64::consts::PI / 2.0 - lat;
+
             if let Some(val) = sample_healpix(map, meta, theta, lon) {
                 let rgba = map_to_color(
                     val,
@@ -632,15 +692,127 @@ pub fn render_projection_to_sink(
                     gamma,
                     bad_color,
                 );
-    
-                sink.draw_pixel(
-                    px + grid.pad,
-                    py + grid.pad,
-                    rgba,
-                );
+
+                let idx = (py * grid.width + px) as usize;
+                grid.buffer[idx] = rgba.0;
             }
         }
     }
+}
 
+pub fn blit_grid_to_sink(
+    grid: &RasterGrid,
+    sink: &mut dyn PixelSink,
+    x0: u32,
+    y0: u32,
+) {
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            let idx = (y * grid.width + x) as usize;
+            let p = grid.buffer[idx];
+
+            if p[3] == 0 {
+                continue;
+            }
+
+            sink.draw_pixel(x0 + x, y0 + y, Rgba(p));
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DebugOverlay {
+    pub enabled: bool,
+    pub show_grid_box: bool,
+    pub show_center: bool,
+}
+
+impl DebugOverlay {
+    pub fn off() -> Self {
+        Self {
+            enabled: false,
+            show_grid_box: false,
+            show_center: false,
+        }
+    }
+
+    pub fn grid_only() -> Self {
+        Self {
+            enabled: true,
+            show_grid_box: true,
+            show_center: true,
+        }
+    }
+}
+
+
+pub fn draw_debug_overlay(
+    sink: &mut dyn RenderBackend,
+    grid: &RasterGrid,
+    x0: u32,
+    y0: u32,
+    overlay: DebugOverlay,
+) {
+    if !overlay.enabled {
+        return;
+    }
+
+    let x0 = x0 as f64;
+    let y0 = y0 as f64;
+    let w = grid.width as f64;
+    let h = grid.height as f64;
+
+    sink.set_color(255, 0, 0, 160);
+
+    if overlay.show_grid_box {
+        sink.stroke_line(x0, y0, x0 + w, y0, 1.0);
+        sink.stroke_line(x0 + w, y0, x0 + w, y0 + h, 1.0);
+        sink.stroke_line(x0 + w, y0 + h, x0, y0 + h, 1.0);
+        sink.stroke_line(x0, y0 + h, x0, y0, 1.0);
+    }
+
+    if overlay.show_center {
+        let cx = x0 + 0.5 * w;
+        let cy = y0 + 0.5 * h;
+
+        sink.stroke_line(cx - 10.0, cy, cx + 10.0, cy, 1.0);
+        sink.stroke_line(cx, cy - 10.0, cx, cy + 10.0, 1.0);
+    }
+}
+
+pub fn draw_debug_overlay_raster(
+    grid: &mut RasterGrid,
+    overlay: DebugOverlay,
+) {
+    if !overlay.enabled {
+        return;
+    }
+
+    let w = grid.width;
+    let h = grid.height;
+    let red = [255, 0, 0, 160];
+
+    if overlay.show_grid_box {
+        for x in 0..w {
+            grid.put_pixel(x, 0, red);
+            grid.put_pixel(x, h - 1, red);
+        }
+        for y in 0..h {
+            grid.put_pixel(0, y, red);
+            grid.put_pixel(w - 1, y, red);
+        }
+    }
+
+    if overlay.show_center {
+        let cx = w / 2;
+        let cy = h / 2;
+
+        for dx in cx.saturating_sub(10)..=(cx + 10).min(w - 1) {
+            grid.put_pixel(dx, cy, red);
+        }
+        for dy in cy.saturating_sub(10)..=(cy + 10).min(h - 1) {
+            grid.put_pixel(cx, dy, red);
+        }
+    }
 }
 
