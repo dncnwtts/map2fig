@@ -71,14 +71,12 @@ pub fn render_mollweide_pixels(
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
+    debug_overlay: Option<DebugOverlay>, // new optional parameter
 ) {
     use crate::mollweide::MollweideProjection;
     let proj = MollweideProjection;
 
-    let mut grid = RasterGrid::new(
-        layout.map_w as u32,
-        layout.map_h as u32,
-    );
+    let mut grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
 
     render_projection_to_grid(
         map,
@@ -93,15 +91,14 @@ pub fn render_mollweide_pixels(
         meta,
     );
 
-    draw_debug_overlay_raster(
-        &mut grid,
-        DebugOverlay::grid_only(),
-    );
-
+    // Draw debug overlay only if provided
+    if let Some(overlay) = debug_overlay {
+        draw_debug_overlay_raster(&mut grid, overlay);
+    }
 
     blit_grid_to_sink(&grid, sink, 0, 0);
-
 }
+
 
 
 
@@ -202,6 +199,12 @@ pub fn plot_mollweide_pdf(
     let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
     
     let mut sink = CairoImageSink { cr: &cr_img };
+    let debug_overlay = if cfg!(feature = "debug_overlay") {
+        Some(DebugOverlay::grid_only())
+    } else {
+        None
+    };
+    
     render_mollweide_pixels(
         map,
         layout,
@@ -213,7 +216,20 @@ pub fn plot_mollweide_pdf(
         bad_color,
         meta,
         &mut sink,
+        debug_overlay, // pass the optional overlay
     );
+    // render_mollweide_pixels(
+    //     map,
+    //     layout,
+    //     &scale_params,
+    //     cmap,
+    //     gamma,
+    //     scale,
+    //     neg_mode,
+    //     bad_color,
+    //     meta,
+    //     &mut sink,
+    // );
 
 
     // CRITICAL
@@ -386,6 +402,12 @@ pub fn plot_mollweide_png(
         x0: layout.map_x as u32,
         y0: layout.map_y as u32,
     };
+
+    let debug_overlay = if cfg!(feature = "debug_overlay") {
+        Some(DebugOverlay::grid_only())
+    } else {
+        None
+    };
     
     render_mollweide_pixels(
         map,
@@ -398,7 +420,22 @@ pub fn plot_mollweide_png(
         bad_color,
         meta,
         &mut sink,
+        debug_overlay, // pass the optional overlay
     );
+
+    
+    // render_mollweide_pixels(
+    //     map,
+    //     layout,
+    //     &scale_params,
+    //     cmap,
+    //     gamma,
+    //     scale,
+    //     neg_mode,
+    //     bad_color,
+    //     meta,
+    //     &mut sink,
+    // );
 
     if show_colorbar {
         let mut sink = PngSink { 
@@ -908,41 +945,3 @@ pub fn draw_debug_overlay_raster(
         }
     }
 }
-
-
-// pub fn draw_debug_overlay_raster(
-//     grid: &mut RasterGrid,
-//     overlay: DebugOverlay,
-// ) {
-//     if !overlay.enabled {
-//         return;
-//     }
-// 
-//     let w = grid.width;
-//     let h = grid.height;
-//     let red = [255, 0, 0, 160];
-// 
-//     if overlay.show_grid_box {
-//         for x in 0..w {
-//             grid.put_pixel(x, 0, red);
-//             grid.put_pixel(x, h - 1, red);
-//         }
-//         for y in 0..h {
-//             grid.put_pixel(0, y, red);
-//             grid.put_pixel(w - 1, y, red);
-//         }
-//     }
-// 
-//     if overlay.show_center {
-//         let cx = w / 2;
-//         let cy = h / 2;
-// 
-//         for dx in cx.saturating_sub(10)..=(cx + 10).min(w - 1) {
-//             grid.put_pixel(dx, cy, red);
-//         }
-//         for dy in cy.saturating_sub(10)..=(cy + 10).min(h - 1) {
-//             grid.put_pixel(cx, dy, red);
-//         }
-//     }
-// }
-
