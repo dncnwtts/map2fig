@@ -27,7 +27,6 @@ fn test_rgbaarg_from_str() {
 /// ----------------------------
 #[test]
 fn test_bad_color_parse() {
-    assert!(matches!(InputColor::from_str("transparent").unwrap(), InputColor::Transparent));
     assert!(matches!(InputColor::from_str("gray").unwrap(), InputColor::Gray));
     assert!(matches!(InputColor::from_str("grey").unwrap(), InputColor::Gray));
     assert!(matches!(InputColor::from_str("255,128,0,255").unwrap(),

@@ -92,6 +92,7 @@ pub enum Scale {
     PlanckLog { linthresh: f64 },
 }
 
+
 pub fn scale_value(
     value: f64,
     min: f64,
@@ -103,105 +104,82 @@ pub fn scale_value(
         panic!("min must be < max");
     }
 
-
+    // Unseen / NaN handling
     if !is_seen(value) {
         return PixelValue::Bad;
     }
-
+    
+    // Underflow relative to min (still global)
     if value < min {
-        return PixelValue::Underflow;
+        return match neg_mode {
+            NegMode::Zero => PixelValue::Color(0.0),
+            NegMode::Unseen => PixelValue::Bad,
+        };
     }
-
+    
+    // Overflow clamps
     if value > max {
-        return PixelValue::Overflow;
+        return PixelValue::Color(1.0);
     }
-
-
-    let t: f64 = match scale {
+    
+    let t = match scale {
         Scale::Linear => {
-            if value < min {
+            if value < 0.0 {
                 return match neg_mode {
                     NegMode::Zero => PixelValue::Color(0.0),
                     NegMode::Unseen => PixelValue::Bad,
                 };
-            } else if value > max {
-                1.0
-            } else {
-                (value - min) / (max - min)
             }
+            (value - min) / (max - min)
         }
-
+    
         Scale::Log => {
-            if value <= 0.0 || value < min {
+            if value <= 0.0 {
                 return match neg_mode {
                     NegMode::Zero => PixelValue::Color(0.0),
                     NegMode::Unseen => PixelValue::Bad,
                 };
-            } else if value > max {
-                1.0
-            } else {
-                (value.ln() - min.ln()) / (max.ln() - min.ln())
             }
+            (value.ln() - min.ln()) / (max.ln() - min.ln())
         }
-
+    
         Scale::Asinh { scale } => {
             let val = (value / scale).asinh();
             let min_val = (min / scale).asinh();
             let max_val = (max / scale).asinh();
-
-            if val < min_val {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if val > max_val {
-                1.0
-            } else {
-                (val - min_val) / (max_val - min_val)
-            }
+            (val - min_val) / (max_val - min_val)
         }
-
+    
+        // ✅ Symlog explicitly supports negative values
         Scale::Symlog { linthresh } => {
             let abs_val = value.abs();
-            let scaled = if abs_val < linthresh {
+            let max_abs = max.abs();
+    
+            if abs_val < linthresh {
                 0.5 + 0.5 * (value / linthresh)
             } else {
-                0.5 + 0.5 * value.signum()
-                    * (linthresh + (abs_val - linthresh).ln())
-                    / (linthresh + (max.abs() - linthresh).ln())
-            };
-
-            if value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
-            } else {
-                scaled
+                0.5
+                    + 0.5
+                        * value.signum()
+                        * (linthresh + (abs_val - linthresh).ln())
+                        / (linthresh + (max_abs - linthresh).ln())
             }
         }
-
+    
+        // ✅ PlanckLog also symmetric
         Scale::PlanckLog { linthresh } => {
-            if value < min {
-                return match neg_mode {
-                    NegMode::Zero => PixelValue::Color(0.0),
-                    NegMode::Unseen => PixelValue::Bad,
-                };
-            } else if value > max {
-                1.0
+            if value.abs() < linthresh {
+                0.5 + 0.5 * (value / linthresh)
             } else {
-                if value.abs() < linthresh {
-                    0.5 + 0.5 * (value / linthresh)
-                } else {
-                    0.5 + 0.5 * value.signum()
+                0.5
+                    + 0.5
+                        * value.signum()
                         * (linthresh + (value.abs() - linthresh).ln())
                         / (linthresh + (max - linthresh).ln())
-                }
             }
         }
     };
+    
+    PixelValue::Color(t.clamp(0.0, 1.0))
 
-    PixelValue::Color(t)
 }
