@@ -665,6 +665,48 @@ pub fn render_projection_to_sink(
 }
 
 
+/// Convert a scalar map value to a PixelValue (handles underflow/overflow)
+#[inline]
+pub fn map_to_pixel_value(
+    val: f64,
+    minv: f64,
+    maxv: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+) -> PixelValue {
+    match scale_value(val, minv, maxv, scale, neg_mode) {
+        PixelValue::Bad => PixelValue::Bad,
+        PixelValue::Underflow => PixelValue::Underflow,
+        PixelValue::Overflow => PixelValue::Overflow,
+        PixelValue::Color(t) => PixelValue::Color(t),
+    }
+}
+/// Convert a PixelValue into an RGBA color
+#[inline]
+pub fn pixel_value_to_rgba(
+    pv: PixelValue,
+    cmap: &Colormap,
+    gamma: f64,
+    bad_color: Rgba<u8>,
+) -> Rgba<u8> {
+    match pv {
+        PixelValue::Color(t) => {
+            let t = apply_gamma(t, gamma);
+            let c = cmap.sample(t);
+            Rgba([c[0], c[1], c[2], 255])
+        }
+        PixelValue::Underflow => {
+            let c = cmap.sample(0.0);
+            Rgba([c[0], c[1], c[2], 255])
+        }
+        PixelValue::Overflow => {
+            let c = cmap.sample(1.0);
+            Rgba([c[0], c[1], c[2], 255])
+        }
+        PixelValue::Bad => bad_color,
+    }
+}
+
 pub fn render_projection_to_grid(
     map: &[f64],
     proj: &dyn Projection,
@@ -678,27 +720,61 @@ pub fn render_projection_to_grid(
     meta: HealpixMeta,
 ) {
     for (px, py, u, v) in grid.iter() {
+        // Convert normalized coordinates [0,1] -> projection
         if let Some((lon, lat)) = proj.inverse(u, v) {
             let theta = std::f64::consts::PI / 2.0 - lat;
 
-            if let Some(val) = sample_healpix(map, meta, theta, lon) {
-                let rgba = map_to_color(
-                    val,
-                    scale_params.minv,
-                    scale_params.maxv,
-                    cmap,
-                    scale,
-                    neg_mode,
-                    gamma,
-                    bad_color,
-                );
+            // Sample the HEALPix map at this point
+            let pixel_val = match sample_healpix(map, meta, theta, lon) {
+                Some(val) => map_to_pixel_value(val, scale_params.minv, scale_params.maxv, scale, neg_mode),
+                None => PixelValue::Bad,
+            };
 
-                let idx = (py * grid.width + px) as usize;
-                grid.buffer[idx] = rgba.0;
-            }
+            // Convert to RGBA
+            let rgba = pixel_value_to_rgba(pixel_val, cmap, gamma, bad_color);
+
+            // Write into the grid
+            grid.set_pixel(px, py, rgba);
+        } else {
+            // Outside the valid projection domain -> mark as bad
+            grid.set_pixel(px, py, bad_color);
         }
     }
 }
+// pub fn render_projection_to_grid(
+//     map: &[f64],
+//     proj: &dyn Projection,
+//     grid: &mut RasterGrid,
+//     scale_params: &MollweideScale,
+//     cmap: &Colormap,
+//     scale: Scale,
+//     neg_mode: NegMode,
+//     gamma: f64,
+//     bad_color: Rgba<u8>,
+//     meta: HealpixMeta,
+// ) {
+//     for (px, py, u, v) in grid.iter() {
+//         if let Some((lon, lat)) = proj.inverse(u, v) {
+//             let theta = std::f64::consts::PI / 2.0 - lat;
+// 
+//             if let Some(val) = sample_healpix(map, meta, theta, lon) {
+//                 let rgba = map_to_color(
+//                     val,
+//                     scale_params.minv,
+//                     scale_params.maxv,
+//                     cmap,
+//                     scale,
+//                     neg_mode,
+//                     gamma,
+//                     bad_color,
+//                 );
+// 
+//                 let idx = (py * grid.width + px) as usize;
+//                 grid.buffer[idx] = rgba.0;
+//             }
+//         }
+//     }
+// }
 
 pub fn blit_grid_to_sink(
     grid: &RasterGrid,
@@ -708,17 +784,34 @@ pub fn blit_grid_to_sink(
 ) {
     for y in 0..grid.height {
         for x in 0..grid.width {
-            let idx = (y * grid.width + x) as usize;
-            let p = grid.buffer[idx];
-
+            let p = grid.get_pixel(x, y);
             if p[3] == 0 {
                 continue;
             }
-
-            sink.draw_pixel(x0 + x, y0 + y, Rgba(p));
+            sink.draw_pixel(x0 + x, y0 + y, p);
         }
     }
 }
+
+// pub fn blit_grid_to_sink(
+//     grid: &RasterGrid,
+//     sink: &mut dyn PixelSink,
+//     x0: u32,
+//     y0: u32,
+// ) {
+//     for y in 0..grid.height {
+//         for x in 0..grid.width {
+//             let idx = (y * grid.width + x) as usize;
+//             let p = grid.buffer[idx];
+// 
+//             if p[3] == 0 {
+//                 continue;
+//             }
+// 
+//             sink.draw_pixel(x0 + x, y0 + y, Rgba(p));
+//         }
+//     }
+// }
 
 #[derive(Clone, Copy, Debug)]
 pub struct DebugOverlay {
@@ -794,12 +887,12 @@ pub fn draw_debug_overlay_raster(
 
     if overlay.show_grid_box {
         for x in 0..w {
-            grid.put_pixel(x, 0, red);
-            grid.put_pixel(x, h - 1, red);
+            grid.set_pixel_array(x, 0, red);
+            grid.set_pixel_array(x, h - 1, red);
         }
         for y in 0..h {
-            grid.put_pixel(0, y, red);
-            grid.put_pixel(w - 1, y, red);
+            grid.set_pixel_array(0, y, red);
+            grid.set_pixel_array(w - 1, y, red);
         }
     }
 
@@ -808,11 +901,48 @@ pub fn draw_debug_overlay_raster(
         let cy = h / 2;
 
         for dx in cx.saturating_sub(10)..=(cx + 10).min(w - 1) {
-            grid.put_pixel(dx, cy, red);
+            grid.set_pixel_array(dx, cy, red);
         }
         for dy in cy.saturating_sub(10)..=(cy + 10).min(h - 1) {
-            grid.put_pixel(cx, dy, red);
+            grid.set_pixel_array(cx, dy, red);
         }
     }
 }
+
+
+// pub fn draw_debug_overlay_raster(
+//     grid: &mut RasterGrid,
+//     overlay: DebugOverlay,
+// ) {
+//     if !overlay.enabled {
+//         return;
+//     }
+// 
+//     let w = grid.width;
+//     let h = grid.height;
+//     let red = [255, 0, 0, 160];
+// 
+//     if overlay.show_grid_box {
+//         for x in 0..w {
+//             grid.put_pixel(x, 0, red);
+//             grid.put_pixel(x, h - 1, red);
+//         }
+//         for y in 0..h {
+//             grid.put_pixel(0, y, red);
+//             grid.put_pixel(w - 1, y, red);
+//         }
+//     }
+// 
+//     if overlay.show_center {
+//         let cx = w / 2;
+//         let cy = h / 2;
+// 
+//         for dx in cx.saturating_sub(10)..=(cx + 10).min(w - 1) {
+//             grid.put_pixel(dx, cy, red);
+//         }
+//         for dy in cy.saturating_sub(10)..=(cy + 10).min(h - 1) {
+//             grid.put_pixel(cx, dy, red);
+//         }
+//     }
+// }
 
