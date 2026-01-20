@@ -69,7 +69,6 @@ pub fn render_mollweide_pixels(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
     debug_overlay: Option<DebugOverlay>, // new optional parameter
@@ -96,7 +95,6 @@ pub fn render_mollweide_pixels(
         neg_mode,
         gamma,
         bad_color,
-        bg_color,
         meta,
     );
 
@@ -151,7 +149,7 @@ pub fn plot_mollweide_pdf(
     scale: Scale,
     neg_mode: NegMode,
     bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
+    _bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
 
@@ -179,14 +177,6 @@ pub fn plot_mollweide_pdf(
     
     let cr_pdf = Context::new(&surface_pdf).unwrap();
     
-    // // Background
-    // if transparent {
-    //     cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-    // } else {
-    //     cr_pdf.set_source_rgb(1.0, 1.0, 1.0);
-    // }
-    // cr_pdf.paint().unwrap();
-    // Clear raster background ONLY if requested
     if transparent {
         cr_pdf.set_operator(cairo::Operator::Source);
         cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
@@ -231,7 +221,6 @@ pub fn plot_mollweide_pdf(
         scale,
         neg_mode,
         bad_color,
-        bg_color,
         meta,
         &mut sink,
         debug_overlay, // pass the optional overlay
@@ -338,7 +327,8 @@ pub fn plot_mollweide_png(
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    let bg = Rgba([0, 0, 0, 0]); // ALWAYS transparent
+    let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
+        if transparent {0} else {255}]);
     
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
@@ -367,7 +357,6 @@ pub fn plot_mollweide_png(
         scale,
         neg_mode,
         bad_color,
-        bg_color,
         meta,
         &mut sink,
         debug_overlay, // pass the optional overlay
@@ -393,16 +382,12 @@ pub fn plot_mollweide_png(
             border_cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             border_cr.paint().unwrap();
 
-            let half = layout.border_width_px / 2.0;
-            let half = layout.border_width_px * 1.00;
-            let half = 0.0;
-    
             draw_projection_border_pdf(
                 &border_cr,
-                pad as f64 - half,
-                pad as f64 - half,
-                layout.map_w + 2.0 * half,
-                layout.map_h + 2.0 * half,
+                pad as f64,
+                pad as f64,
+                layout.map_w,
+                layout.map_h,
                 layout.border_width_px,
             );
             // border_cr dropped here
@@ -762,26 +747,38 @@ pub fn render_projection_to_grid(
     neg_mode: NegMode,
     gamma: f64,
     bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
     meta: HealpixMeta,
 ) {
-    for (px, py, u, v) in grid.iter() {
-        // Convert normalized coordinates [0,1] -> projection
-        if let Some((lon, lat)) = proj.inverse(u, v) {
-            grid.set_valid(px, py, true);
-            let theta = std::f64::consts::PI / 2.0 - lat;
 
-            // Sample the HEALPix map at this point
+    for (px, py, u, v) in grid.iter() {
+        let x = 2.0 * u - 1.0;
+        let y = 2.0 * v - 1.0;
+    
+        let inside_oval = (x * x) / 4.0 + (y * y) <= 1.0;
+    
+        if !inside_oval {
+            grid.set_valid(px, py, false);
+            continue;
+        }
+    
+        if let Some((lon, lat)) = proj.inverse(u, v) {
+            let theta = std::f64::consts::PI / 2.0 - lat;
+    
             let pixel_val = match sample_healpix(map, meta, theta, lon) {
-                Some(val) => map_to_pixel_value(val, scale_params.minv, scale_params.maxv, scale, neg_mode),
+                Some(val) => map_to_pixel_value(
+                    val,
+                    scale_params.minv,
+                    scale_params.maxv,
+                    scale,
+                    neg_mode,
+                ),
                 None => PixelValue::Bad,
             };
-
-            // Convert to RGBA
+    
             let rgba = pixel_value_to_rgba(pixel_val, cmap, gamma, bad_color);
-
-            // Write into the grid
+    
             grid.set_pixel(px, py, rgba);
+            grid.set_valid(px, py, true);
         } else {
             grid.set_valid(px, py, false);
         }
@@ -796,9 +793,6 @@ pub fn blit_grid_to_sink(
 ) {
     for y in 0..grid.height {
         for x in 0..grid.width {
-            // if p[3] == 0 {
-            //     continue;
-            // }
             if !grid.is_valid(x, y) {
                 continue;
             } else {

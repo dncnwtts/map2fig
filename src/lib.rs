@@ -260,7 +260,7 @@ pub fn resolve_input_color(bad: Option<InputColor>, cmap: &Colormap, transparent
         }
 
         InputColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
-        InputColor::Transparent => Rgba([0, 0,0,0]),
+        InputColor::Transparent => Rgba([255,255,255,0]),
         InputColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
     }
 }

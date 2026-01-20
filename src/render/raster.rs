@@ -197,8 +197,6 @@ impl RasterGrid {
     pub fn norm_y(&self, y: u32) -> f64 {
         y as f64 / (self.height - 1) as f64
     }
-
-
 }
 
 

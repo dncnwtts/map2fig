@@ -299,7 +299,7 @@ impl RenderTarget for PdfRenderTarget<'_> {
         }
 
         surface.flush();
-        self.cr.set_source_surface(&surface, x, y);
+        let _ = self.cr.set_source_surface(&surface, x, y);
         self.cr.paint().unwrap();
     }
 }
