@@ -394,6 +394,8 @@ pub fn plot_mollweide_png(
             border_cr.paint().unwrap();
 
             let half = layout.border_width_px / 2.0;
+            let half = layout.border_width_px * 1.00;
+            let half = 0.0;
     
             draw_projection_border_pdf(
                 &border_cr,
@@ -420,11 +422,26 @@ pub fn plot_mollweide_png(
                 let r = data[idx + 2];
                 let g = data[idx + 1];
                 let b = data[idx + 0];
-    
+
+                let dst = img.get_pixel(
+                    layout.map_x as u32 + x as u32 - pad as u32,
+                    layout.map_y as u32 + y as u32 - pad as u32,
+                );
+                let src = Rgba([r, g, b, a]);
+                
+                let alpha = a as f32 / 255.0;
+                
+                let out = Rgba([
+                    ((src[0] as f32 + dst[0] as f32 * (1.0 - alpha)) as u8),
+                    ((src[1] as f32 + dst[1] as f32 * (1.0 - alpha)) as u8),
+                    ((src[2] as f32 + dst[2] as f32 * (1.0 - alpha)) as u8),
+                    ((a as f32 + dst[3] as f32 * (1.0 - alpha)) as u8),
+                ]);
+                
                 img.put_pixel(
                     layout.map_x as u32 + x as u32 - pad as u32,
                     layout.map_y as u32 + y as u32 - pad as u32,
-                    Rgba([r, g, b, a]),
+                    out,
                 );
             }
         }
