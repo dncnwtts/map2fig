@@ -32,6 +32,8 @@ fn main() {
             }
         } else if args.log {
             Scale::Log
+        } else if args.hist {
+            Scale::Histogram
         } else {
             Scale::Linear
         };

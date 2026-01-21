@@ -176,6 +176,10 @@ pub struct Args {
     #[arg(long)]
     pub symlog: bool,
 
+    /// Symmetric log
+    #[arg(long)]
+    pub hist: bool,
+
     /// Linear region width for symlog
     #[arg(long)]
     pub linthresh: Option<f64>,

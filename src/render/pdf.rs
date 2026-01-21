@@ -8,7 +8,7 @@ use crate::plot::rasterize_to_surface;
 use crate::layout::{ColorbarLayout};
 use crate::render::target::{RenderTarget,PixelSource};
 use crate::PixelSink;
-use crate::scale::generate_colorbar_ticks;
+use crate::scale::{generate_colorbar_ticks,HistogramScale};
 
 
 
@@ -213,12 +213,14 @@ pub fn draw_colorbar_pdf(
     maxv: f64,
     scale: Scale,
     gamma: f64,
+    hist: Option<&HistogramScale>,
 ) {
 
         let ticks = generate_colorbar_ticks(
             minv,
             maxv,
             &scale,
+            hist,
         );
 
 

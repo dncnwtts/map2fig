@@ -89,15 +89,28 @@ pub fn value_to_t(
 pub struct HistogramScale {
     pub values: Vec<f64>,   // sorted unique values or bin centers
     pub cdf: Vec<f64>,      // monotonically increasing [0,1]
+
+    pub minv: f64,
+    pub maxv: f64,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum HistogramRange {
+    Percentile { low: f64, high: f64 },
+    Explicit { min: f64, max: f64 },
+    Full,
+}
+
 
 pub fn build_histogram_scale(
     map: &[f64],
-    min: f64,
-    max: f64,
+    range: HistogramRange,
     neg_mode: NegMode,
     bins: usize,
 ) -> HistogramScale {
+    // ------------------------------------------------------------
+    // 1. Collect valid values
+    // ------------------------------------------------------------
     let mut vals: Vec<f64> = map
         .iter()
         .copied()
@@ -106,19 +119,65 @@ pub fn build_histogram_scale(
             NegMode::Zero => true,
             NegMode::Unseen => *v >= 0.0,
         })
-        .filter(|v| *v >= min && *v <= max)
         .collect();
-
-    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
     if vals.is_empty() {
         return HistogramScale {
             values: vec![],
             cdf: vec![],
+            minv: 0.0,
+            maxv: 1.0,
         };
     }
 
-    // Downsample into bins
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let n = vals.len();
+
+    // ------------------------------------------------------------
+    // 2. Determine minv / maxv from HistogramRange
+    // ------------------------------------------------------------
+    let (minv, maxv) = match range {
+        HistogramRange::Explicit { min, max } => (min, max),
+
+        HistogramRange::Full => {
+            println!("{}, {}, range?", vals[0], vals[n-1]);
+            (vals[0], vals[n - 1])
+
+        }
+
+        HistogramRange::Percentile { low, high } => {
+            assert!(
+                (0.0..=1.0).contains(&low) && (0.0..=1.0).contains(&high) && low < high,
+                "Invalid percentile range"
+            );
+
+            let ilo = ((n - 1) as f64 * low).round() as usize;
+            let ihi = ((n - 1) as f64 * high).round() as usize;
+
+            (vals[ilo], vals[ihi])
+        }
+    };
+
+    // ------------------------------------------------------------
+    // 3. Filter to chosen range
+    // ------------------------------------------------------------
+    let vals: Vec<f64> = vals
+        .into_iter()
+        .filter(|v| *v >= minv && *v <= maxv)
+        .collect();
+
+    if vals.is_empty() {
+        return HistogramScale {
+            values: vec![],
+            cdf: vec![],
+            minv,
+            maxv,
+        };
+    }
+
+    // ------------------------------------------------------------
+    // 4. Downsample into LUT
+    // ------------------------------------------------------------
     let n = vals.len();
     let step = (n as f64 / bins as f64).ceil() as usize;
 
@@ -128,13 +187,18 @@ pub fn build_histogram_scale(
     for (i, chunk) in vals.chunks(step).enumerate() {
         let v = chunk[chunk.len() / 2];
         let t = (i * step) as f64 / (n - 1) as f64;
+
         values.push(v);
         cdf.push(t.min(1.0));
     }
 
-    HistogramScale { values, cdf }
+    HistogramScale {
+        values,
+        cdf,
+        minv,
+        maxv,
+    }
 }
-
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -148,23 +212,30 @@ pub enum Scale {
 }
 
 
+
 pub fn generate_colorbar_ticks(
     min: f64,
     max: f64,
     scale: &Scale,
+    hist: Option<&HistogramScale>,
 ) -> ColorbarTicks {
+    match scale {
+        Scale::Histogram => {
+            return histogram_ticks(
+                hist.expect("Histogram ticks require histogram scale")
+            );
+        }
+
+        _ => {}
+    }
+
     let mut ticks = match scale {
         Scale::Linear => linear_ticks(min, max),
         Scale::Log => log_ticks(min, max),
         Scale::Symlog { linthresh } => symlog_ticks(min, max, *linthresh),
         Scale::Asinh { scale } => asinh_ticks(min, max, *scale),
         Scale::PlanckLog { linthresh } => symlog_ticks(min, max, *linthresh),
-        Scale::Histogram => ColorbarTicks {
-            major_values: vec![],
-            minor_values: vec![],
-            major_positions: vec![],
-            minor_positions: vec![],
-        },
+        Scale::Histogram => unreachable!(),
     };
 
     ticks.major_positions = ticks
@@ -181,6 +252,7 @@ pub fn generate_colorbar_ticks(
 
     ticks
 }
+
 
 pub fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
     let percentiles = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0];
@@ -474,12 +546,14 @@ pub fn scale_value(
             }
         }
 
-        // Scale::Histogram => todo!()
         Scale::Histogram => {
             let hist = hist.expect("Histogram scale requires histogram");
-        
-            if hist.values.is_empty() {
-                return PixelValue::Bad;
+
+            if value <= hist.minv {
+                return PixelValue::Color(0.0);
+            }
+            if value >= hist.maxv {
+                return PixelValue::Color(1.0);
             }
         
             match hist.values.binary_search_by(|v| v.partial_cmp(&value).unwrap()) {
@@ -495,6 +569,7 @@ pub fn scale_value(
                 }
             }
         }
+
 
     };
     

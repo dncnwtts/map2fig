@@ -13,6 +13,7 @@ use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
+use crate::scale::HistogramRange;
 
 
 pub struct MollweideScale {
@@ -207,11 +208,20 @@ pub fn plot_mollweide_pdf(
     let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
 
     let hist_scale = if scale == Scale::Histogram {
-        Some(&build_histogram_scale(map, scale_params.minv, scale_params.maxv, 
-                neg_mode, 1024))
+        Some(
+            &build_histogram_scale(
+                map,
+                // HistogramRange::Percentile { low: 0.01, high: 0.99 },
+                //HistogramRange::Percentile { low: 0.00, high: 1.0 },
+                HistogramRange::Full,
+                neg_mode,
+                1024,
+            )
+        )
     } else {
         None
     };
+
     
     let mut sink = CairoImageSink { cr: &cr_img };
     let debug_overlay = if cfg!(feature = "debug_overlay") {
@@ -272,6 +282,7 @@ pub fn plot_mollweide_pdf(
             scale_params.maxv,
             scale,
             gamma,
+            hist_scale,
         );
     }
 
@@ -342,14 +353,22 @@ pub fn plot_mollweide_png(
 
 
 
-    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
-
     let hist_scale = if scale == Scale::Histogram {
-        Some(&build_histogram_scale(map, scale_params.minv, scale_params.maxv, 
-                neg_mode, 1024))
+        Some(
+            &build_histogram_scale(
+                map,
+                //HistogramRange::Percentile { low: 0.00, high: 1.0 },
+                HistogramRange::Full,
+                neg_mode,
+                1024,
+            )
+        )
     } else {
         None
     };
+
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
+
 
    
     let mut sink = PngSink { 
@@ -470,6 +489,7 @@ pub fn plot_mollweide_png(
             scale_params.minv,
             scale_params.maxv,
             &scale,
+            hist_scale,
         );
 
         // Scale tick heights relative to colorbar
