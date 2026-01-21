@@ -2,7 +2,7 @@ use image::{RgbaImage, Rgba};
 use crate::colormap::{Colormap};
 use crate::colorbar::{format_tick_label, render_colorbar_gradient, apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale, scale_value,generate_colorbar_ticks};
+use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale};
 use crate::layout::{compute_mollweide_layout,MollweideLayout};
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
@@ -70,6 +70,7 @@ pub fn render_mollweide_pixels(
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
+    hist_scale: Option<&HistogramScale>,
     debug_overlay: Option<DebugOverlay>, // new optional parameter
 ) {
     use crate::mollweide::MollweideProjection;
@@ -95,6 +96,7 @@ pub fn render_mollweide_pixels(
         gamma,
         bad_color,
         meta,
+        hist_scale,
     );
 
     // Draw debug overlay only if provided
@@ -203,6 +205,13 @@ pub fn plot_mollweide_pdf(
     cr_img.paint().unwrap();
 
     let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
+
+    let hist_scale = if scale == Scale::Histogram {
+        Some(&build_histogram_scale(map, scale_params.minv, scale_params.maxv, 
+                neg_mode, 1024))
+    } else {
+        None
+    };
     
     let mut sink = CairoImageSink { cr: &cr_img };
     let debug_overlay = if cfg!(feature = "debug_overlay") {
@@ -222,6 +231,7 @@ pub fn plot_mollweide_pdf(
         bad_color,
         meta,
         &mut sink,
+        hist_scale,
         debug_overlay, // pass the optional overlay
     );
 
@@ -333,6 +343,14 @@ pub fn plot_mollweide_png(
 
 
     let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
+
+    let hist_scale = if scale == Scale::Histogram {
+        Some(&build_histogram_scale(map, scale_params.minv, scale_params.maxv, 
+                neg_mode, 1024))
+    } else {
+        None
+    };
+
    
     let mut sink = PngSink { 
         img: &mut img, 
@@ -357,6 +375,7 @@ pub fn plot_mollweide_png(
         bad_color,
         meta,
         &mut sink,
+        hist_scale,
         debug_overlay, // pass the optional overlay
     );
 
@@ -561,6 +580,7 @@ pub fn plot_mollweide_auto(
         .unwrap_or("")
         .to_ascii_lowercase();
 
+
     match ext.as_str() {
         "png" => {
             plot_mollweide_png(
@@ -610,85 +630,6 @@ pub fn plot_mollweide_auto(
 }
 
 
-pub fn map_to_color(
-    val: f64,
-    minv: f64,
-    maxv: f64,
-    cmap: &Colormap,
-    scale: Scale,
-    neg_mode: NegMode,
-    gamma: f64,
-    bad_color: Rgba<u8>,
-) -> Rgba<u8> {
-    match scale_value(val, minv, maxv, scale, neg_mode) {
-        PixelValue::Color(t) => {
-            let t = apply_gamma(t, gamma);
-            let c = cmap.sample(t);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-        PixelValue::Bad => {
-            bad_color
-        }
-        PixelValue::Underflow => {
-            let c = cmap.sample(0.0);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-        PixelValue::Overflow => {
-            let c = cmap.sample(1.0);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-    }
-}
-
-
-pub fn render_projection_to_sink(
-    map: &[f64],
-    proj: &dyn Projection,
-    layout: &MollweideLayout,
-    scale_params: &MollweideScale,
-    cmap: &Colormap,
-    scale: Scale,
-    neg_mode: NegMode,
-    gamma: f64,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
-    sink: &mut dyn PixelSink,
-) {
-    let grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
-
-
-    for py in 0..grid.height {
-        for px in 0..grid.width {
-            let (theta, lon) = match proj.pixel_to_ang(px, py, &grid) {
-                Some(v) => v,
-                None => continue,
-            };
-
-            let val = match sample_healpix(map, meta, theta, lon) {
-                Some(v) => v,
-                None => continue,
-            };
-
-            let rgba = map_to_color(
-                val,
-                scale_params.minv,
-                scale_params.maxv,
-                cmap,
-                scale,
-                neg_mode,
-                gamma,
-                bad_color,
-            );
-
-            sink.draw_pixel(
-                px,
-                py,
-                rgba,
-            );
-        }
-    }
-}
-
 
 /// Convert a scalar map value to a PixelValue (handles underflow/overflow)
 #[inline]
@@ -698,8 +639,9 @@ pub fn map_to_pixel_value(
     maxv: f64,
     scale: Scale,
     neg_mode: NegMode,
+    hist_scale: Option<&HistogramScale>,
 ) -> PixelValue {
-    match scale_value(val, minv, maxv, scale, neg_mode) {
+    match scale_value(val, minv, maxv, scale, neg_mode, hist_scale) {
         PixelValue::Bad => PixelValue::Bad,
         PixelValue::Underflow => PixelValue::Underflow,
         PixelValue::Overflow => PixelValue::Overflow,
@@ -743,6 +685,7 @@ pub fn render_projection_to_grid(
     gamma: f64,
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
+    hist_scale: Option<&HistogramScale>,
 ) {
 
     for (px, py, u, v) in grid.iter() {
@@ -766,6 +709,7 @@ pub fn render_projection_to_grid(
                     scale_params.maxv,
                     scale,
                     neg_mode,
+                    hist_scale,
                 ),
                 None => PixelValue::Bad,
             };

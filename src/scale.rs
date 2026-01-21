@@ -80,17 +80,71 @@ pub fn value_to_t(
                 (f(max) - f(min))
             )
         }
+
+        Scale::Histogram => todo!()
     }
 }
 
 
-#[derive(Clone, Copy)]
+pub struct HistogramScale {
+    pub values: Vec<f64>,   // sorted unique values or bin centers
+    pub cdf: Vec<f64>,      // monotonically increasing [0,1]
+}
+
+pub fn build_histogram_scale(
+    map: &[f64],
+    min: f64,
+    max: f64,
+    neg_mode: NegMode,
+    bins: usize,
+) -> HistogramScale {
+    let mut vals: Vec<f64> = map
+        .iter()
+        .copied()
+        .filter(|v| is_seen(*v))
+        .filter(|v| match neg_mode {
+            NegMode::Zero => true,
+            NegMode::Unseen => *v >= 0.0,
+        })
+        .filter(|v| *v >= min && *v <= max)
+        .collect();
+
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    if vals.is_empty() {
+        return HistogramScale {
+            values: vec![],
+            cdf: vec![],
+        };
+    }
+
+    // Downsample into bins
+    let n = vals.len();
+    let step = (n as f64 / bins as f64).ceil() as usize;
+
+    let mut values = Vec::new();
+    let mut cdf = Vec::new();
+
+    for (i, chunk) in vals.chunks(step).enumerate() {
+        let v = chunk[chunk.len() / 2];
+        let t = (i * step) as f64 / (n - 1) as f64;
+        values.push(v);
+        cdf.push(t.min(1.0));
+    }
+
+    HistogramScale { values, cdf }
+}
+
+
+
+#[derive(Clone, Copy, PartialEq)]
 pub enum Scale {
     Linear,
     Log,
     Asinh { scale: f64 },
     Symlog { linthresh: f64 },
     PlanckLog { linthresh: f64 },
+    Histogram,
 }
 
 
@@ -105,12 +159,12 @@ pub fn generate_colorbar_ticks(
         Scale::Symlog { linthresh } => symlog_ticks(min, max, *linthresh),
         Scale::Asinh { scale } => asinh_ticks(min, max, *scale),
         Scale::PlanckLog { linthresh } => symlog_ticks(min, max, *linthresh),
-        // Scale::Histogram => ColorbarTicks {
-        //     major_values: vec![],
-        //     minor_values: vec![],
-        //     major_positions: vec![],
-        //     minor_positions: vec![],
-        // },
+        Scale::Histogram => ColorbarTicks {
+            major_values: vec![],
+            minor_values: vec![],
+            major_positions: vec![],
+            minor_positions: vec![],
+        },
     };
 
     ticks.major_positions = ticks
@@ -127,6 +181,27 @@ pub fn generate_colorbar_ticks(
 
     ticks
 }
+
+pub fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
+    let percentiles = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0];
+
+    let mut major_values = Vec::new();
+    let mut major_positions = Vec::new();
+
+    for &p in &percentiles {
+        let idx = (p * (hist.values.len() - 1) as f64).round() as usize;
+        major_values.push(hist.values[idx]);
+        major_positions.push(p);
+    }
+
+    ColorbarTicks {
+        major_values,
+        major_positions,
+        minor_values: vec![],
+        minor_positions: vec![],
+    }
+}
+
 
 
 fn scale_position(
@@ -190,7 +265,7 @@ fn scale_position(
             scale_position(value, min, max, &Scale::Symlog { linthresh: *linthresh })
         }
 
-        // Scale::Histogram => None, // intentionally unsupported here
+        Scale::Histogram => todo!() // intentionally unsupported here
     }
 }
 
@@ -327,6 +402,7 @@ pub fn scale_value(
     max: f64,
     scale: Scale,
     neg_mode: NegMode,
+    hist: Option<&HistogramScale>,
 ) -> PixelValue {
     if min >= max {
         panic!("min must be < max");
@@ -397,6 +473,29 @@ pub fn scale_value(
                         / (linthresh + (max - linthresh).ln())
             }
         }
+
+        // Scale::Histogram => todo!()
+        Scale::Histogram => {
+            let hist = hist.expect("Histogram scale requires histogram");
+        
+            if hist.values.is_empty() {
+                return PixelValue::Bad;
+            }
+        
+            match hist.values.binary_search_by(|v| v.partial_cmp(&value).unwrap()) {
+                Ok(i) => hist.cdf[i],
+                Err(i) => {
+                    if i == 0 {
+                        0.0
+                    } else if i >= hist.cdf.len() {
+                        1.0
+                    } else {
+                        hist.cdf[i]
+                    }
+                }
+            }
+        }
+
     };
     
     PixelValue::Color(t.clamp(0.0, 1.0))

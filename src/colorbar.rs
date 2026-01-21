@@ -38,47 +38,6 @@ pub struct ColorbarTicks {
     pub minor_values: Vec<f64>,
     pub minor_positions: Vec<f64>,
 }
-// pub fn compute_colorbar_tick_positions(
-//     minv: f64,
-//     maxv: f64,
-//     scale: Scale,
-//     neg_mode: NegMode,
-//     nticks: usize,
-//     n_minor: usize,
-// ) -> ColorbarTicks {
-//     let major_values = compute_major_tick_values(minv, maxv, scale, nticks);
-//     println!("Major values: {:?}", major_values);
-// 
-//     let major_positions = major_values
-//         .iter()
-//         .filter_map(|&v| {
-//             match scale_value(v, minv, maxv, scale, neg_mode) {
-//                 PixelValue::Color(t) => Some(t),
-//                 _ => None,
-//             }
-//         })
-//         .collect();
-//     println!("Major positions: {:?}", major_positions);
-// 
-//     let minor_values = compute_minor_tick_values(&major_values, scale, n_minor);
-// 
-//     let minor_positions = minor_values
-//         .iter()
-//         .filter_map(|&v| {
-//             match scale_value(v, minv, maxv, scale, neg_mode) {
-//                 PixelValue::Color(t) => Some(t),
-//                 _ => None,
-//             }
-//         })
-//         .collect();
-// 
-//     ColorbarTicks {
-//         major_values,
-//         major_positions,
-//         minor_values,
-//         minor_positions,
-//     }
-// }
 
 /// Format a tick label for display on colorbar
 pub fn format_tick_label(value: f64, scale: Scale) -> String {
@@ -241,6 +200,7 @@ pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usi
             }
             ticks
         }
+        Scale::Histogram => todo!()
     }
 }
 
