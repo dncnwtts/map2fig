@@ -1,6 +1,6 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
-use crate::{Colormap, Scale, NegMode,CairoImageSink};
+use crate::{Colormap, Scale, CairoImageSink};
 use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
@@ -157,7 +157,6 @@ pub fn draw_colorbar_pdf_ticks(
     cr: &Context,
     layout: ColorbarLayout,
     ticks: &ColorbarTicks,
-    scale: Scale,
 ) {
     let y0 = layout.y + layout.h;
     let major_len = layout.major_tick_height;
@@ -212,7 +211,6 @@ pub fn draw_colorbar_pdf(
     cmap: &Colormap,
     minv: f64,
     maxv: f64,
-    negmode: NegMode,
     scale: Scale,
     gamma: f64,
 ) {
@@ -255,7 +253,6 @@ pub fn draw_colorbar_pdf(
             &cr,
             cb_layout,
             &ticks,
-            scale,
         );
     
         draw_colorbar_pdf_labels(

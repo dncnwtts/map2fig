@@ -24,7 +24,6 @@ pub fn compute_mollweide_scale(
     map: &[f64],
     minv: Option<f64>,
     maxv: Option<f64>,
-    scale: Scale,
     gamma: f64,
 ) -> MollweideScale {
     let mut values: Vec<f64> = map
@@ -203,7 +202,7 @@ pub fn plot_mollweide_pdf(
     }
     cr_img.paint().unwrap();
 
-    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
     
     let mut sink = CairoImageSink { cr: &cr_img };
     let debug_overlay = if cfg!(feature = "debug_overlay") {
@@ -261,7 +260,6 @@ pub fn plot_mollweide_pdf(
             &cmap,
             scale_params.minv,
             scale_params.maxv,
-            neg_mode,
             scale,
             gamma,
         );
@@ -334,7 +332,7 @@ pub fn plot_mollweide_png(
 
 
 
-    let scale_params = compute_mollweide_scale(map, minv, maxv, scale, gamma);
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
    
     let mut sink = PngSink { 
         img: &mut img, 
