@@ -1,13 +1,14 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
 use crate::{Colormap, Scale, NegMode,CairoImageSink};
-use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks,compute_colorbar_tick_positions};
+use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
 use crate::layout::{ColorbarLayout};
 use crate::render::target::{RenderTarget,PixelSource};
 use crate::PixelSink;
+use crate::scale::generate_colorbar_ticks;
 
 
 
@@ -216,13 +217,10 @@ pub fn draw_colorbar_pdf(
     gamma: f64,
 ) {
 
-        let ticks = compute_colorbar_tick_positions(
+        let ticks = generate_colorbar_ticks(
             minv,
             maxv,
-            scale,
-            negmode, // or pass explicitly
-            5,
-            5,
+            &scale,
         );
 
 

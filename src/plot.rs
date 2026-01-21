@@ -1,8 +1,8 @@
 use image::{RgbaImage, Rgba};
 use crate::colormap::{Colormap};
-use crate::colorbar::{format_tick_label, render_colorbar_gradient, compute_colorbar_tick_positions,apply_gamma};
+use crate::colorbar::{format_tick_label, render_colorbar_gradient, apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale, scale_value};
+use crate::scale::{Scale, scale_value,generate_colorbar_ticks};
 use crate::layout::{compute_mollweide_layout,MollweideLayout};
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
@@ -449,13 +449,10 @@ pub fn plot_mollweide_png(
             &mut sink,
         );
 
-        let ticks = compute_colorbar_tick_positions(
+        let ticks = generate_colorbar_ticks(
             scale_params.minv,
             scale_params.maxv,
-            scale,
-            neg_mode,
-            5,
-            5,
+            &scale,
         );
 
         // Scale tick heights relative to colorbar
