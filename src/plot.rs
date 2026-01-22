@@ -20,12 +20,12 @@ pub struct MollweideScale {
     pub minv: f64,
     pub maxv: f64,
 }
-
 pub fn compute_mollweide_scale(
     map: &[f64],
     minv: Option<f64>,
     maxv: Option<f64>,
     gamma: f64,
+    scale: Scale,
 ) -> MollweideScale {
     let mut values: Vec<f64> = map
         .iter()
@@ -39,12 +39,24 @@ pub fn compute_mollweide_scale(
 
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    let (minv, maxv) = match (minv, maxv) {
-        (Some(lo), Some(hi)) => (lo, hi),
-        _ => (
-            percentile(&values, 5.0),
-            percentile(&values, 95.0),
-        ),
+    let data_min = *values.first().unwrap();
+    let data_max = *values.last().unwrap();
+
+    let (minv, maxv) = match scale {
+        // 🔴 Histogram scale overrides percentiles
+        Scale::Histogram => match (minv, maxv) {
+            (Some(lo), Some(hi)) => (lo, hi),
+            _ => (data_min, data_max),
+        },
+
+        // 🟢 All other scales keep percentile default
+        _ => match (minv, maxv) {
+            (Some(lo), Some(hi)) => (lo, hi),
+            _ => (
+                percentile(&values, 5.0),
+                percentile(&values, 95.0),
+            ),
+        },
     };
 
     if gamma <= 0.0 {
@@ -59,6 +71,7 @@ pub fn compute_mollweide_scale(
 
     MollweideScale { minv, maxv }
 }
+
 
 pub fn render_mollweide_pixels(
     map: &[f64],
@@ -205,22 +218,27 @@ pub fn plot_mollweide_pdf(
     }
     cr_img.paint().unwrap();
 
-    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
 
     let hist_scale = if scale == Scale::Histogram {
+        let range = match (minv, maxv) {
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            _ => HistogramRange::Full,
+        };
+    
         Some(
             &build_histogram_scale(
                 map,
-                // HistogramRange::Percentile { low: 0.01, high: 0.99 },
-                //HistogramRange::Percentile { low: 0.00, high: 1.0 },
-                HistogramRange::Full,
-                neg_mode,
-                1024,
+                range,
+                1024, // number of bins
             )
         )
     } else {
         None
     };
+
+    println!("post-build-hist min/max {}, {}", scale_params.minv, scale_params.maxv);
+
 
     
     let mut sink = CairoImageSink { cr: &cr_img };
@@ -351,25 +369,24 @@ pub fn plot_mollweide_png(
     
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
-
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
 
     let hist_scale = if scale == Scale::Histogram {
+        let range = match (minv, maxv) {
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            _ => HistogramRange::Full,
+        };
+    
         Some(
             &build_histogram_scale(
                 map,
-                //HistogramRange::Percentile { low: 0.00, high: 1.0 },
-                HistogramRange::Full,
-                neg_mode,
-                1024,
+                range,
+                1024, // number of bins
             )
         )
     } else {
         None
     };
-
-    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma);
-
-
    
     let mut sink = PngSink { 
         img: &mut img, 

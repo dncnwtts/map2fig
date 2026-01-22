@@ -101,26 +101,13 @@ pub enum HistogramRange {
     Full,
 }
 
-
 pub fn build_histogram_scale(
     map: &[f64],
     range: HistogramRange,
-    neg_mode: NegMode,
     bins: usize,
 ) -> HistogramScale {
-    // ------------------------------------------------------------
-    // 1. Collect valid values
-    // ------------------------------------------------------------
-    let mut vals: Vec<f64> = map
-        .iter()
-        .copied()
-        .filter(|v| is_seen(*v))
-        .filter(|v| match neg_mode {
-            NegMode::Zero => true,
-            NegMode::Unseen => *v >= 0.0,
-        })
-        .collect();
-
+    // 1. Filter valid values only
+    let mut vals: Vec<f64> = map.iter().copied().filter(|v| is_seen(*v)).collect();
     if vals.is_empty() {
         return HistogramScale {
             values: vec![],
@@ -133,72 +120,134 @@ pub fn build_histogram_scale(
     vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = vals.len();
 
-    // ------------------------------------------------------------
-    // 2. Determine minv / maxv from HistogramRange
-    // ------------------------------------------------------------
+    // 2. Compute minv / maxv based on HistogramRange
     let (minv, maxv) = match range {
         HistogramRange::Explicit { min, max } => (min, max),
-
-        HistogramRange::Full => {
-            println!("{}, {}, range?", vals[0], vals[n-1]);
-            (vals[0], vals[n - 1])
-
-        }
-
+        HistogramRange::Full => (vals[0], vals[n - 1]),
         HistogramRange::Percentile { low, high } => {
-            assert!(
-                (0.0..=1.0).contains(&low) && (0.0..=1.0).contains(&high) && low < high,
-                "Invalid percentile range"
-            );
-
             let ilo = ((n - 1) as f64 * low).round() as usize;
             let ihi = ((n - 1) as f64 * high).round() as usize;
-
             (vals[ilo], vals[ihi])
         }
     };
 
-    // ------------------------------------------------------------
-    // 3. Filter to chosen range
-    // ------------------------------------------------------------
-    let vals: Vec<f64> = vals
-        .into_iter()
-        .filter(|v| *v >= minv && *v <= maxv)
-        .collect();
-
+    // 3. Filter to minv/maxv range for histogram LUT
+    let vals: Vec<f64> = vals.into_iter().filter(|v| *v >= minv && *v <= maxv).collect();
     if vals.is_empty() {
-        return HistogramScale {
-            values: vec![],
-            cdf: vec![],
-            minv,
-            maxv,
-        };
+        return HistogramScale { values: vec![], cdf: vec![], minv, maxv };
     }
 
-    // ------------------------------------------------------------
-    // 4. Downsample into LUT
-    // ------------------------------------------------------------
+    // 4. Downsample to bins
     let n = vals.len();
     let step = (n as f64 / bins as f64).ceil() as usize;
-
     let mut values = Vec::new();
     let mut cdf = Vec::new();
 
     for (i, chunk) in vals.chunks(step).enumerate() {
         let v = chunk[chunk.len() / 2];
         let t = (i * step) as f64 / (n - 1) as f64;
-
         values.push(v);
         cdf.push(t.min(1.0));
     }
 
-    HistogramScale {
-        values,
-        cdf,
-        minv,
-        maxv,
-    }
+    HistogramScale { values, cdf, minv, maxv }
 }
+
+
+// pub fn build_histogram_scale(
+//     map: &[f64],
+//     range: HistogramRange,
+//     neg_mode: NegMode,
+//     bins: usize,
+// ) -> HistogramScale {
+//     // ------------------------------------------------------------
+//     // 1. Collect valid values
+//     // ------------------------------------------------------------
+//     let mut vals: Vec<f64> = map
+//         .iter()
+//         .copied()
+//         .filter(|v| is_seen(*v))
+//         .filter(|v| *v >= min && *v <= max)
+//         .collect();
+// 
+//     if vals.is_empty() {
+//         return HistogramScale {
+//             values: vec![],
+//             cdf: vec![],
+//             minv: 0.0,
+//             maxv: 1.0,
+//         };
+//     }
+// 
+//     vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+//     let n = vals.len();
+// 
+//     // ------------------------------------------------------------
+//     // 2. Determine minv / maxv from HistogramRange
+//     // ------------------------------------------------------------
+//     let (minv, maxv) = match range {
+//         HistogramRange::Explicit { min, max } => (min, max),
+// 
+//         HistogramRange::Full => {
+//             println!("{}, {}, range?", vals[0], vals[n-1]);
+//             (vals[0], vals[n - 1])
+// 
+//         }
+// 
+//         HistogramRange::Percentile { low, high } => {
+//             assert!(
+//                 (0.0..=1.0).contains(&low) && (0.0..=1.0).contains(&high) && low < high,
+//                 "Invalid percentile range"
+//             );
+// 
+//             let ilo = ((n - 1) as f64 * low).round() as usize;
+//             let ihi = ((n - 1) as f64 * high).round() as usize;
+// 
+//             (vals[ilo], vals[ihi])
+//         }
+//     };
+// 
+//     // ------------------------------------------------------------
+//     // 3. Filter to chosen range
+//     // ------------------------------------------------------------
+//     let vals: Vec<f64> = vals
+//         .into_iter()
+//         .filter(|v| *v >= minv && *v <= maxv)
+//         .collect();
+// 
+//     if vals.is_empty() {
+//         return HistogramScale {
+//             values: vec![],
+//             cdf: vec![],
+//             minv,
+//             maxv,
+//         };
+//     }
+// 
+//     // ------------------------------------------------------------
+//     // 4. Downsample into LUT
+//     // ------------------------------------------------------------
+//     let n = vals.len();
+//     let step = (n as f64 / bins as f64).ceil() as usize;
+// 
+//     let mut values = Vec::new();
+//     let mut cdf = Vec::new();
+// 
+//     for (i, chunk) in vals.chunks(step).enumerate() {
+//         let v = chunk[chunk.len() / 2];
+//         let t = (i * step) as f64 / (n - 1) as f64;
+// 
+//         values.push(v);
+//         cdf.push(t.min(1.0));
+//     }
+// 
+//     HistogramScale {
+//         values,
+//         cdf,
+//         minv,
+//         maxv,
+//     }
+// }
 
 
 #[derive(Clone, Copy, PartialEq)]
