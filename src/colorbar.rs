@@ -32,6 +32,29 @@ pub fn apply_gamma(t: f64, gamma: f64) -> f64 {
     }
 }
 
+fn apply_lightness(c: Rgba<u8>, m: f64) -> Rgba<u8> {
+    let scale = |x: u8| ((x as f64 * m).clamp(0.0, 255.0)) as u8;
+    Rgba([scale(c[0]), scale(c[1]), scale(c[2]), c[3]])
+}
+
+fn sample_distortion(profile: &[f64], t: f64) -> f64 {
+    if profile.is_empty() {
+        return 0.0;
+    }
+
+    let n = profile.len();
+    let x = t * (n - 1) as f64;
+    let i = x.floor() as usize;
+    let w = x - i as f64;
+
+    if i + 1 < n {
+        profile[i] * (1.0 - w) + profile[i + 1] * w
+    } else {
+        profile[n - 1]
+    }
+}
+
+
 pub struct ColorbarTicks {
     pub major_values: Vec<f64>,
     pub major_positions: Vec<f64>,
@@ -40,11 +63,23 @@ pub struct ColorbarTicks {
 }
 
 /// Format a tick label for display on colorbar
-pub fn format_tick_label(value: f64, scale: Scale) -> String {
+pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>) -> String {
     if value.abs() < 1e-12 {
         "0".to_string()
     } else {
         match scale {
+            Scale::Histogram => {
+                if let Some(p) = pos {
+                    if (p - 0.0).abs() < 1e-6 || (p - 1.0).abs() < 1e-6 {
+                        println!("Position, value, {}, {}", p, value);
+                        format!("{:.3}", value)
+                    } else {
+                        format!("{:.0}%", p * 100.0)
+                    }
+                } else {
+                    format!("{:.3}", value)
+                }
+            }
             Scale::Log => {
                 let exp = value.abs().log10().floor() as i32;
                 let base = 10_f64.powi(exp);
@@ -217,13 +252,16 @@ pub fn render_colorbar_gradient(
         for px in 0..width {
             let t_linear = px as f64 / (width - 1) as f64;
             let t = apply_gamma(t_linear, gamma);
-            let c = cmap.sample(t);
+            
+            let mut c = Rgba([0, 0, 0, 255]);
+            let base = cmap.sample(t);
+            c[0] = base[0];
+            c[1] = base[1];
+            c[2] = base[2];
+            
+            
+            sink.draw_pixel(x0 + px, y0 + py, c);
 
-            sink.draw_pixel(
-                x0 + px,
-                y0 + py,
-                Rgba([c[0], c[1], c[2], 255]),
-            );
         }
     }
 }

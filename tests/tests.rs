@@ -51,21 +51,21 @@ fn test_scale_value_transformations() {
     let max = 100.0;
 
     // Linear scale
-    let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero);
+    let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero, None);
     match t {
         PixelValue::Color(c) => assert!((c - 0.4949).abs() < 1e-3),
         _ => panic!(),
     }
 
     // Log scale
-    let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero);
+    let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero, None);
     match t {
         PixelValue::Color(c) => assert!((c - 0.5).abs() < 1e-3),
         _ => panic!(),
     }
 
     // Asinh scale
-    let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero);
+    let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero, None);
     match t {
         PixelValue::Color(c) => assert!(c > 0.0 && c < 1.0),
         _ => panic!(),
@@ -81,7 +81,7 @@ fn test_neg_mode_behavior() {
     let max = 10.0;
 
     // Negative value with Zero mode
-    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero);
+    let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, None);
     match t {
         PixelValue::Color(c) => assert_eq!(c, 0.0),
         _ => panic!(),

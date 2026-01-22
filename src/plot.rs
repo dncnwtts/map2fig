@@ -534,7 +534,7 @@ pub fn plot_mollweide_png(
             }
         
             // Draw label
-            let label = format_tick_label(val, scale);
+            let label = format_tick_label(val, scale, Some(t));
             let text_width_est = (label.len() as f32 * 
                 cb_layout.tick_font_size as f32 * 0.6) as i32;
             let text_x = px as i32 - text_width_est / 2;

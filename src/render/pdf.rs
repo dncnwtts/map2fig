@@ -192,7 +192,7 @@ pub fn draw_colorbar_pdf_labels(
     cr.set_font_size(11.0);
 
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
-        let label = format_tick_label(val, scale);
+        let label = format_tick_label(val, scale, Some(t));
         let x = t * layout.w + layout.x;
 
         // Center text

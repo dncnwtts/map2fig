@@ -132,25 +132,77 @@ impl HistogramScale {
         }
     }
 
-    pub fn value_at_quantile(&self, q: f64) -> Option<f64> {
+    fn value_at_quantile(&self, t: f64) -> Option<f64> {
         if self.values.is_empty() {
-            return None;
+            return Some(0.0);
         }
 
-        let q = q.clamp(0.0, 1.0);
+        if t <= 0.0 {
+            return Some(self.minv);
+        }
+        if t >= 1.0 {
+            return Some(self.maxv);
+        }
 
-        match self.cdf.binary_search_by(|p| p.partial_cmp(&q).unwrap()) {
-            Ok(i) => self.values.get(i).copied(),
+        match self.cdf.binary_search_by(|p| p.partial_cmp(&t).unwrap()) {
+            Ok(i) => Some(self.values[i]),
             Err(i) => {
                 if i == 0 {
-                    self.values.first().copied()
+                    Some(self.values[0])
                 } else if i >= self.values.len() {
-                    self.values.last().copied()
+                    Some(*self.values.last().unwrap())
                 } else {
-                    Some(self.values[i])
+                    // Linear interpolation between neighbors
+                    let t0 = self.cdf[i - 1];
+                    let t1 = self.cdf[i];
+                    let v0 = self.values[i - 1];
+                    let v1 = self.values[i];
+
+                    let w = (t - t0) / (t1 - t0);
+                    Some(v0 + w * (v1 - v0))
                 }
             }
         }
+    }
+    pub fn distortion_profile(&self, n: usize) -> Vec<f64> {
+        assert!(n >= 2, "distortion_profile requires n >= 2");
+
+        // 1. Sample inverse CDF
+        let mut v = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = i as f64 / (n - 1) as f64;
+            v.push(self.value_at_quantile(t).unwrap_or(0.0));
+        }
+
+        // 2. Finite-difference dv/dt
+        let dt = 1.0 / (n - 1) as f64;
+        let mut dvdt = vec![0.0; n];
+
+        for i in 1..n - 1 {
+            dvdt[i] = (v[i + 1] - v[i - 1]).abs() / (2.0 * dt);
+        }
+
+        dvdt[0] = (v[1] - v[0]).abs() / dt;
+        dvdt[n - 1] = (v[n - 1] - v[n - 2]).abs() / dt;
+
+        // 3. Compress dynamic range
+        for d in dvdt.iter_mut() {
+            *d = (1.0 + *d).ln();
+        }
+
+        // 4. Normalize to [0,1]
+        let max_d = dvdt
+            .iter()
+            .cloned()
+            .fold(0.0_f64, f64::max);
+
+        if max_d > 0.0 {
+            for d in dvdt.iter_mut() {
+                *d /= max_d;
+            }
+        }
+
+        dvdt
     }
 }
 
@@ -217,12 +269,6 @@ pub fn build_histogram_scale(
 
 const TARGET_MAJOR_TICKS: usize = 7;
 
-fn local_density(hist: &HistogramScale, q: f64, dq: f64) -> Option<f64> {
-    let v0 = hist.value_at_quantile((q - dq).max(0.0))?;
-    let v1 = hist.value_at_quantile((q + dq).min(1.0))?;
-    Some((v1 - v0).abs() / (2.0 * dq))
-}
-
 
 fn uniform_quantiles(n: usize) -> Vec<f64> {
     (0..n)
@@ -242,21 +288,23 @@ pub enum Scale {
     Histogram,
 }
 
+
 pub fn generate_colorbar_ticks(
     min: f64,
     max: f64,
     scale: &Scale,
     hist: Option<&HistogramScale>,
 ) -> ColorbarTicks {
-
-    // Histogram is special: positions are already in [0,1]
-    if let Scale::Histogram = scale {
-        return histogram_ticks(
-            hist.expect("Histogram ticks require histogram scale")
-        );
+    match scale {
+        Scale::Histogram => {
+            let ticks = histogram_ticks(
+                hist.expect("Histogram ticks require histogram scale")
+            );
+            return ticks;
+        }
+        _ => {}
     }
 
-    // All other scales produce value-space ticks
     let mut ticks = match scale {
         Scale::Linear => linear_ticks(min, max),
         Scale::Log => log_ticks(min, max),
@@ -266,7 +314,6 @@ pub fn generate_colorbar_ticks(
         Scale::Histogram => unreachable!(),
     };
 
-    // Convert value → colorbar position
     ticks.major_positions = ticks
         .major_values
         .iter()
@@ -281,6 +328,8 @@ pub fn generate_colorbar_ticks(
 
     ticks
 }
+
+
 
 fn histogram_major_ticks(hist: &HistogramScale) -> (Vec<f64>, Vec<f64>) {
     let mut values = Vec::new();
@@ -298,12 +347,12 @@ fn histogram_major_ticks(hist: &HistogramScale) -> (Vec<f64>, Vec<f64>) {
 
 fn histogram_minor_ticks(
     hist: &HistogramScale,
-    major_q: &[f64],
+    _major_q: &[f64],
 ) -> (Vec<f64>, Vec<f64>) {
     let mut values = Vec::new();
     let mut positions = Vec::new();
 
-    for q in uniform_quantiles(64) {
+    for q in uniform_quantiles(50) {
         // Always allow near edges
         if q < 0.05 || q > 0.95 {
             if let Some(v) = hist.value_at_quantile(q) {
@@ -311,18 +360,6 @@ fn histogram_minor_ticks(
                 positions.push(q);
             }
             continue;
-        }
-
-        // Suppress near major ticks
-        if major_q.iter().any(|&mq| (mq - q).abs() < 0.02) {
-            continue;
-        }
-
-        // Density-based suppression
-        if let Some(d) = local_density(hist, q, 0.02) {
-            if d > 50.0 {
-                continue;
-            }
         }
 
         if let Some(v) = hist.value_at_quantile(q) {
@@ -653,7 +690,7 @@ pub fn scale_value(
 
 #[test]
 fn linear_underflow_always_saturates() {
-    let t = scale_value(-5.0, 0.0, 10.0, Scale::Linear, NegMode::Unseen);
+    let t = scale_value(-5.0, 0.0, 10.0, Scale::Linear, NegMode::Unseen, None);
     match t {
         PixelValue::Color(c) => assert_eq!(c, 0.0),
         _ => panic!("Linear underflow should saturate, not go Bad"),
