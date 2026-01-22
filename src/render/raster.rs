@@ -146,6 +146,25 @@ impl RasterGrid {
         self.valid[idx] = validity;
     }
 
+    /// Set a pixel from Rgba<u8> without bounds checking
+    #[inline]
+    pub unsafe fn set_pixel_unchecked(&mut self, x: u32, y: u32, color: Rgba<u8>) {
+        let idx = (y * self.width + x) as usize;
+        unsafe {
+            *self.buffer.get_unchecked_mut(idx) = color;
+            *self.valid.get_unchecked_mut(idx) = true;
+        }
+    }
+
+    /// Set validity without bounds checking
+    #[inline]
+    pub unsafe fn set_valid_unchecked(&mut self, x: u32, y: u32, validity: bool) {
+        let idx = (y * self.width + x) as usize;
+        unsafe {
+            *self.valid.get_unchecked_mut(idx) = validity;
+        }
+    }
+
     #[inline]
     pub fn is_valid(&self, x: u32, y: u32) -> bool {
         let idx = (y * self.width + x) as usize;

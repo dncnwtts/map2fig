@@ -67,7 +67,7 @@ pub fn compute_mollweide_scale(
         panic!("Invalid color scale: {minv} > {maxv}");
     }
 
-    println!("map min = {}, max = {}", minv, maxv);
+    // println!("map min = {}, max = {}", minv, maxv);
 
     MollweideScale { minv, maxv }
 }
@@ -237,7 +237,7 @@ pub fn plot_mollweide_pdf(
         None
     };
 
-    println!("post-build-hist min/max {}, {}", scale_params.minv, scale_params.maxv);
+    // println!("post-build-hist min/max {}, {}", scale_params.minv, scale_params.maxv);
 
 
     
@@ -724,39 +724,69 @@ pub fn render_projection_to_grid(
     meta: HealpixMeta,
     hist_scale: Option<&HistogramScale>,
 ) {
+    let width = grid.width;
+    let height = grid.height;
 
-    for (px, py, u, v) in grid.iter() {
-        let x = 2.0 * u - 1.0;
-        let y = 2.0 * v - 1.0;
-    
-        let inside_oval = (x * x) / 4.0 + (y * y) <= 1.0;
-    
-        if !inside_oval {
-            grid.set_valid(px, py, false);
-            continue;
-        }
-    
-        if let Some((lon, lat)) = proj.inverse(u, v) {
-            let theta = std::f64::consts::PI / 2.0 - lat;
-    
-            let pixel_val = match sample_healpix(map, meta, theta, lon) {
-                Some(val) => map_to_pixel_value(
-                    val,
-                    scale_params.minv,
-                    scale_params.maxv,
-                    scale,
-                    neg_mode,
-                    hist_scale,
-                ),
-                None => PixelValue::Bad,
-            };
-    
-            let rgba = pixel_value_to_rgba(pixel_val, cmap, gamma, bad_color);
-    
-            grid.set_pixel(px, py, rgba);
-            grid.set_valid(px, py, true);
-        } else {
-            grid.set_valid(px, py, false);
+    // Precompute gamma value to avoid repeated checks
+    let gamma_inv = if (gamma - 1.0).abs() < f64::EPSILON {
+        1.0
+    } else {
+        gamma
+    };
+
+    for py in 0..height {
+        for px in 0..width {
+            let u = px as f64 / (width - 1) as f64;
+            let v = py as f64 / (height - 1) as f64;
+
+            let x = 2.0 * u - 1.0;
+            let y = 2.0 * v - 1.0;
+
+            let inside_oval = (x * x) / 4.0 + (y * y) <= 1.0;
+
+            if !inside_oval {
+                grid.set_valid(px, py, false);
+                continue;
+            }
+
+            if let Some((lon, lat)) = proj.inverse(u, v) {
+                let theta = std::f64::consts::PI / 2.0 - lat;
+
+                let pixel_val = match sample_healpix(map, meta, theta, lon) {
+                    Some(val) => scale_value(
+                        val,
+                        scale_params.minv,
+                        scale_params.maxv,
+                        scale,
+                        neg_mode,
+                        hist_scale,
+                    ),
+                    None => PixelValue::Bad,
+                };
+
+                // Inline pixel_value_to_rgba for better performance
+                let rgba = match pixel_val {
+                    PixelValue::Color(t) => {
+                        let t = if gamma_inv == 1.0 { t } else { t.powf(gamma_inv) };
+                        let c = cmap.sample(t);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Underflow => {
+                        let c = cmap.sample(0.0);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Overflow => {
+                        let c = cmap.sample(1.0);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Bad => bad_color,
+                };
+
+                grid.set_pixel(px, py, rgba);
+                grid.set_valid(px, py, true);
+            } else {
+                grid.set_valid(px, py, false);
+            }
         }
     }
 }
