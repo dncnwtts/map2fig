@@ -94,6 +94,67 @@ pub struct HistogramScale {
     pub maxv: f64,
 }
 
+impl HistogramScale {
+    pub fn lookup_cdf(&self, value: f64) -> Option<f64> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        match self.values.binary_search_by(|v| v.partial_cmp(&value).unwrap()) {
+            Ok(i) => Some(self.cdf[i]),
+            Err(i) => {
+                if i == 0 {
+                    Some(0.0)
+                } else if i >= self.cdf.len() {
+                    Some(1.0)
+                } else {
+                    Some(self.cdf[i])
+                }
+            }
+        }
+    }
+    pub fn inverse_cdf(&self, q: f64) -> Option<f64> {
+        if self.cdf.is_empty() {
+            return None;
+        }
+
+        match self.cdf.binary_search_by(|p| p.partial_cmp(&q).unwrap()) {
+            Ok(i) => Some(self.values[i]),
+            Err(i) => {
+                if i == 0 {
+                    Some(self.values[0])
+                } else if i >= self.values.len() {
+                    Some(*self.values.last().unwrap())
+                } else {
+                    Some(self.values[i])
+                }
+            }
+        }
+    }
+
+    pub fn value_at_quantile(&self, q: f64) -> Option<f64> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        let q = q.clamp(0.0, 1.0);
+
+        match self.cdf.binary_search_by(|p| p.partial_cmp(&q).unwrap()) {
+            Ok(i) => self.values.get(i).copied(),
+            Err(i) => {
+                if i == 0 {
+                    self.values.first().copied()
+                } else if i >= self.values.len() {
+                    self.values.last().copied()
+                } else {
+                    Some(self.values[i])
+                }
+            }
+        }
+    }
+}
+
+
 #[derive(Clone, Copy, Debug)]
 pub enum HistogramRange {
     Percentile { low: f64, high: f64 },
@@ -154,100 +215,21 @@ pub fn build_histogram_scale(
 }
 
 
-// pub fn build_histogram_scale(
-//     map: &[f64],
-//     range: HistogramRange,
-//     neg_mode: NegMode,
-//     bins: usize,
-// ) -> HistogramScale {
-//     // ------------------------------------------------------------
-//     // 1. Collect valid values
-//     // ------------------------------------------------------------
-//     let mut vals: Vec<f64> = map
-//         .iter()
-//         .copied()
-//         .filter(|v| is_seen(*v))
-//         .filter(|v| *v >= min && *v <= max)
-//         .collect();
-// 
-//     if vals.is_empty() {
-//         return HistogramScale {
-//             values: vec![],
-//             cdf: vec![],
-//             minv: 0.0,
-//             maxv: 1.0,
-//         };
-//     }
-// 
-//     vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-//     let n = vals.len();
-// 
-//     // ------------------------------------------------------------
-//     // 2. Determine minv / maxv from HistogramRange
-//     // ------------------------------------------------------------
-//     let (minv, maxv) = match range {
-//         HistogramRange::Explicit { min, max } => (min, max),
-// 
-//         HistogramRange::Full => {
-//             println!("{}, {}, range?", vals[0], vals[n-1]);
-//             (vals[0], vals[n - 1])
-// 
-//         }
-// 
-//         HistogramRange::Percentile { low, high } => {
-//             assert!(
-//                 (0.0..=1.0).contains(&low) && (0.0..=1.0).contains(&high) && low < high,
-//                 "Invalid percentile range"
-//             );
-// 
-//             let ilo = ((n - 1) as f64 * low).round() as usize;
-//             let ihi = ((n - 1) as f64 * high).round() as usize;
-// 
-//             (vals[ilo], vals[ihi])
-//         }
-//     };
-// 
-//     // ------------------------------------------------------------
-//     // 3. Filter to chosen range
-//     // ------------------------------------------------------------
-//     let vals: Vec<f64> = vals
-//         .into_iter()
-//         .filter(|v| *v >= minv && *v <= maxv)
-//         .collect();
-// 
-//     if vals.is_empty() {
-//         return HistogramScale {
-//             values: vec![],
-//             cdf: vec![],
-//             minv,
-//             maxv,
-//         };
-//     }
-// 
-//     // ------------------------------------------------------------
-//     // 4. Downsample into LUT
-//     // ------------------------------------------------------------
-//     let n = vals.len();
-//     let step = (n as f64 / bins as f64).ceil() as usize;
-// 
-//     let mut values = Vec::new();
-//     let mut cdf = Vec::new();
-// 
-//     for (i, chunk) in vals.chunks(step).enumerate() {
-//         let v = chunk[chunk.len() / 2];
-//         let t = (i * step) as f64 / (n - 1) as f64;
-// 
-//         values.push(v);
-//         cdf.push(t.min(1.0));
-//     }
-// 
-//     HistogramScale {
-//         values,
-//         cdf,
-//         minv,
-//         maxv,
-//     }
-// }
+const TARGET_MAJOR_TICKS: usize = 7;
+
+fn local_density(hist: &HistogramScale, q: f64, dq: f64) -> Option<f64> {
+    let v0 = hist.value_at_quantile((q - dq).max(0.0))?;
+    let v1 = hist.value_at_quantile((q + dq).min(1.0))?;
+    Some((v1 - v0).abs() / (2.0 * dq))
+}
+
+
+fn uniform_quantiles(n: usize) -> Vec<f64> {
+    (0..n)
+        .map(|i| i as f64 / (n - 1) as f64)
+        .collect()
+}
+
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -260,24 +242,21 @@ pub enum Scale {
     Histogram,
 }
 
-
-
 pub fn generate_colorbar_ticks(
     min: f64,
     max: f64,
     scale: &Scale,
     hist: Option<&HistogramScale>,
 ) -> ColorbarTicks {
-    match scale {
-        Scale::Histogram => {
-            return histogram_ticks(
-                hist.expect("Histogram ticks require histogram scale")
-            );
-        }
 
-        _ => {}
+    // Histogram is special: positions are already in [0,1]
+    if let Scale::Histogram = scale {
+        return histogram_ticks(
+            hist.expect("Histogram ticks require histogram scale")
+        );
     }
 
+    // All other scales produce value-space ticks
     let mut ticks = match scale {
         Scale::Linear => linear_ticks(min, max),
         Scale::Log => log_ticks(min, max),
@@ -287,6 +266,7 @@ pub fn generate_colorbar_ticks(
         Scale::Histogram => unreachable!(),
     };
 
+    // Convert value → colorbar position
     ticks.major_positions = ticks
         .major_values
         .iter()
@@ -302,27 +282,71 @@ pub fn generate_colorbar_ticks(
     ticks
 }
 
+fn histogram_major_ticks(hist: &HistogramScale) -> (Vec<f64>, Vec<f64>) {
+    let mut values = Vec::new();
+    let mut positions = Vec::new();
+
+    for q in uniform_quantiles(TARGET_MAJOR_TICKS) {
+        if let Some(v) = hist.value_at_quantile(q) {
+            values.push(v);
+            positions.push(q);
+        }
+    }
+
+    (values, positions)
+}
+
+fn histogram_minor_ticks(
+    hist: &HistogramScale,
+    major_q: &[f64],
+) -> (Vec<f64>, Vec<f64>) {
+    let mut values = Vec::new();
+    let mut positions = Vec::new();
+
+    for q in uniform_quantiles(64) {
+        // Always allow near edges
+        if q < 0.05 || q > 0.95 {
+            if let Some(v) = hist.value_at_quantile(q) {
+                values.push(v);
+                positions.push(q);
+            }
+            continue;
+        }
+
+        // Suppress near major ticks
+        if major_q.iter().any(|&mq| (mq - q).abs() < 0.02) {
+            continue;
+        }
+
+        // Density-based suppression
+        if let Some(d) = local_density(hist, q, 0.02) {
+            if d > 50.0 {
+                continue;
+            }
+        }
+
+        if let Some(v) = hist.value_at_quantile(q) {
+            values.push(v);
+            positions.push(q);
+        }
+    }
+
+    (values, positions)
+}
+
 
 pub fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
-    let percentiles = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0];
-
-    let mut major_values = Vec::new();
-    let mut major_positions = Vec::new();
-
-    for &p in &percentiles {
-        let idx = (p * (hist.values.len() - 1) as f64).round() as usize;
-        major_values.push(hist.values[idx]);
-        major_positions.push(p);
-    }
+    let (major_values, major_positions) = histogram_major_ticks(hist);
+    let (minor_values, minor_positions) =
+        histogram_minor_ticks(hist, &major_positions);
 
     ColorbarTicks {
         major_values,
         major_positions,
-        minor_values: vec![],
-        minor_positions: vec![],
+        minor_values,
+        minor_positions,
     }
 }
-
 
 
 fn scale_position(
