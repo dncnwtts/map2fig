@@ -92,9 +92,10 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, _latex_rend
     }
 }
 
-/// Format a tick label for display on colorbar with optional LaTeX rendering
-/// Note: Units are displayed separately, not appended to labels
-pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, _units: Option<&str>) -> String {
+/// Format a tick label for display on colorbar
+/// Note: Always applies LaTeX processing to convert math notation (e.g., 10^{-3} to 10⁻³)
+/// The latex_rendering parameter is for user-supplied content like units
+pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, _latex_rendering: bool, _units: Option<&str>) -> String {
     let mut label = if value.abs() < 1e-12 {
         "0".to_string()
     } else {
@@ -141,10 +142,8 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
         }
     };
 
-    // Apply LaTeX processing if enabled
-    if latex_rendering {
-        label = latex_to_unicode(&label);
-    }
+    // Always apply LaTeX processing to convert mathematical notation
+    label = latex_to_unicode(&label);
 
     label
 }

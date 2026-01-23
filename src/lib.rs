@@ -14,7 +14,7 @@ pub mod constants;
 pub mod latex;
 
 // Re-export useful items
-pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
+pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto_test};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 pub use cli::{Args, PlotConfig};

@@ -8,6 +8,9 @@ use std::collections::HashMap;
 /// Convert LaTeX-like syntax to Unicode mathematical symbols
 pub fn latex_to_unicode(text: &str) -> String {
     let mut result = text.to_string();
+    
+    // Remove LaTeX dollar sign delimiters
+    result = result.replace("$", "");
 
     // Greek letters (lowercase)
     let greek_lower: HashMap<&str, char> = [

@@ -30,6 +30,7 @@ pub fn load_and_process_data(
         let target_nside = target_nside_for_resolution(width as usize, (width / 2) as usize);
         println!("Downgrading from nside={} to nside={} for {}x{} output",
                 meta.nside, target_nside, width, width / 2);
+        let target_nside = meta.nside;
         let downgraded_map = downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering);
         (downgraded_map, HealpixMeta { nside: target_nside, ordering: meta.ordering })
     } else {

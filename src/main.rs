@@ -1,7 +1,7 @@
 use clap::Parser;
 use healpix_plotter::cli::Args;
 use healpix_plotter::pipeline::load_and_process_data;
-use healpix_plotter::plot_mollweide_auto;
+use healpix_plotter::plot_mollweide_auto_test;
 use std::time::Instant;
 
 fn main() {
@@ -16,24 +16,7 @@ fn main() {
 
     println!("Starting plot generation...");
     let start = Instant::now();
-    plot_mollweide_auto(
-        &data.map,
-        args.width,
-        &args.out,
-        args.min,
-        args.max,
-        config.colormap,
-        !args.no_cbar,
-        args.transparent,
-        !args.no_border,
-        args.gamma,
-        config.scale,
-        config.neg_mode,
-        config.bad_color_rgba,
-        config.bg_color_rgba,
-        data.meta,
-        config.latex_rendering,
-        config.units.as_deref(),
-    );
+    println!("DEBUG: Calling plot_mollweide_auto_test");
+    plot_mollweide_auto_test();
     println!("Plot generation completed in {:.2}s", start.elapsed().as_secs_f64());
 }
