@@ -12,6 +12,7 @@ pub mod cli;
 pub mod pipeline;
 pub mod constants;
 pub mod latex;
+pub mod rotation;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
