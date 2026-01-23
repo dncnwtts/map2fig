@@ -614,8 +614,8 @@ pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
     // For very high resolution maps, we want to downgrade to improve cache performance
     // Target around 1024 nside for typical plot sizes
     let pixels = (width * height) as f64;
-    let target_resolution = (pixels.sqrt() / 10.0).max(512.0).min(2048.0);
-    let target_nside = (target_resolution / 4.0).round() as i64;
+    let target_resolution = pixels.sqrt(); 
+    let target_nside = target_resolution.round() as i64;
     // Ensure nside is a power of 2
     let mut nside = 1;
     while nside * 2 <= target_nside {
