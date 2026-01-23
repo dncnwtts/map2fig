@@ -448,18 +448,25 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
 pub fn sample_healpix(
     map: &[f64],
     meta: HealpixMeta,
-    theta: f64, // colatitude [0, pi]
-    lon: f64,   // longitude [-pi, pi] (or [0, 2pi], depending on your convention)
+    theta: f64,
+    lon: f64,
 ) -> Option<f64> {
-    if !(0.0..=std::f64::consts::PI).contains(&theta) {
+    if !theta.is_finite() || !lon.is_finite() {
         return None;
     }
 
-    let ipix = ang2pix(meta, theta, lon) as usize;
-    let val = map[ipix];
+    let theta = theta.clamp(0.0, std::f64::consts::PI);
+    let lon = lon.rem_euclid(2.0 * std::f64::consts::PI);
 
-    Some(val)
+    let ipix = ang2pix(meta, theta, lon) as usize;
+
+    if ipix >= map.len() {
+        return None;
+    }
+
+    Some(map[ipix])
 }
+
 
 #[cfg(test)]
 mod tests {
