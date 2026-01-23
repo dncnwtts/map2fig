@@ -192,6 +192,11 @@ fn to_superscript(n: i32) -> String {
 
 
 pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
+    // Handle the case where all values are the same
+    if minv >= maxv {
+        return vec![minv; nticks];
+    }
+
     match scale {
         Scale::Linear => {
             let mut ticks = Vec::with_capacity(nticks);

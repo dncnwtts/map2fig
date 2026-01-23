@@ -452,6 +452,16 @@ fn scale_position(
 }
 
 pub fn linear_ticks(min: f64, max: f64) -> ColorbarTicks {
+    // Handle the case where all values are the same
+    if min >= max {
+        return ColorbarTicks {
+            major_values: vec![min],
+            major_positions: vec![0.5],
+            minor_values: vec![],
+            minor_positions: vec![],
+        };
+    }
+
     let span = max - min;
     let raw_step = span / 5.0;
 
@@ -586,8 +596,17 @@ pub fn scale_value(
     neg_mode: NegMode,
     hist: Option<&HistogramScale>,
 ) -> PixelValue {
-    if min >= max {
-        panic!("min must be < max");
+    if min > max {
+        panic!("min must be <= max");
+    }
+
+    // Handle the case where all valid values are the same
+    if min == max {
+        return if is_seen(value) {
+            PixelValue::Color(0.5) // Map to middle of color scale
+        } else {
+            PixelValue::Bad
+        };
     }
 
     // Unseen / NaN handling

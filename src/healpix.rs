@@ -475,9 +475,6 @@ pub fn sample_healpix(
 
     Some(val)
 }
-
-
-#[cfg(test)]
 fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
     let cosd = theta1.cos() * theta2.cos()
         + theta1.sin() * theta2.sin() * (phi1 - phi2).cos();
@@ -630,6 +627,78 @@ fn test_pix_ang_pix_roundtrip_ring() {
         let ipix2 = ang2pix_ring(nside, theta, phi);
         assert_eq!(ipix, ipix2);
     }
+}
+
+/// Calculate target nside for a given resolution to balance quality and performance
+pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
+    // For very high resolution maps, we want to downgrade to improve cache performance
+    // Target around 1024 nside for typical plot sizes
+    let pixels = (width * height) as f64;
+    let target_resolution = (pixels.sqrt() / 10.0).max(512.0).min(2048.0);
+    let target_nside = (target_resolution / 4.0).round() as i64;
+    // Ensure nside is a power of 2
+    let mut nside = 1;
+    while nside * 2 <= target_nside {
+        nside *= 2;
+    }
+    nside
+}
+
+/// Downgrade a HEALPix map from high nside to lower nside by averaging pixels
+pub fn downgrade_healpix_map(
+    map: &[f64],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<f64> {
+    if source_nside <= target_nside {
+        return map.to_vec();
+    }
+
+    let ratio = (source_nside / target_nside) as usize;
+    let _factor = ratio * ratio; // Each target pixel covers factor source pixels
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    let mut result = vec![0.0; target_npix];
+
+    for target_pix in 0..target_npix {
+        let mut sum = 0.0;
+        let mut count = 0;
+
+        // Convert target pixel to angles
+        let (theta, phi) = match ordering {
+            HealpixOrdering::Ring => pix2ang_ring(target_nside, target_pix as i64),
+            HealpixOrdering::Nested => pix2ang_nest(target_nside, target_pix as i64),
+        };
+
+        // Sample the source pixels that cover this target pixel
+        // For simplicity, sample a grid within the target pixel area
+        let n_samples = ratio.min(4); // Limit samples for performance
+        let step = 1.0 / n_samples as f64;
+
+        for i in 0..n_samples {
+            for j in 0..n_samples {
+                let d_theta = (i as f64 + 0.5) * step - 0.5;
+                let d_phi = (j as f64 + 0.5) * step - 0.5;
+
+                let sample_theta = (theta + d_theta * std::f64::consts::PI / (2.0 * target_nside as f64)).clamp(0.0, std::f64::consts::PI);
+                let sample_phi = (phi + d_phi * 2.0 * std::f64::consts::PI / target_nside as f64).rem_euclid(2.0 * std::f64::consts::PI);
+
+                let source_pix = match ordering {
+                    HealpixOrdering::Ring => ang2pix_ring(source_nside, sample_theta, sample_phi),
+                    HealpixOrdering::Nested => ang2pix_nest(source_nside, sample_theta, sample_phi),
+                } as usize;
+
+                if source_pix < map.len() && is_seen(map[source_pix]) {
+                    sum += map[source_pix];
+                    count += 1;
+                }
+            }
+        }
+
+        result[target_pix] = if count > 0 { sum / count as f64 } else { HPX_UNSEEN };
+    }
+
+    result
 }
 
 
