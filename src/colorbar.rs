@@ -41,7 +41,7 @@ pub struct ColorbarTicks {
 }
 
 /// Format a tick label for display on colorbar
-pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, units: Option<&str>) -> String {
+pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, _latex_rendering: bool, _units: Option<&str>) -> String {
     if value.abs() < 1e-12 {
         "0".to_string()
     } else {
@@ -92,8 +92,9 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, latex_rende
     }
 }
 
-/// Format a tick label for display on colorbar with optional LaTeX rendering and units
-pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, units: Option<&str>) -> String {
+/// Format a tick label for display on colorbar with optional LaTeX rendering
+/// Note: Units are displayed separately, not appended to labels
+pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, _units: Option<&str>) -> String {
     let mut label = if value.abs() < 1e-12 {
         "0".to_string()
     } else {
@@ -130,7 +131,7 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
                     let exp = value.abs().log10().floor() as i32;
                     let base = 10_f64.powi(exp);
                     let coeff = (value / base).round();
-                    if (coeff - 1.0).abs() < 1e-6 {
+                    if (coeff - 1.0).abs() < 1e-12 {
                         format!("10^{{{}}}", exp)
                     } else {
                         format!("{} \\times 10^{{{}}}", coeff as i64, exp)
@@ -145,16 +146,18 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
         label = latex_to_unicode(&label);
     }
 
-    // Add units if specified
-    if let Some(unit_str) = units {
-        if latex_rendering {
-            label.push_str(&format!(" {}", latex_to_unicode(unit_str)));
-        } else {
-            label.push_str(&format!(" {}", unit_str));
-        }
-    }
-
     label
+}
+
+/// Format units label to be displayed below the colorbar
+pub fn format_units_label(latex_rendering: bool, units: Option<&str>) -> Option<String> {
+    units.map(|unit_str| {
+        if latex_rendering {
+            latex_to_unicode(unit_str)
+        } else {
+            unit_str.to_string()
+        }
+    })
 }
 
 /// Convert integer to Unicode superscript string

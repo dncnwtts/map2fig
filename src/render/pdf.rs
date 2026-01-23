@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
 use crate::{Colormap, Scale, CairoImageSink};
-use crate::colorbar::{apply_gamma,format_tick_label_with_units,ColorbarTicks};
+use crate::colorbar::{apply_gamma,format_tick_label_with_units,format_units_label,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
@@ -50,7 +50,7 @@ impl<'a> RenderBackend for PdfBackend<'a> {
         self.cr.set_font_size(size);
 
         // Try to use STIX fonts for mathematical text, fall back to default
-        let font_set = self.cr.set_font_face(&cairo::FontFace::toy_create(
+        let _font_set = self.cr.set_font_face(&cairo::FontFace::toy_create(
             "STIXGeneral",
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
@@ -208,6 +208,7 @@ pub fn draw_colorbar_pdf_labels(
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_font_size(11.0);
 
+    // Draw tick labels (without units)
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
         let x = t * layout.w + layout.x;
@@ -218,6 +219,18 @@ pub fn draw_colorbar_pdf_labels(
 
         cr.move_to(tx, layout.tick_label_pad);
         cr.show_text(&label).unwrap();
+    }
+
+    // Draw units label below colorbar if specified
+    if let Some(units_str) = units {
+        if let Some(units_label) = format_units_label(latex_rendering, Some(units_str)) {
+            cr.set_font_size(10.0);
+            let ext = cr.text_extents(&units_label).unwrap();
+            let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
+            let y = layout.tick_label_pad + 20.0;  // Position below tick labels
+            cr.move_to(center_x, y);
+            cr.show_text(&units_label).unwrap();
+        }
     }
 }
 
