@@ -1,6 +1,6 @@
 use image::{RgbaImage, Rgba};
 use crate::colormap::{Colormap};
-use crate::colorbar::{format_tick_label, render_colorbar_gradient, apply_gamma};
+use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient, apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale};
 use crate::layout::{compute_mollweide_layout,MollweideLayout};
@@ -166,6 +166,8 @@ pub fn plot_mollweide_pdf(
     bad_color: Rgba<u8>,
     _bg_color: Rgba<u8>,
     meta: HealpixMeta,
+    latex_rendering: bool,
+    units: Option<&str>,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -301,6 +303,8 @@ pub fn plot_mollweide_pdf(
             scale,
             gamma,
             hist_scale,
+            latex_rendering,
+            units,
         );
     }
 
@@ -341,6 +345,8 @@ pub fn plot_mollweide_png(
     bad_color: Rgba<u8>,
     bg_color: Rgba<u8>,
     meta: HealpixMeta,
+    latex_rendering: bool,
+    units: Option<&str>,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -534,7 +540,7 @@ pub fn plot_mollweide_png(
             }
         
             // Draw label
-            let label = format_tick_label(val, scale, Some(t));
+            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
             let text_width_est = (label.len() as f32 * 
                 cb_layout.tick_font_size as f32 * 0.6) as i32;
             let text_x = px as i32 - text_width_est / 2;
@@ -610,6 +616,8 @@ pub fn plot_mollweide_auto(
     bad_color: Rgba<u8>,
     bg_color: Rgba<u8>,
     meta: HealpixMeta,
+    latex_rendering: bool,
+    units: Option<&str>,
 ) {
     let ext = Path::new(filename)
         .extension()
@@ -636,6 +644,8 @@ pub fn plot_mollweide_auto(
                 bad_color,
                 bg_color,
                 meta,
+                latex_rendering,
+                units,
             );
         }
         "pdf" => {
@@ -655,6 +665,8 @@ pub fn plot_mollweide_auto(
                 bad_color,
                 bg_color,
                 meta,
+                latex_rendering,
+                units,
             );
         }
         _ => {

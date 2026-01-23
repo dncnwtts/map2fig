@@ -32,6 +32,8 @@ fn main() {
         config.bad_color_rgba,
         config.bg_color_rgba,
         data.meta,
+        config.latex_rendering,
+        config.units.as_deref(),
     );
     println!("Plot generation completed in {:.2}s", start.elapsed().as_secs_f64());
 }

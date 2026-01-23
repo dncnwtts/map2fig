@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
 use crate::{Colormap, Scale, CairoImageSink};
-use crate::colorbar::{apply_gamma,format_tick_label,ColorbarTicks};
+use crate::colorbar::{apply_gamma,format_tick_label_with_units,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
@@ -48,6 +48,21 @@ impl<'a> RenderBackend for PdfBackend<'a> {
 
     fn draw_text(&mut self, x: f64, y: f64, size: f64, text: &str) {
         self.cr.set_font_size(size);
+
+        // Try to use STIX fonts for mathematical text, fall back to default
+        let font_set = self.cr.set_font_face(&cairo::FontFace::toy_create(
+            "STIXGeneral",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+        ).unwrap_or_else(|_| {
+            // Fallback to default font if STIX is not available
+            cairo::FontFace::toy_create(
+                "DejaVu Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            ).unwrap()
+        }));
+
         self.cr.move_to(x, y);
         self.cr.show_text(text).unwrap();
     }
@@ -187,12 +202,14 @@ pub fn draw_colorbar_pdf_labels(
     layout: ColorbarLayout,
     ticks: &ColorbarTicks,
     scale: Scale,
+    latex_rendering: bool,
+    units: Option<&str>,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_font_size(11.0);
 
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
-        let label = format_tick_label(val, scale, Some(t));
+        let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
         let x = t * layout.w + layout.x;
 
         // Center text
@@ -214,6 +231,8 @@ pub fn draw_colorbar_pdf(
     scale: Scale,
     gamma: f64,
     hist: Option<&HistogramScale>,
+    latex_rendering: bool,
+    units: Option<&str>,
 ) {
 
         let ticks = generate_colorbar_ticks(
@@ -262,6 +281,8 @@ pub fn draw_colorbar_pdf(
             cb_layout,
             &ticks,
             scale,
+            latex_rendering,
+            units,
         );
 
 }

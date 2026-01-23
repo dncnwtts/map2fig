@@ -11,6 +11,7 @@ pub mod mollweide;
 pub mod cli;
 pub mod pipeline;
 pub mod constants;
+pub mod latex;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
@@ -288,6 +289,8 @@ mod tests {
             bad_color,
             bad_color,
             meta,
+            false,  // latex_rendering
+            None,   // units
         );
     }
     
@@ -443,6 +446,8 @@ mod tests {
             bad_color,
             bad_color,
             meta,
+            false,  // latex_rendering
+            None,   // units
         );
     }
     

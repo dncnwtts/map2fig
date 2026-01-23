@@ -2,6 +2,7 @@ use crate::{Scale};
 use crate::colormap::Colormap;
 use crate::{PixelSink};
 use image::Rgba;
+use crate::latex::latex_to_unicode;
 
 
 #[derive(Clone)]
@@ -40,7 +41,7 @@ pub struct ColorbarTicks {
 }
 
 /// Format a tick label for display on colorbar
-pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>) -> String {
+pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, units: Option<&str>) -> String {
     if value.abs() < 1e-12 {
         "0".to_string()
     } else {
@@ -61,10 +62,61 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>) -> String {
                 let exp = value.abs().log10().floor() as i32;
                 let base = 10_f64.powi(exp);
                 let coeff = (value / base).round();
-                if (coeff - 1.0).abs() < 1e-12 {
-                    format!("10{}", to_superscript(exp))
+                let latex_str = if (coeff - 1.0).abs() < 1e-12 {
+                    format!("10^{{{}}}", exp)
                 } else {
-                    format!("{}·10{}", coeff as i64, to_superscript(exp))
+                    format!("{} \\times 10^{{{}}}", coeff as i64, exp)
+                };
+                latex_to_unicode(&latex_str)
+            }
+            _ => {
+                if value.abs() < 1000.0 {
+                    if value.fract().abs() < 1e-6 {
+                        format!("{}", value.round() as i64)
+                    } else {
+                        format!("{:.3}", value)
+                    }
+                } else {
+                    let exp = value.abs().log10().floor() as i32;
+                    let base = 10_f64.powi(exp);
+                    let coeff = (value / base).round();
+                    let latex_str = if (coeff - 1.0).abs() < 1e-6 {
+                        format!("10^{{{}}}", exp)
+                    } else {
+                        format!("{} \\times 10^{{{}}}", coeff as i64, exp)
+                    };
+                    latex_to_unicode(&latex_str)
+                }
+            }
+        }
+    }
+}
+
+/// Format a tick label for display on colorbar with optional LaTeX rendering and units
+pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, units: Option<&str>) -> String {
+    let mut label = if value.abs() < 1e-12 {
+        "0".to_string()
+    } else {
+        match scale {
+            Scale::Histogram => {
+                if let Some(p) = pos {
+                    if (p - 0.0).abs() < 1e-6 || (p - 1.0).abs() < 1e-6 {
+                        format!("{:.3}", value)
+                    } else {
+                        format!("{:.0}%", p * 100.0)
+                    }
+                } else {
+                    format!("{:.3}", value)
+                }
+            }
+            Scale::Log => {
+                let exp = value.abs().log10().floor() as i32;
+                let base = 10_f64.powi(exp);
+                let coeff = (value / base).round();
+                if (coeff - 1.0).abs() < 1e-12 {
+                    format!("10^{{{}}}", exp)
+                } else {
+                    format!("{} \\times 10^{{{}}}", coeff as i64, exp)
                 }
             }
             _ => {
@@ -79,14 +131,30 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>) -> String {
                     let base = 10_f64.powi(exp);
                     let coeff = (value / base).round();
                     if (coeff - 1.0).abs() < 1e-6 {
-                        format!("10{}", to_superscript(exp))
+                        format!("10^{{{}}}", exp)
                     } else {
-                        format!("{}·10{}", coeff as i64, to_superscript(exp))
+                        format!("{} \\times 10^{{{}}}", coeff as i64, exp)
                     }
                 }
             }
         }
+    };
+
+    // Apply LaTeX processing if enabled
+    if latex_rendering {
+        label = latex_to_unicode(&label);
     }
+
+    // Add units if specified
+    if let Some(unit_str) = units {
+        if latex_rendering {
+            label.push_str(&format!(" {}", latex_to_unicode(unit_str)));
+        } else {
+            label.push_str(&format!(" {}", unit_str));
+        }
+    }
+
+    label
 }
 
 /// Convert integer to Unicode superscript string
