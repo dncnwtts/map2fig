@@ -112,6 +112,8 @@ fn test_plot_smoke() {
         image::Rgba([0, 0, 0, 0]),
         image::Rgba([0, 0, 0, 0]),
         meta,
+        false,
+        Some("str"),
     );
 }
 
