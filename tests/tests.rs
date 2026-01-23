@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use healpix_plotter::{
-    InputColor, NegMode, PixelValue,
-    RgbaArg, generate_index_map, 
+    cli::InputColor, NegMode, PixelValue,
+    RgbaArg, generate_index_map,
 };
 
 use healpix_plotter::scale::{Scale, scale_value};

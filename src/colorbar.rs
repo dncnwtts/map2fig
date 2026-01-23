@@ -32,29 +32,6 @@ pub fn apply_gamma(t: f64, gamma: f64) -> f64 {
     }
 }
 
-fn apply_lightness(c: Rgba<u8>, m: f64) -> Rgba<u8> {
-    let scale = |x: u8| ((x as f64 * m).clamp(0.0, 255.0)) as u8;
-    Rgba([scale(c[0]), scale(c[1]), scale(c[2]), c[3]])
-}
-
-fn sample_distortion(profile: &[f64], t: f64) -> f64 {
-    if profile.is_empty() {
-        return 0.0;
-    }
-
-    let n = profile.len();
-    let x = t * (n - 1) as f64;
-    let i = x.floor() as usize;
-    let w = x - i as f64;
-
-    if i + 1 < n {
-        profile[i] * (1.0 - w) + profile[i + 1] * w
-    } else {
-        profile[n - 1]
-    }
-}
-
-
 pub struct ColorbarTicks {
     pub major_values: Vec<f64>,
     pub major_positions: Vec<f64>,

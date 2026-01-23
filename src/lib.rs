@@ -8,13 +8,18 @@ pub mod scale;
 pub mod layout;
 pub mod projection;
 pub mod mollweide;
+pub mod cli;
+pub mod pipeline;
+pub mod constants;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
+pub use cli::{Args, PlotConfig};
+pub use scale::validate_scale_config;
+pub use constants::*;
 
-use clap::Parser;
 use std::str::FromStr;
 use image::{Rgba, RgbaImage};
 
@@ -35,30 +40,6 @@ pub enum PixelValue {
 
 
 
-
-impl FromStr for InputColor {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "under" => Ok(InputColor::Underflow),
-            "over"  => Ok(InputColor::Overflow),
-            "gray" | "grey" => Ok(InputColor::Gray),
-            _ => {
-                let parts: Vec<_> = s.split(',').collect();
-                if parts.len() != 4 {
-                    return Err("Expected r,g,b,a".into());
-                }
-                let vals: Result<Vec<u8>, _> = parts.iter().map(|x| x.parse()).collect();
-                match vals {
-                    Ok(v) => Ok(InputColor::Rgba(v[0], v[1], v[2], v[3])),
-                    Err(_) => Err("RGBA values must be 0–255".into())
-                }
-            }
-        }
-    }
-}
 
 use cairo::Context;
 pub struct CairoRasterSink<'a> {
@@ -120,96 +101,6 @@ impl<'a> PixelSink for CairoImageSink<'a> {
 
 
 
-/// Simple HEALPix Mollweide plotter
-#[derive(Parser, Debug)]
-#[command(author, version, about)]
-pub struct Args {
-    /// Input FITS file
-    #[arg(short, long, default_value = "cosmoglobe_DIRBE_10_I_n00512_DR2_v3.1.fits")]
-    pub fits: String,
-
-    /// Column index
-    #[arg(short='i', long, default_value_t = 0)]
-    pub col: usize,
-
-    /// Colormap name
-    #[arg(short='c', long, default_value = "viridis")]
-    pub cmap: String,
-
-    /// Output width in pixels
-    #[arg(short, long, default_value_t = 1200)]
-    pub width: u32,
-
-    /// Output filename
-    #[arg(short, long, default_value = "output.pdf")]
-    pub out: String,
-
-    /// Disable map border
-    #[arg(long)]
-    pub no_border: bool,
-
-    /// Transparent background
-    #[arg(long)]
-    pub transparent: bool,
-
-    /// Disable colorbar
-    #[arg(long)]
-    pub no_cbar: bool,
-
-    /// Lower color scale limit
-    #[arg(long)]
-    pub min: Option<f64>,
-
-    /// Upper color scale limit
-    #[arg(long)]
-    pub max: Option<f64>,
-
-    /// Gamma correction
-    #[arg(long, default_value_t = 1.0)]
-    pub gamma: f64,
-
-    /// Log scale
-    #[arg(long)]
-    pub log: bool,
-
-    /// Symmetric log
-    #[arg(long)]
-    pub symlog: bool,
-
-    /// Symmetric log
-    #[arg(long)]
-    pub hist: bool,
-
-    /// Linear region width for symlog
-    #[arg(long)]
-    pub linthresh: Option<f64>,
-
-    /// Asinh scaling
-    #[arg(long)]
-    pub asinh: bool,
-
-    /// Negative/invalid handling: zero or unseen
-    #[arg(long, default_value = "unseen")]
-    pub neg_mode: String,
-
-    /// Bad pixel color: auto, gray, or r,g,b,a
-    #[arg(long)]
-    pub bad_color: Option<InputColor>,
-
-    /// Background pixel color: transparent, gray, or r,g,b,a
-    #[arg(long)]
-    pub bg_color: Option<InputColor>,
-
-    #[arg(long)]
-    pub planck_log: bool,
-
-    /// Factor that multiplies the data itself for unit conversions.
-    #[arg(long, default_value_t = 1.0)]
-    pub scale: f64,
-}
-
-
-
 /// RGBA argument parser
 #[derive(Clone, Debug)]
 pub struct RgbaArg {
@@ -234,17 +125,6 @@ impl FromStr for RgbaArg {
     }
 }
 
-/// Bad color option
-#[derive(Clone, Debug)]
-pub enum InputColor {
-    Gray,
-    Underflow,
-    Overflow,
-    Transparent,
-    Rgba(u8, u8, u8, u8),
-}
-
-
 // Optional test helper
 pub fn generate_index_map(nside: i64) -> Vec<f64> {
     let npix = 12 * nside * nside;
@@ -252,48 +132,7 @@ pub fn generate_index_map(nside: i64) -> Vec<f64> {
 }
 
 
-pub fn resolve_input_color(bad: Option<InputColor>, cmap: &Colormap, transparent: bool) -> Rgba<u8> {
-    match bad.unwrap_or(InputColor::Gray) {
-        InputColor::Underflow => {
-            let c = cmap.under();
-            Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
-        }
-        InputColor::Overflow => {
-            let c = cmap.over();
-            Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
-        }
 
-        InputColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
-        InputColor::Transparent => Rgba([255,255,255,0]),
-        InputColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
-    }
-}
-
-
-
-pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) {
-    match scale {
-        Scale::Log => {
-            let min = min.expect("log scale requires --min to be specified");
-            if min <= 0.0 {
-                panic!(
-                    "Invalid --min value for log scale: {} (must be > 0)",
-                    min
-                );
-            }
-        }
-        _ => {}
-    }
-
-    if let (Some(min), Some(max)) = (min, max) {
-        if min >= max {
-            panic!(
-                "Invalid scale range: min ({}) must be < max ({})",
-                min, max
-            );
-        }
-    }
-}
 
 
 
@@ -305,6 +144,7 @@ use crate::scale::Scale; // <- Scale comes from plot module
 #[cfg(test)]
 mod tests {
     use super::*;          // import everything from lib.rs
+    use crate::cli::{InputColor, resolve_input_color}; // moved from lib.rs
     use image::Rgba;       // external deps still need explicit import
                            //
     #[test]

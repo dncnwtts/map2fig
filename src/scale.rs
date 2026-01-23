@@ -3,6 +3,30 @@ use crate::NegMode;
 use crate::healpix::is_seen;
 use crate::colorbar::ColorbarTicks;
 
+pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) {
+    match scale {
+        Scale::Log => {
+            let min = min.expect("log scale requires --min to be specified");
+            if min <= 0.0 {
+                panic!(
+                    "Invalid --min value for log scale: {} (must be > 0)",
+                    min
+                );
+            }
+        }
+        _ => {}
+    }
+
+    if let (Some(min), Some(max)) = (min, max) {
+        if min >= max {
+            panic!(
+                "Invalid scale range: min ({}) must be < max ({})",
+                min, max
+            );
+        }
+    }
+}
+
 pub fn scale_t_to_value(
     t: f64,
     min: f64,
