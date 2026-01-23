@@ -625,7 +625,7 @@ pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
 }
 
 /// Downgrade a HEALPix map from high nside to lower nside by averaging pixels
-pub fn downgrade_healpix_map(
+pub fn downgrade_healpix_map_ang(
     map: &[f64],
     source_nside: i64,
     target_nside: i64,
@@ -688,26 +688,22 @@ pub fn downgrade_healpix_map_xyf(
     source_nside: i64,
     target_nside: i64,
     ordering: HealpixOrdering,
-    pessimistic: bool,
 ) -> Vec<f64> {
-    assert!(source_nside > target_nside);
+    if source_nside <= target_nside {
+        return map.to_vec();
+    }
     assert_eq!(source_nside % target_nside, 0);
 
     let fact = (source_nside / target_nside) as i64;
-    let min_hits = if pessimistic {
-        (fact * fact) as usize
-    } else {
-        1
-    };
-
+    let min_hits = 1;
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![HPX_UNSEEN; target_npix];
 
     for target_pix in 0..target_npix {
         // Convert target pixel to (x, y, face)
         let (x, y, face) = match ordering {
-            HealpixOrdering::Ring => pix2xyf_ring(target_nside, target_pix as i64),
-            HealpixOrdering::Nested => pix2xyf_nest(target_nside, target_pix as i64),
+            HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+            HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
         };
 
         let mut sum = 0.0;
@@ -721,10 +717,10 @@ pub fn downgrade_healpix_map_xyf(
             for i in x0..(x0 + fact) {
                 let source_pix = match ordering {
                     HealpixOrdering::Ring => {
-                        xyf2pix_ring(source_nside, i, j, face)
+                        xyf2ring(source_nside, i, j, face)
                     }
                     HealpixOrdering::Nested => {
-                        xyf2pix_nest(source_nside, i, j, face)
+                        xyf2nest(source_nside, i, j, face)
                     }
                 } as usize;
 
@@ -744,3 +740,15 @@ pub fn downgrade_healpix_map_xyf(
     result
 }
 
+pub fn downgrade_healpix_map(
+    map: &[f64],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<f64> {
+    if target_nside < 256 {
+        downgrade_healpix_map_ang(&map, source_nside, target_nside, ordering)
+    } else {
+        downgrade_healpix_map_xyf(&map, source_nside, target_nside, ordering)
+    }
+}

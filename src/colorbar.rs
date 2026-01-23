@@ -160,84 +160,18 @@ pub fn format_units_label(latex_rendering: bool, units: Option<&str>) -> Option<
     })
 }
 
-/// Convert integer to Unicode superscript string
-fn to_superscript(n: i32) -> String {
-    let map = [
-        ('0', '⁰'), ('1', '¹'), ('2', '²'), ('3', '³'), ('4', '⁴'),
-        ('5', '⁵'), ('6', '⁶'), ('7', '⁷'), ('8', '⁸'), ('9', '⁹'),
-        ('-', '⁻')
-    ].iter().copied().collect::<std::collections::HashMap<_, _>>();
-
-    n.to_string().chars()
-        .map(|c| *map.get(&c).unwrap_or(&c))
-        .collect()
-}
-
-// fn log_minor_ticks(major: &[f64]) -> Vec<f64> {
-//     let mut minors = Vec::new();
+// /// Convert integer to Unicode superscript string
+// fn to_superscript(n: i32) -> String {
+//     let map = [
+//         ('0', '⁰'), ('1', '¹'), ('2', '²'), ('3', '³'), ('4', '⁴'),
+//         ('5', '⁵'), ('6', '⁶'), ('7', '⁷'), ('8', '⁸'), ('9', '⁹'),
+//         ('-', '⁻')
+//     ].iter().copied().collect::<std::collections::HashMap<_, _>>();
 // 
-//     for pair in major.windows(2) {
-//         let a = pair[0];
-//         let b = pair[1];
-// 
-//         if a <= 0.0 || b <= 0.0 {
-//             continue;
-//         }
-// 
-//         let log_a = a.log10();
-// 
-//         let base = 10f64.powf(log_a.floor());
-// 
-//         for mult in [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0] {
-//             let v = base * mult;
-//             if v > a && v < b {
-//                 minors.push(v);
-//             }
-//         }
-//     }
-// 
-//     minors
+//     n.to_string().chars()
+//         .map(|c| *map.get(&c).unwrap_or(&c))
+//         .collect()
 // }
-
-
-// fn linear_minor_ticks(major: &[f64], n_minor: usize) -> Vec<f64> {
-//     let mut minors = Vec::new();
-// 
-//     for pair in major.windows(2) {
-//         let a = pair[0];
-//         let b = pair[1];
-//         let step = (b - a) / (n_minor + 1) as f64;
-// 
-//         for i in 1..=n_minor {
-//             minors.push(a + step * i as f64);
-//         }
-//     }
-// 
-//     minors
-// }
-
-
-// fn compute_minor_tick_values(
-//     major_values: &[f64],
-//     scale: Scale,
-//     n_minor: usize,
-// ) -> Vec<f64> {
-//     match scale {
-//         Scale::Linear
-//         | Scale::Asinh { .. }
-//         | Scale::Symlog { .. }
-//         | Scale::PlanckLog { .. } => {
-//             linear_minor_ticks(major_values, n_minor)
-//         }
-// 
-//         Scale::Log => {
-//             log_minor_ticks(major_values)
-//         }
-//     }
-// }
-
-
-
 
 pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usize) -> Vec<f64> {
     // Handle the case where all values are the same
