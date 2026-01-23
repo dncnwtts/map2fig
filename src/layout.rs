@@ -50,7 +50,7 @@ pub fn compute_mollweide_layout(
     let map_w = width - 2.0 * outer_pad;
     let map_h = map_w / 2.0;
     let cbar_h = if show_colorbar { map_h / 20.0} else { 0.0 };
-    let label_h = if show_colorbar { 35.0 } else { 0.0 };
+    let label_h = if show_colorbar { 50.0 } else { 0.0 };
 
     let height =
         outer_pad +
