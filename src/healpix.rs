@@ -682,3 +682,65 @@ pub fn downgrade_healpix_map(
 }
 
 
+
+pub fn downgrade_healpix_map_xyf(
+    map: &[f64],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+    pessimistic: bool,
+) -> Vec<f64> {
+    assert!(source_nside > target_nside);
+    assert_eq!(source_nside % target_nside, 0);
+
+    let fact = (source_nside / target_nside) as i64;
+    let min_hits = if pessimistic {
+        (fact * fact) as usize
+    } else {
+        1
+    };
+
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    let mut result = vec![HPX_UNSEEN; target_npix];
+
+    for target_pix in 0..target_npix {
+        // Convert target pixel to (x, y, face)
+        let (x, y, face) = match ordering {
+            HealpixOrdering::Ring => pix2xyf_ring(target_nside, target_pix as i64),
+            HealpixOrdering::Nested => pix2xyf_nest(target_nside, target_pix as i64),
+        };
+
+        let mut sum = 0.0;
+        let mut hits = 0usize;
+
+        // Loop over corresponding source pixels
+        let x0 = fact * x;
+        let y0 = fact * y;
+
+        for j in y0..(y0 + fact) {
+            for i in x0..(x0 + fact) {
+                let source_pix = match ordering {
+                    HealpixOrdering::Ring => {
+                        xyf2pix_ring(source_nside, i, j, face)
+                    }
+                    HealpixOrdering::Nested => {
+                        xyf2pix_nest(source_nside, i, j, face)
+                    }
+                } as usize;
+
+                let val = map[source_pix];
+                if is_seen(val) {
+                    sum += val;
+                    hits += 1;
+                }
+            }
+        }
+
+        if hits >= min_hits {
+            result[target_pix] = sum / hits as f64;
+        }
+    }
+
+    result
+}
+
