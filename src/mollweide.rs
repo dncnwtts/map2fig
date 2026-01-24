@@ -5,6 +5,12 @@ use crate::render::raster::RasterGrid;
 #[derive(Debug, Clone, Copy)]
 pub struct MollweideProjection;
 
+impl Default for MollweideProjection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MollweideProjection {
     pub fn new() -> Self {
         Self

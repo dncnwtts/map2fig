@@ -70,7 +70,7 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
     };
 
     let nside = match header.get("NSIDE") {
-        Some(Value::Integer { value, .. }) => *value as i64,
+        Some(Value::Integer { value, .. }) => *value,
         _ => return None,
     };
 
@@ -155,7 +155,7 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
 }
 
 pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
-    assert!(theta >= 0.0 && theta <= PI);
+    assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();
     let za = z.abs();
@@ -229,7 +229,7 @@ pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
 }
 
 pub fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
-    assert!(theta >= 0.0 && theta <= PI);
+    assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();
     let za = z.abs();
@@ -299,11 +299,11 @@ pub fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
 
     // Interleave bits of ix and iy
     for bit in 0..32 {
-        morton |= ((ix as i64 >> bit) & 1) << (2 * bit);
-        morton |= ((iy as i64 >> bit) & 1) << (2 * bit + 1);
+        morton |= ((ix >> bit) & 1) << (2 * bit);
+        morton |= ((iy >> bit) & 1) << (2 * bit + 1);
     }
 
-    morton + (face as i64) * (nside as i64) * (nside as i64)
+    morton + (face as i64) * nside * nside
 }
 
 /// Convert NESTED pixel index → (ix, iy, face)
@@ -333,7 +333,7 @@ pub fn nest2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
 
 pub fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
     let nl4 = 4 * nside;
-    let jr = JRLL[face as usize] * nside - ix - iy - 1;
+    let jr = JRLL[face] * nside - ix - iy - 1;
 
     let (nr, kshift, n_before) = if jr < nside {
         let nr = jr;
@@ -355,7 +355,7 @@ pub fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
     };
 
     let mut jp =
-        (JPLL[face as usize] * nr + ix - iy + 1 + kshift) / 2;
+        (JPLL[face] * nr + ix - iy + 1 + kshift) / 2;
 
     if jp > nl4 {
         jp -= nl4;
@@ -448,7 +448,7 @@ pub fn nest2ring(nside: i64, ipnest: i64) -> i64 {
     }
 
     let (ix, iy, face) = nest2xyf(nside, ipnest);
-    xyf2ring(nside, ix, iy, face) as i64
+    xyf2ring(nside, ix, iy, face)
 }
 
 /// Convert a ring pixel index to a nested pixel index
@@ -457,7 +457,7 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
         panic!("nside must be a power of two");
     }
 
-    let (ix, iy, face) = ring2xyf(nside as i64, ipring as i64);
+    let (ix, iy, face) = ring2xyf(nside, ipring);
     xyf2nest(nside, ix, iy, face)
 }
 
@@ -727,7 +727,7 @@ pub fn downgrade_healpix_map_xyf(
     }
     assert_eq!(source_nside % target_nside, 0);
 
-    let fact = (source_nside / target_nside) as i64;
+    let fact = (source_nside / target_nside);
     let min_hits = 1;
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![HPX_UNSEEN; target_npix];
@@ -780,8 +780,8 @@ pub fn downgrade_healpix_map(
     ordering: HealpixOrdering,
 ) -> Vec<f64> {
     if target_nside < 256 {
-        downgrade_healpix_map_ang(&map, source_nside, target_nside, ordering)
+        downgrade_healpix_map_ang(map, source_nside, target_nside, ordering)
     } else {
-        downgrade_healpix_map_xyf(&map, source_nside, target_nside, ordering)
+        downgrade_healpix_map_xyf(map, source_nside, target_nside, ordering)
     }
 }

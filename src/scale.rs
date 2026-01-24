@@ -4,27 +4,23 @@ use crate::healpix::is_seen;
 use crate::colorbar::ColorbarTicks;
 
 pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) {
-    match scale {
-        Scale::Log => {
-            let min = min.expect("log scale requires --min to be specified");
-            if min <= 0.0 {
-                panic!(
-                    "Invalid --min value for log scale: {} (must be > 0)",
-                    min
-                );
-            }
+    if scale == &Scale::Log {
+        let min = min.expect("log scale requires --min to be specified");
+        if min <= 0.0 {
+            panic!(
+                "Invalid --min value for log scale: {} (must be > 0)",
+                min
+            );
         }
-        _ => {}
     }
 
-    if let (Some(min), Some(max)) = (min, max) {
-        if min >= max {
+    if let (Some(min), Some(max)) = (min, max)
+        && min >= max {
             panic!(
                 "Invalid scale range: min ({}) must be < max ({})",
                 min, max
             );
         }
-    }
 }
 
 pub fn scale_t_to_value(
@@ -319,14 +315,11 @@ pub fn generate_colorbar_ticks(
     scale: &Scale,
     hist: Option<&HistogramScale>,
 ) -> ColorbarTicks {
-    match scale {
-        Scale::Histogram => {
-            let ticks = histogram_ticks(
-                hist.expect("Histogram ticks require histogram scale")
-            );
-            return ticks;
-        }
-        _ => {}
+    if scale == &Scale::Histogram {
+        let ticks = histogram_ticks(
+            hist.expect("Histogram ticks require histogram scale")
+        );
+        return ticks;
     }
 
     let mut ticks = match scale {
@@ -378,7 +371,7 @@ fn histogram_minor_ticks(
 
     for q in uniform_quantiles(50) {
         // Always allow near edges
-        if q < 0.05 || q > 0.95 {
+        if !(0.05..=0.95).contains(&q) {
             if let Some(v) = hist.value_at_quantile(q) {
                 values.push(v);
                 positions.push(q);

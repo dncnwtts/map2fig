@@ -92,11 +92,10 @@ pub fn render_mollweide_pixels(
 
     let mut grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
 
-    if let Some(overlay) = debug_overlay {
-        if overlay.show_background {
+    if let Some(overlay) = debug_overlay
+        && overlay.show_background {
             fill_grid_background(&mut grid);
         }
-    }
 
 
     render_projection_to_grid(
@@ -187,8 +186,8 @@ pub fn plot_mollweide_pdf(
 
 
     let surface_pdf = PdfSurface::new(
-        layout.width as f64,
-        layout.height as f64,
+        layout.width,
+        layout.height,
         filename,
     ).expect("Failed to create PDF surface");
     
@@ -297,7 +296,7 @@ pub fn plot_mollweide_pdf(
         draw_colorbar_pdf(
             &cr_pdf,
             cb_layout,
-            &cmap,
+            cmap,
             scale_params.minv,
             scale_params.maxv,
             scale,
@@ -489,8 +488,8 @@ pub fn plot_mollweide_png(
         //         );
         //     }
         // }
-        for y in 0..surf_h as i32 {
-            for x in 0..surf_w as i32 {
+        for y in 0..surf_h {
+            for x in 0..surf_w {
                 let idx = (y as usize) * stride + (x as usize) * 4;
                 let a = data[idx + 3];
                 if a == 0 {
@@ -499,10 +498,10 @@ pub fn plot_mollweide_png(
         
                 let r = data[idx + 2];
                 let g = data[idx + 1];
-                let b = data[idx + 0];
+                let b = data[idx];
         
-                let dst_x = layout.map_x as i32 + x - pad as i32;
-                let dst_y = layout.map_y as i32 + y - pad as i32;
+                let dst_x = layout.map_x as i32 + x - pad;
+                let dst_y = layout.map_y as i32 + y - pad;
         
                 if dst_x < 0 || dst_y < 0 {
                     continue;
@@ -732,12 +731,7 @@ pub fn map_to_pixel_value(
     neg_mode: NegMode,
     hist_scale: Option<&HistogramScale>,
 ) -> PixelValue {
-    match scale_value(val, minv, maxv, scale, neg_mode, hist_scale) {
-        PixelValue::Bad => PixelValue::Bad,
-        PixelValue::Underflow => PixelValue::Underflow,
-        PixelValue::Overflow => PixelValue::Overflow,
-        PixelValue::Color(t) => PixelValue::Color(t),
-    }
+    scale_value(val, minv, maxv, scale, neg_mode, hist_scale)
 }
 /// Convert a PixelValue into an RGBA color
 #[inline]

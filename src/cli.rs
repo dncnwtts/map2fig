@@ -205,8 +205,8 @@ impl Args {
         };
 
         // Resolve colors
-        let bad_color_rgba = resolve_input_color(self.bad_color.clone().or(Some(InputColor::Gray)), &colormap, self.transparent);
-        let bg_color_rgba = resolve_input_color(self.bg_color.clone().or(Some(InputColor::Transparent)), &colormap, self.transparent);
+        let bad_color_rgba = resolve_input_color(self.bad_color.clone().or(Some(InputColor::Gray)), colormap, self.transparent);
+        let bg_color_rgba = resolve_input_color(self.bg_color.clone().or(Some(InputColor::Transparent)), colormap, self.transparent);
 
         Ok(PlotConfig {
             scale,

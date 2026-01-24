@@ -50,7 +50,7 @@ impl<'a> RenderBackend for PdfBackend<'a> {
         self.cr.set_font_size(size);
 
         // Try to use STIX fonts for mathematical text, fall back to default
-        let _font_set = self.cr.set_font_face(&cairo::FontFace::toy_create(
+        self.cr.set_font_face(&cairo::FontFace::toy_create(
             "STIXGeneral",
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
@@ -222,8 +222,8 @@ pub fn draw_colorbar_pdf_labels(
     }
 
     // Draw units label below colorbar if specified
-    if let Some(units_str) = units {
-        if let Some(units_label) = format_units_label(latex_rendering, Some(units_str)) {
+    if let Some(units_str) = units
+        && let Some(units_label) = format_units_label(latex_rendering, Some(units_str)) {
             cr.set_font_size(10.0);
             let ext = cr.text_extents(&units_label).unwrap();
             let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
@@ -231,7 +231,6 @@ pub fn draw_colorbar_pdf_labels(
             cr.move_to(center_x, y);
             cr.show_text(&units_label).unwrap();
         }
-    }
 }
 
 
@@ -284,13 +283,13 @@ pub fn draw_colorbar_pdf(
         cr.paint().unwrap();
 
         draw_colorbar_pdf_ticks(
-            &cr,
+            cr,
             cb_layout,
             &ticks,
         );
     
         draw_colorbar_pdf_labels(
-            &cr,
+            cr,
             cb_layout,
             &ticks,
             scale,
