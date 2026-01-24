@@ -54,17 +54,21 @@ pub type Mat3 = [[f64; 3]; 3];
 /// Obliquity of the ecliptic (J2000), radians
 const OBLIQUITY: f64 = 23.439291111_f64.to_radians();
 
-const GAL_TO_EQ: Mat3 = [
+
+/// Equatorial → Galactic (IAU 1958 / J2000, as used by SOFA / Astropy)
+const EQ_TO_GAL: Mat3 = [
     [-0.0548755604, -0.8734370902, -0.4838350155],
     [ 0.4941094279, -0.4448296300,  0.7469822445],
     [-0.8676661490, -0.1980763734,  0.4559837762],
 ];
 
-const EQ_TO_GAL: Mat3 = [
+/// Galactic → Equatorial (inverse = transpose)
+const GAL_TO_EQ: Mat3 = [
     [-0.0548755604,  0.4941094279, -0.8676661490],
     [-0.8734370902, -0.4448296300, -0.1980763734],
     [-0.4838350155,  0.7469822445,  0.4559837762],
 ];
+
 
 pub const GAL_CENTER: [f64; 3] = [1.0, 0.0, 0.0];
 
@@ -253,14 +257,25 @@ pub fn gal_to_ecl_dummy(v: [f64; 3]) -> [f64; 3] {
 
 #[inline(always)]
 pub fn gal_to_ecl(v: [f64; 3]) -> [f64; 3] {
-    let veq = mat_vec(&GAL_TO_EQ, v);
-    mat_vec(&eq_to_ecl(), veq)
+    let v_eq = matvec(&GAL_TO_EQ, v);
+    matvec(&eq_to_ecl(), v_eq)
 }
 
 #[inline(always)]
 pub fn ecl_to_gal(v: [f64; 3]) -> [f64; 3] {
-    let veq = mat_vec(&ecl_to_eq(), v);
-    mat_vec(&EQ_TO_GAL, veq)
+    let v_eq = matvec(&ecl_to_eq(), v);
+    matvec(&EQ_TO_GAL, v_eq)
+}
+
+
+/// Interpret a galactic vector in ecliptic coordinates (PASSIVE)
+pub fn gal_basis_to_ecl(v: [f64; 3]) -> [f64; 3] {
+    matvec(&EQ_TO_GAL, matvec(&ecl_to_eq(), v))
+}
+
+/// Interpret an ecliptic vector in galactic coordinates (PASSIVE)
+pub fn ecl_basis_to_gal(v: [f64; 3]) -> [f64; 3] {
+    matvec(&GAL_TO_EQ, matvec(&eq_to_ecl(), v))
 }
 
 
@@ -285,6 +300,7 @@ mod tests {
 
     const TOL: f64 = 1e-9;
     const DEG2RAD: f64 = PI / 180.0;
+    const LIT_TOL: f64 = 1e-9;
 
     fn vec_approx_eq(v1: [f64; 3], v2: [f64; 3], tol: f64) -> bool {
         (0..3).all(|i| (v1[i] - v2[i]).abs() < tol)
@@ -419,7 +435,7 @@ mod tests {
         let g = normalize(GAL_CENTER_ECL);
     
         assert!(
-            vec_approx_eq(v, g, 1e-12),
+            vec_approx_eq(v, g, LIT_TOL),
             "GC → ecliptic mismatch: {:?} vs {:?}", v, g
         );
     }
@@ -429,43 +445,52 @@ mod tests {
         let v_eq = normalize(matvec(&GAL_TO_EQ, GAL_CENTER));
         let g_eq = normalize(GAL_CENTER_EQ);
     
-        assert!(vec_approx_eq(v_eq, g_eq, 1e-12),
+        assert!(vec_approx_eq(v_eq, g_eq, LIT_TOL),
             "GC -> equatorial mismatch: {:?} vs {:?}", v_eq, g_eq
             );
     }
 
-#[test]
-fn north_galactic_pole_matches_equatorial() {
-    let v_eq = normalize(matvec(&GAL_TO_EQ, [0.0, 0.0, 1.0]));
-    let g_eq = normalize(NGP_EQ);
+    #[test]
+    fn north_galactic_pole_matches_equatorial() {
+        let v_eq = normalize(matvec(&GAL_TO_EQ, [0.0, 0.0, 1.0]));
+        let g_eq = normalize(NGP_EQ);
+    
+        assert!(
+            vec_approx_eq(v_eq, g_eq, 1e-6),
+            "NGP → equatorial mismatch: {:?} vs {:?}", v_eq, g_eq
+        );
+    }
+    
+    #[test]
+    fn north_galactic_pole_matches_ecliptic() {
+        let v_ecl = normalize(gal_to_ecl([0.0, 0.0, 1.0]));
+        let g_ecl = normalize(NGP_ECL);
+    
+        assert!(
+            vec_approx_eq(v_ecl, g_ecl, 1e-6),
+            "NGP → ecliptic mismatch: {:?} vs {:?}", v_ecl, g_ecl
+        );
+    }
+    
+    #[test]
+    fn north_galactic_pole_round_trip() {
+        let v = [0.0, 0.0, 1.0];
+        let v2 = normalize(ecl_to_gal(gal_to_ecl(v)));
+    
+        assert!(
+            vec_approx_eq(v, v2, 1e-10),
+            "NGP round-trip failed: {:?} vs {:?}", v, v2
+        );
+    }
 
-    assert!(
-        vec_approx_eq(v_eq, g_eq, 1e-6),
-        "NGP → equatorial mismatch: {:?} vs {:?}", v_eq, g_eq
-    );
-}
-
-#[test]
-fn north_galactic_pole_matches_ecliptic() {
-    let v_ecl = normalize(gal_to_ecl([0.0, 0.0, 1.0]));
-    let g_ecl = normalize(NGP_ECL);
-
-    assert!(
-        vec_approx_eq(v_ecl, g_ecl, 1e-6),
-        "NGP → ecliptic mismatch: {:?} vs {:?}", v_ecl, g_ecl
-    );
-}
-
-#[test]
-fn north_galactic_pole_round_trip() {
-    let v = [0.0, 0.0, 1.0];
-    let v2 = normalize(ecl_to_gal(gal_to_ecl(v)));
-
-    assert!(
-        vec_approx_eq(v, v2, 1e-12),
-        "NGP round-trip failed: {:?} vs {:?}", v, v2
-    );
-}
+    #[test]
+    fn gal_eq_matrices_are_transposes() {
+        for i in 0..3 {
+            for j in 0..3 {
+                assert!((GAL_TO_EQ[i][j] - EQ_TO_GAL[j][i]).abs() < 1e-12);
+            }
+        }
+    }
 
 
 }

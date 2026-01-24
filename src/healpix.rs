@@ -16,7 +16,7 @@ use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::header::Header;
 
 use crate::rotation::CoordSystem;
-use crate::rotation::{vec_to_sph,sph_to_vec,gal_to_ecl};
+use crate::rotation::{vec_to_sph,sph_to_vec,gal_basis_to_ecl,ecl_basis_to_gal};
 
 #[derive(Debug, Clone, Copy)]
 pub enum HealpixOrdering {
@@ -475,9 +475,9 @@ pub fn sample_healpix(
     // Convert to Cartesian
     let mut v = sph_to_vec(theta, lon);
 
-    // --- DUMMY rotation: Galactic → Ecliptic ---
     if meta.coord == CoordSystem::G {
-        v = gal_to_ecl(v);
+        //v = gal_to_ecl(v);
+        v = gal_basis_to_ecl(v);
     }
 
     // Back to spherical
