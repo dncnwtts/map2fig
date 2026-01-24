@@ -727,7 +727,7 @@ pub fn downgrade_healpix_map_xyf(
     }
     assert_eq!(source_nside % target_nside, 0);
 
-    let fact = (source_nside / target_nside);
+    let fact = source_nside / target_nside ;
     let min_hits = 1;
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![HPX_UNSEEN; target_npix];
