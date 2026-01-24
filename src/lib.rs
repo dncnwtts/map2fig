@@ -13,6 +13,7 @@ pub mod pipeline;
 pub mod constants;
 pub mod latex;
 pub mod rotation;
+pub mod sampler;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
@@ -264,12 +265,13 @@ mod tests {
     #[test]
     fn test_plot_small_map() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
+        use crate::rotation::CoordSystem;
         let map = generate_index_map(1); // 12 pixels
         let cmap = get_colormap("viridis");
         let bad_color = Rgba([128, 128, 128, 255]);
         let neg_mode = NegMode::Zero;
 
-        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
+        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
     
         let scale = Scale::Linear;
     
@@ -421,6 +423,7 @@ mod tests {
     #[test]
     fn test_plot_extreme_options() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
+        use crate::rotation::CoordSystem;
         let map = generate_index_map(1);
         let cmap = get_colormap("plasma");
         let bad_color = Rgba([255, 0, 255, 255]);
@@ -429,7 +432,7 @@ mod tests {
             linthresh: 10.0,
         };
 
-        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
+        let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
     
         plot_mollweide_png(
             &map,

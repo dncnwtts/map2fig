@@ -92,9 +92,10 @@ fn test_neg_mode_behavior() {
 #[test]
 fn test_plot_smoke() {
     use healpix_plotter::healpix::{HealpixMeta, HealpixOrdering};
+    use healpix_plotter::rotation::CoordSystem;
     let map = healpix_plotter::generate_index_map(1);
     let cmap = healpix_plotter::get_colormap("viridis");
-    let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1};
+    let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
 
     healpix_plotter::plot_mollweide_png(
         &map,

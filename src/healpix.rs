@@ -15,6 +15,9 @@ use std::io::BufReader;
 use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::header::Header;
 
+use crate::rotation::CoordSystem;
+use crate::rotation::{vec_to_sph,sph_to_vec,gal_to_ecl};
+
 #[derive(Debug, Clone, Copy)]
 pub enum HealpixOrdering {
     Ring,
@@ -25,7 +28,9 @@ pub enum HealpixOrdering {
 pub struct HealpixMeta {
     pub ordering: HealpixOrdering,
     pub nside: i64,
+    pub coord: CoordSystem,
 }
+
 
 
 
@@ -57,11 +62,10 @@ pub fn read_healpix_meta(path: &str) -> Option<HealpixMeta> {
 
     None
 }
-
 fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
     let ordering = match header.get("ORDERING") {
-        Some(Value::String { value, .. }) if value == "RING" => HealpixOrdering::Ring,
-        Some(Value::String { value, .. }) if value == "NESTED" => HealpixOrdering::Nested,
+        Some(Value::String { value, .. }) if value.trim() == "RING" => HealpixOrdering::Ring,
+        Some(Value::String { value, .. }) if value.trim() == "NESTED" => HealpixOrdering::Nested,
         _ => return None,
     };
 
@@ -70,8 +74,20 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
         _ => return None,
     };
 
-    Some(HealpixMeta { ordering, nside })
+    let coord = match header.get("COORDSYS") {
+        Some(Value::String { value, .. }) => match value.trim() {
+            "C" | "CEL" | "CELESTIAL" => CoordSystem::C,
+            "G" | "GAL" | "GALACTIC"  => CoordSystem::G,
+            "E" | "ECL" | "ECLIPTIC"  => CoordSystem::E,
+            _ => CoordSystem::G, // HEALPix default
+        },
+        None => CoordSystem::G, // HEALPix convention
+        _ => todo!(),
+    };
+
+    Some(HealpixMeta { ordering, nside, coord})
 }
+
 
 
 
@@ -445,6 +461,7 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
     xyf2nest(nside, ix, iy, face)
 }
 
+
 pub fn sample_healpix(
     map: &[f64],
     meta: HealpixMeta,
@@ -455,17 +472,26 @@ pub fn sample_healpix(
         return None;
     }
 
+    // Convert to Cartesian
+    let mut v = sph_to_vec(theta, lon);
+
+    // --- DUMMY rotation: Galactic → Ecliptic ---
+    if meta.coord == CoordSystem::G {
+        v = gal_to_ecl(v);
+    }
+
+    // Back to spherical
+    let (theta, lon) = vec_to_sph(v);
+
+    // Normalize angles
     let theta = theta.clamp(0.0, std::f64::consts::PI);
     let lon = lon.rem_euclid(2.0 * std::f64::consts::PI);
 
     let ipix = ang2pix(meta, theta, lon) as usize;
-
-    if ipix >= map.len() {
-        return None;
-    }
-
-    Some(map[ipix])
+    map.get(ipix).copied()
 }
+
+
 
 
 #[cfg(test)]
