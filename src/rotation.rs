@@ -3,8 +3,6 @@
 //! Internally: ACTIVE rotations (rotate vectors).
 //! Externally: PASSIVE semantics (re-express same direction).
 
-use std::f64::consts::PI;
-
 pub type Mat3 = [[f64; 3]; 3];
 
 /// Coordinate systems
@@ -133,6 +131,19 @@ pub fn normalize(v: [f64; 3]) -> [f64; 3] {
     let n = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
     [v[0]/n, v[1]/n, v[2]/n]
 }
+
+/// Galactic longitude ℓ, latitude b → Cartesian unit vector
+/// ℓ, b in radians
+#[inline(always)]
+pub fn galactic_lonlat_to_vec(l: f64, b: f64) -> [f64; 3] {
+    let cb = b.cos();
+    [
+        cb * l.cos(),
+        cb * l.sin(),
+        b.sin(),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +156,18 @@ mod tests {
         (a - b).abs() < tol
     }
 
+    fn vec_approx_eq(a: [f64; 3], b: [f64; 3], tol: f64) -> bool {
+        (0..3).all(|i| (a[i] - b[i]).abs() < tol)
+    }
+
+    fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+        let mut sum = 0.0;
+        for i in 0..3 {
+            sum += a[i] * b[i];
+        }
+        sum
+    }
+
     /// Convert cartesian vector `v` into (theta, lon)
     fn vec_to_angles(v: [f64; 3]) -> (f64, f64) {
         let (theta, lon) = vec_to_sph(v);
@@ -152,38 +175,30 @@ mod tests {
         (theta, lon)
     }
 
-    // #[test]
-    // fn galactic_center_to_ecliptic_angles() {
-    //     // Direction: l=0°, b=0°
-    //     let v_gal = galactic_lonlat_to_vec(0.0 * DEG2RAD, 0.0 * DEG2RAD);
+    /// Convert vector → (lon, lat)
+    fn vec_to_lonlat(v: [f64; 3]) -> (f64, f64) {
+        let r = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
+        let lon = v[1].atan2(v[0]).rem_euclid(2.0 * std::f64::consts::PI);
+        let lat = (v[2] / r).asin();
+        (lon, lat)
+    }
+    
+    #[test]
+    fn north_galactic_pole_to_equatorial_angles() {
+        let v_gal = galactic_lonlat_to_vec(0.0, 90.0 * DEG2RAD);
+        let v_eq  = matvec(&GAL_TO_EQ, v_gal);
+        let (ra, dec) = vec_to_lonlat(v_eq);
+    
+        let ra_exp  = 192.85948 * DEG2RAD;
+        let dec_exp = 27.12825 * DEG2RAD;
+    
+        assert!(approx_eq(ra,  ra_exp,  1e-6), "RA mismatch");
+        assert!(approx_eq(dec, dec_exp, 1e-6), "Dec mismatch");
+    }
+    
+    
 
-    //     // Passive transform → ecliptic
-    //     let v_ecl = gal_to_ecl(v_gal);
-    //     let (theta, lon) = vec_to_angles(v_ecl);
 
-    //     // Known ecliptic coords from literature:
-    //     // λ ≈ 266.14097°, β ≈ –5.5297°
-    //     let expected_theta = (90.0 + 5.5297) * DEG2RAD;
-    //     let expected_lon   = 266.14097 * DEG2RAD;
-
-    //     assert!(approx_eq(theta, expected_theta, 1e-6));
-    //     assert!(approx_eq(lon, expected_lon,   1e-6));
-    // }
-
-    // #[test]
-    // fn north_galactic_pole_to_ecliptic_angles() {
-    //     // Direction: b=+90°
-    //     let v_ngp_gal = galactic_lonlat_to_vec(0.0, 90.0 * DEG2RAD);
-    //     let v_ecl = gal_to_ecl(v_ngp_gal);
-    //     let (theta, lon) = vec_to_angles(v_ecl);
-
-    //     // Known ecliptic coords ≈ λ 179.32095°, β +29.811954°
-    //     let expected_theta = (90.0 - 29.811954) * DEG2RAD;
-    //     let expected_lon   = 179.32095 * DEG2RAD;
-
-    //     assert!(approx_eq(theta, expected_theta, 1e-6));
-    //     assert!(approx_eq(lon, expected_lon,     1e-6));
-    // }
 
     #[test]
     fn north_ecliptic_pole_is_pole() {
@@ -192,5 +207,151 @@ mod tests {
         let (theta, _) = vec_to_angles(v);
         assert!(approx_eq(theta, 0.0, 1e-12));
     }
+
+    #[test]
+    fn galactic_lonlat_round_trip_angles() {
+        let cases = [
+            (0.0, 0.0),
+            (90.0, 0.0),
+            (180.0, 0.0),
+            (45.0, 30.0),
+            (270.0, -45.0),
+        ];
+    
+        for (l_deg, b_deg) in cases {
+            let l = l_deg * DEG2RAD;
+            let b = b_deg * DEG2RAD;
+    
+            let v_gal = galactic_lonlat_to_vec(l, b);
+            let v_ecl = gal_to_ecl(v_gal);
+            let v_back = ecl_to_gal(v_ecl);
+    
+            let (l2, b2) = vec_to_lonlat(v_back);
+    
+            assert!(
+                approx_eq(b, b2, 1e-8),
+                "Latitude round-trip failed: b={} → {}",
+                b_deg, b2 / DEG2RAD
+            );
+    
+            assert!(
+                approx_eq(
+                    (l - l2).sin(), 0.0, 1e-8
+                ),
+                "Longitude round-trip failed: l={} → {}",
+                l_deg, l2 / DEG2RAD
+            );
+        }
+    }
+
+    #[test]
+    fn equatorial_ecliptic_round_trip_angles() {
+        let cases = [
+            (0.0, 0.0),
+            (90.0, 0.0),
+            (180.0, 0.0),
+            (45.0, 23.0),
+            (300.0, -30.0),
+        ];
+    
+        for (lon_deg, lat_deg) in cases {
+            let lon = lon_deg * DEG2RAD;
+            let lat = lat_deg * DEG2RAD;
+    
+            let v = [
+                lat.cos() * lon.cos(),
+                lat.cos() * lon.sin(),
+                lat.sin(),
+            ];
+    
+            let v_ecl = eq_to_ecl(v);
+            let v_back = ecl_to_eq(v_ecl);
+    
+            let (lon2, lat2) = vec_to_lonlat(v_back);
+    
+            assert!(approx_eq(lat, lat2, 1e-10));
+            assert!(approx_eq((lon - lon2).sin(), 0.0, 1e-10));
+        }
+    }
+    #[test]
+    fn poles_are_fixed_under_rotation() {
+        let poles = [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+        ];
+    
+        for p in poles {
+            let p2 = ecl_to_gal(gal_to_ecl(p));
+            assert!(
+                vec_approx_eq(normalize(p), normalize(p2), 1e-12),
+                "Pole not invariant: {:?} → {:?}", p, p2
+            );
+        }
+    }
+    
+    #[test]
+    fn angular_separation_is_preserved() {
+        let v1 = galactic_lonlat_to_vec(10.0 * DEG2RAD, 20.0 * DEG2RAD);
+        let v2 = galactic_lonlat_to_vec(80.0 * DEG2RAD, -10.0 * DEG2RAD);
+    
+        let sep = dot(v1, v2).acos();
+    
+        let v1r = gal_to_ecl(v1);
+        let v2r = gal_to_ecl(v2);
+    
+        let sep_r = dot(v1r, v2r).acos();
+    
+        assert!((sep - sep_r).abs() < 1e-12);
+    }
+
+#[test]
+fn gal_to_ecl_is_orthonormal() {
+    let basis = [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+
+    let b: Vec<_> = basis.iter().map(|&v| gal_to_ecl(v)).collect();
+
+    for i in 0..3 {
+        assert!((dot(b[i], b[i]) - 1.0).abs() < 1e-12);
+        for j in i+1..3 {
+            assert!(dot(b[i], b[j]).abs() < 1e-12);
+        }
+    }
+}
+#[test]
+fn galactic_equator_maps_to_smooth_curve() {
+    let mut last_lon = None;
+
+    for l in (0..360).step_by(5) {
+        let v = galactic_lonlat_to_vec(l as f64 * DEG2RAD, 0.0);
+        let v2 = gal_to_ecl(v);
+        let (lon, _) = vec_to_lonlat(v2);
+
+        if let Some(prev) = last_lon {
+            assert!((lon - prev).abs() < PI);
+        }
+        last_lon = Some(lon);
+    }
+}
+
+#[test]
+fn random_round_trip_fuzz() {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..10_000 {
+        let lon = rng.gen_range(0.0..2.0*PI);
+        let lat = rng.gen_range(-PI/2.0..PI/2.0);
+
+        let v = galactic_lonlat_to_vec(lon, lat);
+        let v2 = ecl_to_gal(gal_to_ecl(v));
+
+        assert!(vec_approx_eq(normalize(v), normalize(v2), 1e-10));
+    }
+}
+
 }
 
