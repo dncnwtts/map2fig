@@ -321,21 +321,23 @@ fn gal_to_ecl_is_orthonormal() {
         }
     }
 }
+
 #[test]
-fn galactic_equator_maps_to_smooth_curve() {
-    let mut last_lon = None;
+fn galactic_equator_is_continuous_in_cartesian_space() {
+    let mut last_v = None;
 
     for l in (0..360).step_by(5) {
         let v = galactic_lonlat_to_vec(l as f64 * DEG2RAD, 0.0);
-        let v2 = gal_to_ecl(v);
-        let (lon, _) = vec_to_lonlat(v2);
+        let v2 = normalize(gal_to_ecl(v));
 
-        if let Some(prev) = last_lon {
-            assert!((lon - prev).abs() < PI);
+        if let Some(prev) = last_v {
+            let angle = dot(prev, v2).acos();
+            assert!(angle < 0.2); // ~11 degrees
         }
-        last_lon = Some(lon);
+        last_v = Some(v2);
     }
 }
+
 
 #[test]
 fn random_round_trip_fuzz() {
