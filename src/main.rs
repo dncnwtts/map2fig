@@ -7,7 +7,7 @@ use std::time::Instant;
 fn main() {
     let args = Args::parse();
     let config = args.resolve_config().expect("Failed to resolve configuration");
-
+    let view = args.resolve_view_transform().expect("Failed to resolve rotation");
     println!("Reading HEALPix metadata...");
     let start = Instant::now();
     println!("Reading map...");
@@ -35,6 +35,7 @@ fn main() {
         data.meta,
         config.latex_rendering,
         config.units.as_deref(),
+        &view,
     );
     println!("Plot generation completed in {:.2}s", start.elapsed().as_secs_f64());
 }

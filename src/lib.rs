@@ -13,7 +13,6 @@ pub mod pipeline;
 pub mod constants;
 pub mod latex;
 pub mod rotation;
-pub mod sampler;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
@@ -265,7 +264,7 @@ mod tests {
     #[test]
     fn test_plot_small_map() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
-        use crate::rotation::CoordSystem;
+        use crate::rotation::{CoordSystem,ViewTransform};
         let map = generate_index_map(1); // 12 pixels
         let cmap = get_colormap("viridis");
         let bad_color = Rgba([128, 128, 128, 255]);
@@ -274,6 +273,10 @@ mod tests {
         let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
     
         let scale = Scale::Linear;
+        let input = CoordSystem::G;
+        let output = CoordSystem::G;
+        let rot = None;
+        let view = ViewTransform::new(input,output,rot);
     
         // Should not panic
         plot_mollweide_png(
@@ -294,6 +297,7 @@ mod tests {
             meta,
             false,  // latex_rendering
             None,   // units
+            &view,
         );
     }
     
@@ -423,7 +427,7 @@ mod tests {
     #[test]
     fn test_plot_extreme_options() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
-        use crate::rotation::CoordSystem;
+        use crate::rotation::{CoordSystem, ViewTransform};
         let map = generate_index_map(1);
         let cmap = get_colormap("plasma");
         let bad_color = Rgba([255, 0, 255, 255]);
@@ -433,6 +437,10 @@ mod tests {
         };
 
         let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
+        let input = CoordSystem::G;
+        let output = CoordSystem::G;
+        let rot = None;
+        let view = ViewTransform::new(input,output,rot);
     
         plot_mollweide_png(
             &map,
@@ -452,6 +460,7 @@ mod tests {
             meta,
             false,  // latex_rendering
             None,   // units
+            &view,
         );
     }
     

@@ -1,6 +1,8 @@
 use std::f64::consts::PI;
 
 pub const HPX_UNSEEN: f64 = -1.6375e30;
+use crate::rotation::ViewTransform;
+
 const HALF_PI: f64 = PI / 2.0;
 const TWOPI: f64 = 2.0 * PI;
 const INV_HALFPI: f64 = 2.0 / PI;
@@ -16,7 +18,7 @@ use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::header::Header;
 
 use crate::rotation::CoordSystem;
-use crate::rotation::{vec_to_sph,sph_to_vec,gal_to_ecl};
+use crate::rotation::{vec_to_sph,sph_to_vec};
 
 #[derive(Debug, Clone, Copy)]
 pub enum HealpixOrdering {
@@ -461,10 +463,10 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
     xyf2nest(nside, ix, iy, face)
 }
 
-
 pub fn sample_healpix(
     map: &[f64],
     meta: HealpixMeta,
+    view: &ViewTransform,
     theta: f64,
     lon: f64,
 ) -> Option<f64> {
@@ -472,25 +474,20 @@ pub fn sample_healpix(
         return None;
     }
 
-    // Convert to Cartesian
-    let mut v = sph_to_vec(theta, lon);
+    // Direction on the screen / projection
+    let v_view = sph_to_vec(theta, lon);
 
-    if meta.coord == CoordSystem::G {
-        v = gal_to_ecl(v);
-    }
+    // Rotate BACK into map coordinates
+    let v_map = view.rotation.inverse().apply(v_view);
 
-    // Back to spherical
-    let (theta, lon) = vec_to_sph(v);
+    let (theta_m, lon_m) = vec_to_sph(v_map);
 
-    // Normalize angles
-    let theta = theta.clamp(0.0, std::f64::consts::PI);
-    let lon = lon.rem_euclid(2.0 * std::f64::consts::PI);
+    let theta_m = theta_m.clamp(0.0, PI);
+    let lon_m = lon_m.rem_euclid(2.0 * PI);
 
-    let ipix = ang2pix(meta, theta, lon) as usize;
+    let ipix = ang2pix(meta, theta_m, lon_m) as usize;
     map.get(ipix).copied()
 }
-
-
 
 
 #[cfg(test)]

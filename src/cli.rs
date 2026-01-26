@@ -2,6 +2,7 @@ use clap::Parser;
 use crate::{Scale, NegMode, get_colormap, Colormap, validate_scale_config};
 use std::str::FromStr;
 use image::Rgba;
+use crate::rotation::{ViewTransform,CoordSystem,view_rotation,DEG2RAD};
 
 /// Simple HEALPix Mollweide plotter
 #[derive(Parser, Debug)]
@@ -98,6 +99,23 @@ pub struct Args {
     /// Units string for colorbar (supports LaTeX syntax when --latex is enabled)
     #[arg(long)]
     pub units: Option<String>,
+
+    /// Input coordinate system: gal, eq, ecl
+    #[arg(long, default_value = "gal")]
+    pub input_coord: String,
+    
+    /// Output coordinate system: gal, eq, ecl
+    #[arg(long, default_value = "gal")]
+    pub output_coord: String,
+
+    /// Rotate view so that (lon,lat) becomes the new center [degrees]
+    #[arg(long, value_name = "LON,LAT")]
+    pub rotate_to: Option<String>,
+    
+    /// Roll angle around the new center [degrees]
+    #[arg(long, default_value_t = 0.0)]
+    pub roll: f64,
+
 }
 
 /// Bad color option
@@ -218,4 +236,25 @@ impl Args {
             units: self.units.clone(),
         })
     }
+
+    pub fn resolve_view_transform(&self) -> Result<ViewTransform, String> {
+        let input = CoordSystem::from_str(&self.input_coord)?;
+        let output = CoordSystem::from_str(&self.output_coord)?;
+
+        let view = if let Some(ref s) = self.rotate_to {
+            let parts: Vec<_> = s.split(',').collect();
+            if parts.len() != 2 {
+                return Err("--rotate-to expects lon,lat".into());
+            }
+            let lon = parts[0].parse::<f64>().map_err(|_| "bad lon")? * DEG2RAD;
+            let lat = parts[1].parse::<f64>().map_err(|_| "bad lat")? * DEG2RAD;
+            let roll = self.roll * DEG2RAD;
+            Some(view_rotation(lon, lat, roll))
+        } else {
+            None
+        };
+
+        Ok(ViewTransform::new(input, output, view))
+    }
 }
+

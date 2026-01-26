@@ -14,6 +14,7 @@ use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
 use crate::scale::HistogramRange;
+use crate::rotation::ViewTransform;
 
 
 pub struct MollweideScale {
@@ -85,7 +86,8 @@ pub fn render_mollweide_pixels(
     meta: HealpixMeta,
     sink: &mut dyn PixelSink,
     hist_scale: Option<&HistogramScale>,
-    debug_overlay: Option<DebugOverlay>, // new optional parameter
+    view: &ViewTransform,
+    debug_overlay: Option<DebugOverlay>, 
 ) {
     use crate::mollweide::MollweideProjection;
     let proj = MollweideProjection;
@@ -110,6 +112,7 @@ pub fn render_mollweide_pixels(
         bad_color,
         meta,
         hist_scale,
+        &view,
     );
 
     // Draw debug overlay only if provided
@@ -167,6 +170,7 @@ pub fn plot_mollweide_pdf(
     meta: HealpixMeta,
     latex_rendering: bool,
     units: Option<&str>,
+    view: &ViewTransform,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -261,6 +265,7 @@ pub fn plot_mollweide_pdf(
         meta,
         &mut sink,
         hist_scale,
+        &view,
         debug_overlay, // pass the optional overlay
     );
 
@@ -346,6 +351,7 @@ pub fn plot_mollweide_png(
     meta: HealpixMeta,
     latex_rendering: bool,
     units: Option<&str>,
+    view: &ViewTransform,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -417,6 +423,7 @@ pub fn plot_mollweide_png(
         meta,
         &mut sink,
         hist_scale,
+        &view,
         debug_overlay, // pass the optional overlay
     );
 
@@ -659,6 +666,7 @@ pub fn plot_mollweide_auto(
     meta: HealpixMeta,
     latex_rendering: bool,
     units: Option<&str>,
+    view: &ViewTransform,
 ) {
     let ext = Path::new(filename)
         .extension()
@@ -687,6 +695,7 @@ pub fn plot_mollweide_auto(
                 meta,
                 latex_rendering,
                 units,
+                &view,
             );
         }
         "pdf" => {
@@ -708,6 +717,7 @@ pub fn plot_mollweide_auto(
                 meta,
                 latex_rendering,
                 units,
+                &view,
             );
         }
         _ => {
@@ -771,6 +781,7 @@ pub fn render_projection_to_grid(
     bad_color: Rgba<u8>,
     meta: HealpixMeta,
     hist_scale: Option<&HistogramScale>,
+    view: &ViewTransform,
 ) {
     let width = grid.width;
     let height = grid.height;
@@ -800,7 +811,7 @@ pub fn render_projection_to_grid(
             if let Some((lon, lat)) = proj.inverse(u, v) {
                 let theta = std::f64::consts::PI / 2.0 - lat;
 
-                let pixel_val = match sample_healpix(map, meta, theta, lon) {
+                let pixel_val = match sample_healpix(map, meta, &view, theta, lon) {
                     Some(val) => scale_value(
                         val,
                         scale_params.minv,
