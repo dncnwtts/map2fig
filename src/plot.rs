@@ -463,38 +463,6 @@ pub fn plot_mollweide_png(
         let stride = border_surf.stride() as usize;
         let data = border_surf.data().unwrap();
    
-        // for y in 0..surf_h as usize {
-        //     for x in 0..surf_w as usize {
-        //         let idx = y * stride + x * 4;
-        //         let a = data[idx + 3];
-        //         if a == 0 { continue; }
-    
-        //         let r = data[idx + 2];
-        //         let g = data[idx + 1];
-        //         let b = data[idx + 0];
-
-        //         let dst = img.get_pixel(
-        //             layout.map_x as u32 + x as u32 - pad as u32,
-        //             layout.map_y as u32 + y as u32 - pad as u32,
-        //         );
-        //         let src = Rgba([r, g, b, a]);
-        //         
-        //         let alpha = a as f32 / 255.0;
-        //         
-        //         let out = Rgba([
-        //             ((src[0] as f32 + dst[0] as f32 * (1.0 - alpha)) as u8),
-        //             ((src[1] as f32 + dst[1] as f32 * (1.0 - alpha)) as u8),
-        //             ((src[2] as f32 + dst[2] as f32 * (1.0 - alpha)) as u8),
-        //             ((a as f32 + dst[3] as f32 * (1.0 - alpha)) as u8),
-        //         ]);
-        //         
-        //         img.put_pixel(
-        //             layout.map_x as u32 + x as u32 - pad as u32,
-        //             layout.map_y as u32 + y as u32 - pad as u32,
-        //             out,
-        //         );
-        //     }
-        // }
         for y in 0..surf_h {
             for x in 0..surf_w {
                 let idx = (y as usize) * stride + (x as usize) * 4;
