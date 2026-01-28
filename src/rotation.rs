@@ -9,24 +9,24 @@ pub const RAD2DEG: f64 = 180.0 / PI;
 
 pub const EXPECTED_ECL_LAT_OF_NGP: f64 = 29.811438 * DEG2RAD;
 
-struct LonLat {
-    lon: f64,
-    lat: f64,
-}
-
-struct ThetaPhi {
-    theta: f64,
-    phi: f64,
-}
-
-impl From<LonLat> for ThetaPhi {
-    fn from(ll: LonLat) -> Self {
-        Self {
-            theta: PI/2.0 - ll.lat,
-            phi: ll.lon,
-        }
-    }
-}
+// struct LonLat {
+//     lon: f64,
+//     lat: f64,
+// }
+// 
+// struct ThetaPhi {
+//     theta: f64,
+//     phi: f64,
+// }
+// 
+// impl From<LonLat> for ThetaPhi {
+//     fn from(ll: LonLat) -> Self {
+//         Self {
+//             theta: PI/2.0 - ll.lat,
+//             phi: ll.lon,
+//         }
+//     }
+// }
 
 
 pub type Mat3 = [[f64; 3]; 3];
@@ -176,6 +176,10 @@ impl ViewTransform {
     pub fn apply(&self, v: [f64; 3]) -> [f64; 3] {
         self.rotation.apply(v)
     }
+
+    pub fn identity() -> Self {
+        Self { rotation: Rotation::identity() }
+    }
 }
 
 
@@ -313,6 +317,26 @@ pub fn angular_sep(a: [f64; 3], b: [f64; 3]) -> f64 {
 }
 
 
+/// Convert vector → (lon, lat)
+pub fn vec_to_lonlat(v: [f64; 3]) -> (f64, f64) {
+    let r = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
+    let lon = v[1].atan2(v[0]).rem_euclid(2.0 * std::f64::consts::PI);
+    let lat = (v[2] / r).asin();
+    (lon, lat)
+}
+
+/// Convert (lon, lat) → Cartesian unit vector
+/// lon ∈ [0, 2π), lat ∈ [-π/2, π/2]
+#[inline]
+pub fn lonlat_to_vec(lon: f64, lat: f64) -> [f64; 3] {
+    let clat = lat.cos();
+    [
+        clat * lon.cos(),
+        clat * lon.sin(),
+        lat.sin(),
+    ]
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -335,13 +359,32 @@ mod tests {
         (theta, lon)
     }
 
-    /// Convert vector → (lon, lat)
-    fn vec_to_lonlat(v: [f64; 3]) -> (f64, f64) {
-        let r = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
-        let lon = v[1].atan2(v[0]).rem_euclid(2.0 * std::f64::consts::PI);
-        let lat = (v[2] / r).asin();
-        (lon, lat)
+
+#[test]
+fn lonlat_vec_roundtrip() {
+    use std::f64::consts::PI;
+
+    let cases = [
+        (0.0, 0.0),
+        (0.5, 0.3),
+        (1.2, -0.4),
+        (PI, 0.0),
+        (2.3, PI / 2.0 - 1e-6),
+        (5.8, -PI / 2.0 + 1e-6),
+    ];
+
+    for (lon, lat) in cases {
+        let v = lonlat_to_vec(lon, lat);
+        let (lon2, lat2) = vec_to_lonlat(v);
+
+        let dlon = (lon2 - lon + PI).rem_euclid(2.0 * PI) - PI;
+
+        assert!(dlon.abs() < 1e-8, "lon mismatch: {} vs {}", lon, lon2);
+        assert!((lat - lat2).abs() < 1e-8, "lat mismatch: {} vs {}", lat, lat2);
     }
+}
+
+
     
     #[test]
     fn north_galactic_pole_to_equatorial_angles() {
@@ -576,6 +619,417 @@ mod tests {
     
         assert!((lat - EXPECTED_ECL_LAT_OF_NGP).abs() < 1e-6);
     }
+#[test]
+fn vec_lonlat_roundtrip() {
+    let vectors: [[f64; 3]; 4] = [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.3, -0.4, 0.866],
+    ];
+
+    for mut v in vectors {
+        let r = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
+        for i in 0..3 { v[i] /= r; }
+
+        let (lon, lat) = vec_to_lonlat(v);
+        let v2 = lonlat_to_vec(lon, lat);
+
+        for i in 0..3 {
+            assert!((v[i] - v2[i]).abs() < 1e-12,
+                "component {} mismatch: {} vs {}", i, v[i], v2[i]);
+        }
+    }
+}
+
+#[test]
+fn lonlat_vec_roundtrip_basic() {
+    let samples = [
+        (0.0, 0.0),
+        (0.0, 0.5),
+        (1.0, 0.0),
+        (1.0, 0.5),
+        (-1.0, -0.5),
+        (std::f64::consts::PI, 0.0),
+        (0.0, std::f64::consts::FRAC_PI_2 - 1e-6),
+    ];
+
+    for (lon, lat) in samples {
+        let v = lonlat_to_vec(lon, lat);
+        let (lon2, lat2) = vec_to_lonlat(v);
+
+        assert!((lat - lat2).abs() < 1e-10, "lat mismatch = {:?}", lat-lat2);
+        let dlon = (lon - lon2 + std::f64::consts::PI)
+            .rem_euclid(2.0 * std::f64::consts::PI) - std::f64::consts::PI;
+        assert!(dlon.abs() < 1e-10, "lon mismatch = {:?}", dlon);
+    }
+}
+
+#[test]
+fn coord_identity_is_noop() {
+    let coords = [CoordSystem::G, CoordSystem::C, CoordSystem::E];
+
+    let v = lonlat_to_vec(0.3, -0.4);
+
+    for c in coords {
+        let rot = coord_rotation(c, c);
+        let v2 = rot.apply(v);
+
+        for i in 0..3 {
+            assert!((v[i] - v2[i]).abs() < 1e-12);
+        }
+    }
+}
+
+#[test]
+fn coord_roundtrip_closes() {
+    let coords = [CoordSystem::G, CoordSystem::C, CoordSystem::E];
+    let v = lonlat_to_vec(1.0, 0.3);
+
+    for &a in &coords {
+        for &b in &coords {
+            let r1 = coord_rotation(a, b);
+            let r2 = coord_rotation(b, a);
+
+            let v2 = r2.apply(r1.apply(v));
+
+            for i in 0..3 {
+                assert!(
+                    (v[i] - v2[i]).abs() < 1e-8,
+                    "roundtrip failed {:?}->{:?}->{:?}, diff = {:?}",
+                    a, b, a, v[i] - v2[i],
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn graticule_point_transform_chain() {
+    let grat = CoordSystem::E;
+    let input = CoordSystem::G;
+    let output = CoordSystem::C;
+
+    // Pick a parallel (lat = const)
+    let lon = 0.7;
+    let lat = 0.4;
+
+    let v_grat = lonlat_to_vec(lon, lat);
+
+    // E → G → C
+    let r_e_g = coord_rotation(grat, input);
+    let r_g_c = coord_rotation(input, output);
+
+    let v_out = r_g_c.apply(r_e_g.apply(v_grat));
+
+    // Equivalent single rotation
+    let r_e_c = coord_rotation(grat, output);
+    let v_direct = r_e_c.apply(v_grat);
+
+    for i in 0..3 {
+        assert!((v_out[i] - v_direct[i]).abs() < 1e-6, "Diff is {:?}",
+            v_out[i] - v_direct[i]);
+    }
+}
+
+#[test]
+fn poles_roundtrip_under_coord_change() {
+    let coords = [CoordSystem::G, CoordSystem::C, CoordSystem::E];
+
+    let north = lonlat_to_vec(0.0, std::f64::consts::FRAC_PI_2);
+    let south = lonlat_to_vec(0.0, -std::f64::consts::FRAC_PI_2);
+
+    for &a in &coords {
+        for &b in &coords {
+            let r_ab = coord_rotation(a, b);
+            let r_ba = coord_rotation(b, a);
+
+            let n2 = r_ba.apply(r_ab.apply(north));
+            let s2 = r_ba.apply(r_ab.apply(south));
+
+            for i in 0..3 {
+                assert!((north[i] - n2[i]).abs() < 1e-6);
+                assert!((south[i] - s2[i]).abs() < 1e-6);
+            }
+        }
+    }
+}
+
+fn plane_from_points(a: [f64;3], b: [f64;3], c: [f64;3]) -> ([f64;3], f64) {
+    let u = [
+        b[0] - a[0],
+        b[1] - a[1],
+        b[2] - a[2],
+    ];
+    let v = [
+        c[0] - a[0],
+        c[1] - a[1],
+        c[2] - a[2],
+    ];
+
+    let n = [
+        u[1]*v[2] - u[2]*v[1],
+        u[2]*v[0] - u[0]*v[2],
+        u[0]*v[1] - u[1]*v[0],
+    ];
+
+    let d = n[0]*a[0] + n[1]*a[1] + n[2]*a[2];
+    (n, d)
+}
+
+fn plane_residual(n: [f64;3], d: f64, p: [f64;3]) -> f64 {
+    (n[0]*p[0] + n[1]*p[1] + n[2]*p[2] - d).abs()
+}
+
+#[test]
+fn meridian_is_planar() {
+    let lon = 1.0;
+    let lats: Vec<f64> = (-80..=80).map(|i| i as f64 * DEG2RAD).collect();
+
+    let pts: Vec<_> = lats.iter()
+        .map(|&lat| lonlat_to_vec(lon, lat))
+        .collect();
+
+    let (n, d) = plane_from_points(pts[0], pts[1], pts[2]);
+
+    for p in pts {
+        assert!(plane_residual(n, d, p) < 1e-6);
+    }
+}
+
+#[test]
+fn parallel_is_planar() {
+    let lat = 0.5;
+    let lons: Vec<f64> = (0..360).map(|i| i as f64 * DEG2RAD).collect();
+
+    let pts: Vec<_> = lons.iter()
+        .map(|&lon| lonlat_to_vec(lon, lat))
+        .collect();
+
+    let (n, d) = plane_from_points(pts[0], pts[1], pts[2]);
+
+    for p in pts {
+        assert!(plane_residual(n, d, p) < 1e-6);
+    }
+}
+
+#[test]
+fn meridian_planarity_survives_coord_rotation() {
+    let lon = 0.7;
+    let lats: Vec<f64> = (-80..=80).map(|i| i as f64 * DEG2RAD).collect();
+
+    let r = coord_rotation(CoordSystem::G, CoordSystem::C);
+
+    let pts: Vec<_> = lats.iter()
+        .map(|&lat| r.apply(lonlat_to_vec(lon, lat)))
+        .collect();
+
+    let (n, d) = plane_from_points(pts[0], pts[1], pts[2]);
+
+    for p in pts {
+        assert!(plane_residual(n, d, p) < 1e-6);
+    }
+}
+
+#[test]
+fn parallel_planarity_survives_coord_rotation() {
+    let lat = -0.4;
+    let lons: Vec<f64> = (0..360).map(|i| i as f64 * DEG2RAD).collect();
+
+    let r = coord_rotation(CoordSystem::E, CoordSystem::G);
+
+    let pts: Vec<_> = lons.iter()
+        .map(|&lon| r.apply(lonlat_to_vec(lon, lat)))
+        .collect();
+
+    let (n, d) = plane_from_points(pts[0], pts[1], pts[2]);
+
+    for p in pts {
+        assert!(plane_residual(n, d, p) < 1e-6);
+    }
+}
+
+#[test]
+fn planarity_survives_view_rotation() {
+    let lat = 0.3;
+    let lons: Vec<f64> = (0..360).map(|i| i as f64 * DEG2RAD).collect();
+
+    let view = view_rotation(1.0, 0.5, 0.3);
+
+    let pts: Vec<_> = lons.iter()
+        .map(|&lon| view.apply(lonlat_to_vec(lon, lat)))
+        .collect();
+
+    let (n, d) = plane_from_points(pts[0], pts[1], pts[2]);
+
+    for p in pts {
+        assert!(plane_residual(n, d, p) < 1e-6);
+    }
+}
+
+
+#[inline]
+fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[0] - b[0],
+        a[1] - b[1],
+        a[2] - b[2],
+    ]
+}
+
+
+#[test]
+fn meridian_parallel_intersect() {
+    let lon = 1.2;
+    let lat = -0.4;
+
+    // analytic intersection point
+    let p = lonlat_to_vec(lon, lat);
+
+    // meridian plane (through origin)
+    let m1 = lonlat_to_vec(lon, -0.8);
+    let m2 = lonlat_to_vec(lon,  0.8);
+    let n_mer = cross(m1, m2);
+
+    // parallel plane
+    let q1 = lonlat_to_vec(0.0, lat);
+    let q2 = lonlat_to_vec(1.0, lat);
+    let q3 = lonlat_to_vec(2.0, lat);
+    let n_par = cross(
+        sub(q2, q1),
+        sub(q3, q1),
+    );
+
+
+    let dot1 = dot(n_mer, p);
+    let dot2 = dot(n_par, sub(p, q1));
+
+    assert!(dot1.abs() < 1e-6, "dot(n_mer,p) = {:?}", dot1);
+    assert!(dot2.abs() < 1e-6, "dot(n_par,p) = {:?}", dot2);
+}
+
+#[test]
+fn meridian_parallel_intersect_after_coord_rotation() {
+    let lon = 0.8;
+    let lat = 0.3;
+
+    let r = coord_rotation(CoordSystem::G, CoordSystem::C);
+
+    let p = r.apply(lonlat_to_vec(lon, lat));
+
+    let m1 = r.apply(lonlat_to_vec(lon, -0.8));
+    let m2 = r.apply(lonlat_to_vec(lon,  0.8));
+    let n_mer = cross(m1, m2);
+
+    let q1 = r.apply(lonlat_to_vec(0.0, lat));
+    let q2 = r.apply(lonlat_to_vec(1.0, lat));
+    let q3 = r.apply(lonlat_to_vec(2.0, lat));
+    let n_par = cross(
+        sub(q2, q1),
+        sub(q3, q1),
+    );
+
+    let dot1 = dot(n_mer, p);
+    let dot2 = dot(n_par, sub(p, q1));
+
+    assert!(dot1.abs() < 1e-6, "dot(n_mer,p) = {:?}", dot1);
+    assert!(dot2.abs() < 1e-6, "dot(n_par,p) = {:?}", dot2);
+}
+
+
+#[test]
+fn meridian_parallel_intersect_after_view_transform() {
+    let lon = 2.0;
+    let lat = -0.6;
+
+    let view = ViewTransform::new(
+        CoordSystem::E,
+        CoordSystem::G,
+        Some(view_rotation(1.1, -0.4, 0.2)),
+    );
+
+    let p = view.apply(lonlat_to_vec(lon, lat));
+
+    let m1 = view.apply(lonlat_to_vec(lon, -0.8));
+    let m2 = view.apply(lonlat_to_vec(lon,  0.8));
+    let n_mer = cross(m1, m2);
+
+    let q1 = view.apply(lonlat_to_vec(0.0, lat));
+    let q2 = view.apply(lonlat_to_vec(1.0, lat));
+    let q3 = view.apply(lonlat_to_vec(2.0, lat));
+    let n_par = cross(
+        sub(q2, q1),
+        sub(q3, q1),
+    );
+
+    let dot1 = dot(n_mer, p);
+    let dot2 = dot(n_par, sub(p, q1));
+
+    assert!(dot1.abs() < 1e-6, "dot(n_mer,p) = {:?}", dot1);
+    assert!(dot2.abs() < 1e-6, "dot(n_par,p) = {:?}", dot2);
+}
+
+#[test]
+fn parallel_is_planar2() {
+    let lat: f64 = 0.4;
+    if lat.abs() > PI/2.0 - 1e-8 { return; }
+
+    let q1 = lonlat_to_vec(0.0, lat);
+    let q2 = lonlat_to_vec(1.0, lat);
+    let q3 = lonlat_to_vec(2.0, lat);
+
+    let n = cross(
+        sub(q2, q1),
+        sub(q3, q1),
+    );
+
+    for lon in [-2.0, -1.0, 0.5, 2.2] {
+        let p = lonlat_to_vec(lon, lat);
+        assert!(dot(n, sub(p, q1)).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn parallel_is_planar_after_coord_rotation() {
+    let lat: f64 = -0.3;
+    if lat.abs() > PI/2.0 - 1e-8 { return; }
+
+    let r = coord_rotation(CoordSystem::G, CoordSystem::C);
+
+    let q1 = r.apply(lonlat_to_vec(0.0, lat));
+    let q2 = r.apply(lonlat_to_vec(1.0, lat));
+    let q3 = r.apply(lonlat_to_vec(2.0, lat));
+
+    let n = cross(sub(q2, q1), sub(q3, q1));
+
+    for lon in [-1.5, 0.2, 1.7] {
+        let p = r.apply(lonlat_to_vec(lon, lat));
+        assert!(dot(n, sub(p, q1)).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn parallel_is_planar_after_view_transform() {
+    let lat: f64 = 0.25;
+    if lat.abs() > PI/2.0 - 1e-8 { return; }
+
+    let view = ViewTransform::new(
+        CoordSystem::E,
+        CoordSystem::G,
+        Some(view_rotation(0.7, -0.4, 0.3)),
+    );
+
+    let q1 = view.apply(lonlat_to_vec(0.0, lat));
+    let q2 = view.apply(lonlat_to_vec(1.0, lat));
+    let q3 = view.apply(lonlat_to_vec(2.0, lat));
+
+    let n = cross(sub(q2, q1), sub(q3, q1));
+
+    for lon in [-2.0, -0.3, 1.1] {
+        let p = view.apply(lonlat_to_vec(lon, lat));
+        assert!(dot(n, sub(p, q1)).abs() < 1e-6);
+    }
+}
 
 
 }

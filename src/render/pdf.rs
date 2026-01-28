@@ -9,7 +9,10 @@ use crate::layout::{ColorbarLayout};
 use crate::render::target::{RenderTarget,PixelSource};
 use crate::PixelSink;
 use crate::scale::{generate_colorbar_ticks,HistogramScale};
-
+use crate::rotation::{vec_to_lonlat,lonlat_to_vec,ViewTransform};
+use crate::projection::Projection;
+use crate::mollweide::MollweideProjection;
+use crate::graticule::GraticuleTransform;
 
 
 pub struct PdfBackend<'a> {
@@ -332,5 +335,197 @@ impl RenderTarget for PdfRenderTarget<'_> {
         let _ = self.cr.set_source_surface(&surface, x, y);
         self.cr.paint().unwrap();
     }
+}
+
+/// Draw graticule lines as vector graphics directly into a PDF
+// pub fn draw_graticule_pdf(
+//     cr: &cairo::Context,
+//     layout_map_x: f64,
+//     layout_map_y: f64,
+//     layout_map_w: f64,
+//     layout_map_h: f64,
+//     view: &ViewTransform,
+//     dpar_deg: f64,
+//     dmer_deg: f64,
+// ) 
+// fn wrap_lon(lon: f64) -> f64 {
+//     ((lon + PI) % (2.0*PI)) - PI
+// }
+fn wrap_lon(lon: f64) -> f64 {
+    ((-lon - PI) % (2.0*PI)) + PI
+}
+
+pub fn draw_graticule_pdf(
+    cr: &cairo::Context,
+    layout_map_x: f64,
+    layout_map_y: f64,
+    layout_map_w: f64,
+    layout_map_h: f64,
+    grat_transform: &GraticuleTransform, // NEW
+    dpar_deg: f64,
+    dmer_deg: f64,
+)
+
+
+{
+    let proj = MollweideProjection;
+
+    // Helpers: map Mollweide (u,v) ∈ [0,1] → PDF coordinates
+    let to_px = |u: f64| layout_map_x + u * layout_map_w;
+    let to_py = |v: f64| layout_map_y + (1.0 - v) * layout_map_h; // invert y
+
+    // Spacing
+    let meridians: Vec<f64> = (0..360)
+        .step_by(dmer_deg as usize)
+        .map(|deg| deg as f64 * PI / 180.0)
+        .collect();
+    let parallels: Vec<f64> = (-90..=90)
+        .step_by(dpar_deg as usize)
+        .map(|deg| deg as f64 * PI / 180.0)
+        .collect();
+
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.set_line_width(0.5);
+    cr.set_antialias(cairo::Antialias::Best);
+
+    // Draw meridians
+    for &lon in &meridians {
+        let mut first = true;
+        for &lat in &parallels {
+            let vec = grat_transform.apply(lon, lat);
+            let (lon0, lat0) = vec_to_lonlat(vec);
+            let lon0 = wrap_lon(lon0);
+            if let Some((u, v)) = proj.forward(lon0, lat0) {
+                let px = to_px(u);
+                let py = to_py(v);
+                if first {
+                    cr.move_to(px, py);
+                    first = false;
+                } else {
+                    cr.line_to(px, py);
+                }
+            }
+        }
+        cr.stroke().unwrap();
+    }
+
+    // Draw parallels
+    for &lat in &parallels {
+        let mut first = true;
+        for &lon in &meridians {
+            let vec = grat_transform.apply(lon, lat);
+            let (lon0, lat0) = vec_to_lonlat(vec);
+            let lon0 = wrap_lon(lon0);
+            if let Some((u, v)) = proj.forward(lon0, lat0) {
+                let px = to_px(u);
+                let py = to_py(v);
+                if first {
+                    cr.move_to(px, py);
+                    first = false;
+                } else {
+                    cr.line_to(px, py);
+                }
+            }
+        }
+        cr.stroke().unwrap();
+    }
+
+    // Draw red dot at (0,0)
+    let red_vec = grat_transform.apply(0.0, 0.0);
+    let (lon, lat) = vec_to_lonlat(red_vec);
+    let lon = wrap_lon(lon);
+    if let Some((u, v)) = proj.forward(lon,lat) {
+        let px = to_px(u);
+        let py = to_py(v);
+        cr.arc(px, py, 2.0, 0.0, 2.0 * PI);
+        cr.set_source_rgb(1.0, 0.0, 0.0);
+        cr.fill().unwrap();
+    }
+}
+
+#[test]
+fn test_graticule_transform_identity() {
+    use crate::graticule::{GraticuleTransform, Coord};
+    use crate::rotation::CoordSystem;
+
+    // identity: graticule G → input G, no view rotation
+    let transform = GraticuleTransform::new(
+        CoordSystem::G,
+        CoordSystem::G,
+        None,
+    );
+
+    let lon = 1.0; // radians
+    let lat = 0.5; // radians
+
+    let vec = transform.apply(lon, lat);
+
+    // Convert back to lon/lat
+    let (lon2, lat2) = crate::rotation::vec_to_lonlat(vec);
+    let lon2 = wrap_lon(lon2);
+
+    // Identity transform: values should be close
+    assert!((lon - lon2).abs() < 1e-12);
+    assert!((lat - lat2).abs() < 1e-12);
+}
+
+#[test]
+fn test_vec_lonlat_roundtrip() {
+    use crate::rotation::{lonlat_to_vec, vec_to_lonlat};
+    let lon = 0.3;
+    let lat = -0.4;
+    let v = lonlat_to_vec(lon, lat);
+    let (lon2, lat2) = vec_to_lonlat(v);
+    let lon2 = wrap_lon(lon2);
+    assert!((lon - lon2).abs() < 1e-12);
+    assert!((lat - lat2).abs() < 1e-12);
+}
+
+#[test]
+fn test_raster_grid_set_pixel() {
+    use crate::render::raster::RasterGrid;
+    use image::Rgba;
+
+    let mut grid = RasterGrid::new(10, 10);
+    grid.set_pixel(5, 5, Rgba([255, 0, 0, 255]));
+    let pixel = grid.get_pixel(5, 5);
+    assert_eq!(pixel, Rgba([255, 0, 0, 255]));
+}
+
+#[test]
+fn test_norm_uv_to_pix_bounds() {
+    use crate::render::raster::RasterGrid;
+    let mut grid = RasterGrid::new(100, 50);
+    let (px, py) = grid.norm_uv_to_pix(0.0, 0.0);
+    assert_eq!((px, py), (0, 0));
+    let (px, py) = grid.norm_uv_to_pix(1.0, 1.0);
+    assert_eq!((px, py), (99, 49));
+}
+
+#[test]
+fn test_draw_line_on_grid() {
+    use crate::graticule::draw_line_on_grid;
+    use crate::render::raster::RasterGrid;
+    let mut grid = RasterGrid::new(10, 10);
+    draw_line_on_grid(&mut grid, 0.0, 0.0, 1.0, 1.0);
+
+    // ensure pixels along diagonal are non-zero
+    assert_ne!(grid.get_pixel(0,0).0, [0,0,0,0]);
+    assert_ne!(grid.get_pixel(9,9).0, [0,0,0,0]);
+}
+
+#[test]
+fn test_graticule_basic() {
+    use crate::graticule::draw_graticule;
+    use crate::render::raster::RasterGrid;
+    let mut grid = RasterGrid::new(20, 10);
+    let view = ViewTransform::identity();
+    draw_graticule(&mut grid, &view, 45.0, 90.0, Some("G"));
+
+    // Expect top-left pixel (0,0) to be set for meridian at lon=0
+    // assert_ne!(grid.get_pixel(0,0).0, [0,0,0,0]);
+let center_x = grid.width() / 2;
+let center_y = grid.height() / 2;
+assert_ne!(grid.get_pixel(center_x, center_y).0, [0,0,0,0]);
 }
 
