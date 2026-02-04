@@ -216,15 +216,7 @@ impl RasterGrid {
     pub fn norm_y(&self, y: u32) -> f64 {
         y as f64 / (self.height - 1) as f64
     }
-
-    pub fn norm_uv_to_pix(&self, u: f64, v: f64) -> (u32, u32) {
-        let x = (u * (self.width - 1) as f64).round() as u32;
-        let y = ((1.0 - v) * (self.height - 1) as f64).round() as u32;
-        let y = (v * (self.height as f64 - 1.0)).round() as u32; // no flip
-        (x, y)
-    }
 }
-
 
 
 

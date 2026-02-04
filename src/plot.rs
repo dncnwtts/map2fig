@@ -15,10 +15,6 @@ use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
 use crate::scale::HistogramRange;
 use crate::rotation::ViewTransform;
-use crate::render::pdf::draw_graticule_pdf;
-use crate::graticule::GraticuleTransform;
-use crate::graticule::Coord;
-use crate::rotation::CoordSystem;
 
 
 pub struct MollweideScale {
@@ -288,37 +284,6 @@ pub fn plot_mollweide_pdf(
     );
     cr_pdf.paint().unwrap();
 
-// Convert Coord → CoordSystem
-let grat_coord = Coord::C;
-let grat_coord_system = match grat_coord {
-    Coord::G => CoordSystem::G,
-    Coord::E => CoordSystem::E,
-    Coord::C => CoordSystem::C,
-};
-
-let input_coord = Coord::G;
-let input_coord_system = match input_coord {
-    Coord::G => CoordSystem::G,
-    Coord::E => CoordSystem::E,
-    Coord::C => CoordSystem::E,
-};
-
-// Create graticule transform
-let grat_transform = GraticuleTransform::new(
-    grat_coord_system,
-    input_coord_system,
-    None,  // optional view rotation
-);
-draw_graticule_pdf(
-    &cr_pdf,
-    layout.map_x,
-    layout.map_y,
-    layout.map_w,
-    layout.map_h,
-    &grat_transform,
-    10.0,  // parallels every 10°
-    15.0,  // meridians every 15°
-);
 
     // Draw vector border ON TOP
     if draw_border {
