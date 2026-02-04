@@ -1,5 +1,6 @@
-use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HPX_UNSEEN};
+use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HealpixOrdering,HPX_UNSEEN};
 use crate::fits::read_healpix_column;
+use crate::generate_index_map;
 
 /// Processed HEALPix data ready for plotting
 pub struct ProcessedData {
@@ -9,18 +10,27 @@ pub struct ProcessedData {
 
 /// Load and process HEALPix data from FITS file
 pub fn load_and_process_data(
-    fits_path: &str,
+    fits_path: &Option<String>,
     col: usize,
     scale_factor: f64,
     width: u32,
     verbose: bool,
 ) -> Result<ProcessedData, String> {
+    let Some(new_fits_path) = fits_path 
+        else {
+            let map = generate_index_map(1);
+            let meta = HealpixMeta {
+                ordering: HealpixOrdering::Ring,
+                nside:1,
+            };
+            return Ok(ProcessedData { map, meta })
+        };
     // Load metadata
-    let meta = read_healpix_meta(fits_path)
-        .ok_or_else(|| format!("Could not determine HEALPix ordering / NSIDE for file: {}", fits_path))?;
+    let meta = read_healpix_meta(new_fits_path)
+        .ok_or_else(|| format!("Could not determine HEALPix ordering / NSIDE for file: {}", new_fits_path))?;
 
     // Load and scale data
-    let mut map = read_healpix_column(fits_path, col);
+    let mut map = read_healpix_column(new_fits_path, col);
     for v in &mut map {
         if *v == 0.0 {
             *v = HPX_UNSEEN;

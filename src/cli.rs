@@ -9,8 +9,8 @@ use crate::rotation::{ViewTransform,CoordSystem,view_rotation,DEG2RAD};
 #[command(author, version, about)]
 pub struct Args {
     /// Input FITS file
-    #[arg(short, long, default_value = "cosmoglobe_DIRBE_10_I_n00512_DR2_v3.1.fits")]
-    pub fits: String,
+    #[arg(short, long)]
+    pub fits: Option<String>,
 
     /// Column index
     #[arg(short='i', long, default_value_t = 0)]
