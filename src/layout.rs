@@ -44,7 +44,7 @@ pub fn compute_mollweide_layout(
     let cbar_pad  = 16.0;      // space between map and colorbar
     let label_pad = 14.0;      // space for text descenders
 
-    let border_width_px = (width * 0.005).max(2.0);
+    let border_width_px = (width * 0.0025).max(2.0);
     let map_pad = border_width_px.ceil() + 2.0;
 
     let map_w = width - 2.0 * outer_pad;
