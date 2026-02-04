@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
-use healpix_plotter::{
+use map2fig::{
     cli::InputColor, NegMode, PixelValue,
     RgbaArg, generate_index_map,
 };
 
-use healpix_plotter::scale::{Scale, scale_value};
+use map2fig::scale::{Scale, scale_value};
 
 
 
@@ -91,17 +91,17 @@ fn test_neg_mode_behavior() {
 
 #[test]
 fn test_plot_smoke() {
-    use healpix_plotter::healpix::{HealpixMeta, HealpixOrdering};
-    use healpix_plotter::rotation::{CoordSystem,ViewTransform};
-    let map = healpix_plotter::generate_index_map(1);
-    let cmap = healpix_plotter::get_colormap("viridis");
+    use map2fig::healpix::{HealpixMeta, HealpixOrdering};
+    use map2fig::rotation::{CoordSystem,ViewTransform};
+    let map = map2fig::generate_index_map(1);
+    let cmap = map2fig::get_colormap("viridis");
     let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
     let input = CoordSystem::G;
     let output = CoordSystem::G;
     let rot = None;
     let view = ViewTransform::new(input,output,rot);
 
-    healpix_plotter::plot_mollweide_png(
+    map2fig::plot_mollweide_png(
         &map,
         32,
         "smoke.png",
@@ -112,8 +112,8 @@ fn test_plot_smoke() {
         true,
         false,
         1.0,
-        healpix_plotter::scale::Scale::Linear,
-        healpix_plotter::NegMode::Zero,
+        map2fig::scale::Scale::Linear,
+        map2fig::NegMode::Zero,
         image::Rgba([0, 0, 0, 0]),
         image::Rgba([0, 0, 0, 0]),
         meta,

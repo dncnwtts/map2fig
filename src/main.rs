@@ -1,7 +1,7 @@
 use clap::Parser;
-use healpix_plotter::cli::Args;
-use healpix_plotter::pipeline::load_and_process_data;
-use healpix_plotter::plot_mollweide_auto;
+use map2fig::cli::Args;
+use map2fig::pipeline::load_and_process_data;
+use map2fig::plot_mollweide_auto;
 use std::time::Instant;
 
 fn main() {
