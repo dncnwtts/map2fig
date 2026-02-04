@@ -49,7 +49,6 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, _latex_rend
             Scale::Histogram => {
                 if let Some(p) = pos {
                     if (p - 0.0).abs() < 1e-6 || (p - 1.0).abs() < 1e-6 {
-                        println!("Position, value, {}, {}", p, value);
                         format!("{:.3}", value)
                     } else {
                         format!("{:.0}%", p * 100.0)

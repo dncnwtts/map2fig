@@ -68,8 +68,6 @@ pub fn compute_mollweide_scale(
         panic!("Invalid color scale: {minv} > {maxv}");
     }
 
-    // println!("map min = {}, max = {}", minv, maxv);
-
     MollweideScale { minv, maxv }
 }
 
@@ -241,9 +239,6 @@ pub fn plot_mollweide_pdf(
     } else {
         None
     };
-
-    // println!("post-build-hist min/max {}, {}", scale_params.minv, scale_params.maxv);
-
 
     
     let mut sink = CairoImageSink { cr: &cr_img };

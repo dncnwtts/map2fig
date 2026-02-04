@@ -116,6 +116,9 @@ pub struct Args {
     #[arg(long, default_value_t = 0.0)]
     pub roll: f64,
 
+    /// Allows for more verbose output
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 /// Bad color option
