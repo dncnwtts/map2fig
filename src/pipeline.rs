@@ -1,6 +1,7 @@
 use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HealpixOrdering,HPX_UNSEEN};
 use crate::fits::read_healpix_column;
 use crate::generate_index_map;
+use crate::rotation::CoordSystem;
 
 /// Processed HEALPix data ready for plotting
 pub struct ProcessedData {
@@ -22,6 +23,7 @@ pub fn load_and_process_data(
             let meta = HealpixMeta {
                 ordering: HealpixOrdering::Ring,
                 nside:1,
+                coord: CoordSystem::G
             };
             return Ok(ProcessedData { map, meta })
         };
