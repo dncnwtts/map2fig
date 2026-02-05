@@ -2,8 +2,8 @@ use image::{RgbaImage, Rgba};
 use crate::colormap::{Colormap};
 use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient, apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale};
-use crate::layout::{compute_mollweide_layout,MollweideLayout};
+use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale, HistogramRange};
+use crate::layout::{compute_mollweide_layout, compute_gnomonic_layout, MollweideLayout};
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
@@ -13,7 +13,6 @@ use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
-use crate::scale::HistogramRange;
 use crate::rotation::ViewTransform;
 
 
@@ -758,20 +757,8 @@ pub fn render_projection_to_grid(
 
     for py in 0..height {
         for px in 0..width {
-            let u = px as f64 / (width - 1) as f64;
-            let v = py as f64 / (height - 1) as f64;
-
-            let x = 2.0 * u - 1.0;
-            let y = 2.0 * v - 1.0;
-
-            let inside_oval = (x * x) / 4.0 + (y * y) <= 1.0;
-
-            if !inside_oval {
-                grid.set_valid(px, py, false);
-                continue;
-            }
-
-            if let Some((lon, lat)) = proj.inverse(u, v) {
+            // Use pixel_to_ang for all projections (handles each type correctly)
+            if let Some((lon, lat)) = proj.pixel_to_ang(px, py, grid) {
                 let theta = std::f64::consts::PI / 2.0 - lat;
 
                 let pixel_val = match sample_healpix(map, meta, &view, theta, lon) {
@@ -945,6 +932,330 @@ fn fill_grid_background(grid: &mut RasterGrid) {
     for y in 0..grid.height {
         for x in 0..grid.width {
             grid.set_pixel(x, y, bg);
+        }
+    }
+}
+// ============================================================================
+// GNOMONIC PROJECTION PLOTTING
+// ============================================================================
+
+/// Plot a gnomonic projection to PNG
+pub fn plot_gnomonic_png(
+    map: &[f64],
+    width: u32,
+    filename: &str,
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    cmap: &Colormap,
+    show_colorbar: bool,
+    transparent: bool,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
+    meta: HealpixMeta,
+    latex_rendering: bool,
+    units: Option<&str>,
+    view: &ViewTransform,
+    lon_deg: f64,
+    lat_deg: f64,
+    resolution_arcmin: f64,
+) {
+    use crate::gnomonic::GnomonicProjection;
+
+    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
+
+    let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
+    let font = Font::try_from_bytes(font_data as &[u8])
+        .expect("Failed to load font");
+
+    let proj = GnomonicProjection::new(lon_deg, lat_deg, resolution_arcmin);
+    
+    let mut grid = RasterGrid::new(width, width);
+    
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
+    
+    let hist_scale = if scale == Scale::Histogram {
+        let range = match (minv, maxv) {
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            _ => HistogramRange::Full,
+        };
+        Some(build_histogram_scale(map, range, 1024))
+    } else {
+        None
+    };
+
+    render_projection_to_grid(
+        map,
+        &proj,
+        &mut grid,
+        &scale_params,
+        cmap,
+        scale,
+        neg_mode,
+        gamma,
+        bad_color,
+        meta,
+        hist_scale.as_ref(),
+        view,
+    );
+
+    let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
+        if transparent {0} else {255}]);
+    
+    let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
+
+    // Blit grid to image at map position
+    for y in 0..width {
+        for x in 0..width {
+            if let Some(pixel) = grid.get_pixel_if_valid(x, y) {
+                let img_x = layout.map_x as u32 + x;
+                let img_y = layout.map_y as u32 + y;
+                if img_x < img.width() && img_y < img.height() {
+                    img.put_pixel(img_x, img_y, pixel);
+                }
+            }
+        }
+    }
+
+    // Add colorbar if requested
+    if show_colorbar {
+        let mut sink = PngSink {
+            img: &mut img,
+            x0: layout.cbar_x as u32,
+            y0: layout.cbar_y as u32,
+        };
+        
+        render_colorbar_gradient(
+            0,
+            0,
+            layout.cbar_w as u32,
+            layout.cbar_h as u32,
+            cmap,
+            gamma,
+            &mut sink,
+        );
+        
+        // Add tick marks and labels
+        let ticks = generate_colorbar_ticks(
+            scale_params.minv,
+            scale_params.maxv,
+            &scale,
+            hist_scale.as_ref(),
+        );
+
+        let major_tick_height = cb_layout.major_tick_height as u32;
+        let major_tick_width = cb_layout.major_tick_width as u32;
+        let tick_bottom = cb_layout.tick_bottom as u32;
+        let tick_top = tick_bottom.saturating_sub(major_tick_height);
+
+        // Draw major ticks and labels
+        for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
+            let px = (layout.cbar_x + (t * layout.cbar_w).round()) as u32;
+            for dx in 0..major_tick_width as i32 {
+                let x = (px as i32 + dx) as u32;
+                if x < layout.width as u32 {
+                    for py in tick_top..=tick_bottom {
+                        if py < img.height() {
+                            img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                        }
+                    }
+                }
+            }
+            
+            // Draw label
+            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
+            let text_width_est = (label.len() as f32 * 
+                cb_layout.tick_font_size as f32 * 0.6) as i32;
+            let text_x = px as i32 - text_width_est / 2;
+        
+            draw_text_mut(
+                &mut img,
+                Rgba([0, 0, 0, 255]),
+                text_x,
+                cb_layout.tick_label_pad as i32,
+                FontScale::uniform(cb_layout.tick_font_size as f32),
+                &font,
+                &label,
+            );
+        }
+    }
+
+    // Save PNG
+    img.save(filename).expect("Failed to save PNG");
+}
+
+/// Plot a gnomonic projection to PDF
+pub fn plot_gnomonic_pdf(
+    map: &[f64],
+    width: u32,
+    filename: &str,
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    cmap: &Colormap,
+    _show_colorbar: bool,
+    _transparent: bool,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    _bg_color: Rgba<u8>,
+    meta: HealpixMeta,
+    _latex_rendering: bool,
+    _units: Option<&str>,
+    view: &ViewTransform,
+    lon_deg: f64,
+    lat_deg: f64,
+    resolution_arcmin: f64,
+) {
+    use crate::gnomonic::GnomonicProjection;
+
+    let proj = GnomonicProjection::new(lon_deg, lat_deg, resolution_arcmin);
+    let img_height = width; // Square image for gnomonic
+
+    // Create PDF surface
+    let surface = PdfSurface::new((width as f64) * 72.0 / 100.0, (img_height as f64) * 72.0 / 100.0, filename)
+        .expect("Failed to create PDF surface");
+    let cr = Context::new(&surface).expect("Failed to create Cairo context");
+
+    // Render to image first
+    let img_surface = ImageSurface::create(Format::ARgb32, width as i32, img_height as i32)
+        .expect("Failed to create image surface");
+    let img_context = Context::new(&img_surface).expect("Failed to create image context");
+
+    let mut grid = RasterGrid::new(width, img_height);
+    
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
+    
+    let hist_scale = if scale == Scale::Histogram {
+        let range = match (minv, maxv) {
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            _ => HistogramRange::Full,
+        };
+        Some(build_histogram_scale(map, range, 1024))
+    } else {
+        None
+    };
+
+    render_projection_to_grid(
+        map,
+        &proj,
+        &mut grid,
+        &scale_params,
+        cmap,
+        scale,
+        neg_mode,
+        gamma,
+        bad_color,
+        meta,
+        hist_scale.as_ref(),
+        view,
+    );
+
+    // Blit grid to image
+    for y in 0..img_height {
+        for x in 0..width {
+            if let Some(pixel) = grid.get_pixel_if_valid(x, y) {
+                let r = pixel[0] as f64 / 255.0;
+                let g = pixel[1] as f64 / 255.0;
+                let b = pixel[2] as f64 / 255.0;
+                img_context.set_source_rgb(r, g, b);
+                img_context.rectangle(x as f64, y as f64, 1.0, 1.0);
+                img_context.fill().expect("Failed to fill rectangle");
+            }
+        }
+    }
+
+    img_context.set_source_surface(&img_surface, 0.0, 0.0).expect("Failed to set source");
+    cr.paint().expect("Failed to paint");
+
+    surface.finish();
+}
+
+/// Plot gnomonic projection with automatic format detection
+pub fn plot_gnomonic_auto(
+    map: &[f64],
+    width: u32,
+    filename: &str,
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    cmap: &Colormap,
+    show_colorbar: bool,
+    transparent: bool,
+    gamma: f64,
+    scale: Scale,
+    neg_mode: NegMode,
+    bad_color: Rgba<u8>,
+    bg_color: Rgba<u8>,
+    meta: HealpixMeta,
+    latex_rendering: bool,
+    units: Option<&str>,
+    view: &ViewTransform,
+    lon_deg: f64,
+    lat_deg: f64,
+    resolution_arcmin: f64,
+) {
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    match ext.as_str() {
+        "png" => {
+            plot_gnomonic_png(
+                map,
+                width,
+                filename,
+                minv,
+                maxv,
+                cmap,
+                show_colorbar,
+                transparent,
+                gamma,
+                scale,
+                neg_mode,
+                bad_color,
+                bg_color,
+                meta,
+                latex_rendering,
+                units,
+                view,
+                lon_deg,
+                lat_deg,
+                resolution_arcmin,
+            );
+        }
+        "pdf" => {
+            plot_gnomonic_pdf(
+                map,
+                width,
+                filename,
+                minv,
+                maxv,
+                cmap,
+                show_colorbar,
+                transparent,
+                gamma,
+                scale,
+                neg_mode,
+                bad_color,
+                bg_color,
+                meta,
+                latex_rendering,
+                units,
+                view,
+                lon_deg,
+                lat_deg,
+                resolution_arcmin,
+            );
+        }
+        _ => {
+            panic!(
+                "Unsupported output format: .{} (expected .png or .pdf)",
+                ext
+            );
         }
     }
 }

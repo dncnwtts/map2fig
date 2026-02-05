@@ -8,6 +8,7 @@ pub mod scale;
 pub mod layout;
 pub mod projection;
 pub mod mollweide;
+pub mod gnomonic;
 pub mod cli;
 pub mod pipeline;
 pub mod constants;
@@ -15,7 +16,7 @@ pub mod latex;
 pub mod rotation;
 
 // Re-export useful items
-pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto};
+pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 pub use cli::{Args, PlotConfig};

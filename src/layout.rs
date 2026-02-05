@@ -106,3 +106,56 @@ fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pa
         tick_label_pad: cbar_h + cbar_y + label_pad,
     }
 }
+
+/// Compute layout for gnomonic projection with optional colorbar
+pub fn compute_gnomonic_layout(
+    map_size: f64,
+    show_colorbar: bool,
+) -> (MollweideLayout, ColorbarLayout) {
+    let outer_pad = 24.0;      // margin around everything
+    let cbar_pad  = 8.0;       // minimal gap between map and colorbar
+    let label_pad = 14.0;      // space for text descenders
+
+    let border_width_px = (map_size * 0.0025).max(2.0);
+    let map_pad = border_width_px.ceil() + 2.0;
+
+    let map_w = map_size;
+    let map_h = map_size;
+    let cbar_h = if show_colorbar { map_h / 25.0 } else { 0.0 };
+    let label_h = if show_colorbar { 18.0 } else { 0.0 };
+
+    let height =
+        outer_pad +
+        map_h +
+        cbar_pad +
+        cbar_h +
+        label_h +
+        outer_pad;
+
+    let map_x = outer_pad;
+    let map_y = outer_pad;
+
+    let cbar_y = map_y + map_h + cbar_pad;
+    let width = map_w + 2.0 * outer_pad;
+
+    (MollweideLayout {
+        width,
+        height,
+
+        map_pad,
+        map_x,
+        map_y,
+        map_w,
+        map_h,
+
+        cbar_x: outer_pad,
+        cbar_y,
+        cbar_w: map_w,
+        cbar_h,
+
+        cbar_pad,
+        border_width_px,
+    },
+    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad)
+    )
+}

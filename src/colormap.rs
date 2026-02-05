@@ -2071,7 +2071,6 @@ pub static COLORMAPS: &[&Colormap] = &[
 
 impl Colormap {
     #[inline]
-    #[inline]
     pub fn sample(&self, t: f64) -> Rgb<u8> {
         let n = self.lut.len() - 1;
         let i = (t.clamp(0.0, 1.0) * n as f64).round() as usize;

@@ -91,12 +91,7 @@ impl Projection for MollweideProjection {
         }
         let lon = PI * px / (2.0 * c);
 
-        let theta = PI / 2.0 - lat;
-        if !(0.0..=PI).contains(&theta) {
-            return None;
-        }
-
-        Some((theta, lon))
+        Some((lon, lat))
     }
 }
 
@@ -166,4 +161,74 @@ fn raster_and_inverse_agree_on_validity() {
         assert_eq!(inv.is_some(), oval);
     }
 }
+
+#[test]
+fn pixel_to_ang_matches_inverse() {
+    let p = MollweideProjection;
+    let grid = RasterGrid::new(100, 50);
+
+    for (px, py, u, v) in grid.iter() {
+        let inv = p.inverse(u, v);
+        let pixel_to_ang = p.pixel_to_ang(px, py, &grid);
+
+        match (inv, pixel_to_ang) {
+            (Some((lon1, lat1)), Some((lon2, lat2))) => {
+                assert!((lon1 - lon2).abs() < 1e-10, 
+                    "lon mismatch at ({}, {}): inverse={}, pixel_to_ang={}", 
+                    px, py, lon1, lon2);
+                assert!((lat1 - lat2).abs() < 1e-10,
+                    "lat mismatch at ({}, {}): inverse={}, pixel_to_ang={}", 
+                    px, py, lat1, lat2);
+            }
+            (None, None) => {} // Both should reject
+            _ => panic!(
+                "Validity mismatch at ({}, {}): inverse={}, pixel_to_ang={}",
+                px, py,
+                inv.is_some(),
+                pixel_to_ang.is_some()
+            ),
+        }
+    }
+}
+
+#[test]
+fn pixel_to_ang_center() {
+    let p = MollweideProjection;
+    let grid = RasterGrid::new(512, 256);
+
+    // For a 512x256 grid, the exact center is at pixel (255.5, 127.5)
+    // Which normalizes to (255.5/511, 127.5/255) ≈ (0.5, 0.5)
+    // Test both the floor and ceiling to ensure symmetry
+    let (lon1, lat1) = p.pixel_to_ang(255, 127, &grid).unwrap();
+    let (lon2, lat2) = p.pixel_to_ang(256, 128, &grid).unwrap();
+
+    // Both should be very close to origin
+    assert!(lon1.abs() < 0.02, "Center-1 lon should be ~0: {}", lon1);
+    assert!(lat1.abs() < 0.02, "Center-1 lat should be ~0: {}", lat1);
+    assert!(lon2.abs() < 0.02, "Center lon should be ~0: {}", lon2);
+    assert!(lat2.abs() < 0.02, "Center lat should be ~0: {}", lat2);
+}
+
+#[test]
+fn pixel_to_ang_returns_lon_lat_in_correct_order() {
+    let p = MollweideProjection;
+    let grid = RasterGrid::new(512, 256);
+
+    // Test a point on the right side where px is positive
+    // Pixel (112, 128) is on the right and inside the oval
+    if let Some((lon, lat)) = p.pixel_to_ang(112, 128, &grid) {
+        // This pixel has positive px, which maps to positive longitude
+        assert!(lon > 0.0, "Right side (px>0) should have positive lon: {}", lon);
+        assert!(lat.abs() < 0.3, "Near equator should have small lat: {}", lat);
+    }
+
+    // Test a point on the left side where px is negative
+    // Pixel (400, 128) is on the left and inside the oval
+    if let Some((lon, lat)) = p.pixel_to_ang(400, 128, &grid) {
+        // This pixel has negative px, which maps to negative longitude
+        assert!(lon < 0.0, "Left side (px<0) should have negative lon: {}", lon);
+        assert!(lat.abs() < 0.3, "Near equator should have small lat: {}", lat);
+    }
+}
+
 
