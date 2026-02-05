@@ -171,6 +171,17 @@ impl RasterGrid {
         self.valid[idx]
     }
 
+    /// Get pixel and validity in one operation
+    #[inline]
+    pub fn get_pixel_if_valid(&self, x: u32, y: u32) -> Option<Rgba<u8>> {
+        let idx = (y * self.width + x) as usize;
+        if self.valid[idx] {
+            Some(self.buffer[idx])
+        } else {
+            None
+        }
+    }
+
 
     /// Get as Rgba<u8>
     pub fn get_pixel(&self, x: u32, y: u32) -> Rgba<u8> {

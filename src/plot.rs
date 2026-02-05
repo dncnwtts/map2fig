@@ -823,10 +823,7 @@ pub fn blit_grid_to_sink(
 ) {
     for y in 0..grid.height {
         for x in 0..grid.width {
-            if !grid.is_valid(x, y) {
-                continue;
-            } else {
-                let p = grid.get_pixel(x, y);
+            if let Some(p) = grid.get_pixel_if_valid(x, y) {
                 sink.draw_pixel(x0 + x, y0 + y, p);
             }
         }

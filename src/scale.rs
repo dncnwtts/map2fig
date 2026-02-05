@@ -605,6 +605,7 @@ pub fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
 
 
 
+#[inline]
 pub fn scale_value(
     value: f64,
     min: f64,
@@ -631,16 +632,20 @@ pub fn scale_value(
         return PixelValue::Bad;
     }
     
+    // Fast path for linear scale (most common case)
+    if matches!(scale, Scale::Linear) {
+        let t = if value <= min {
+            0.0
+        } else if value >= max {
+            1.0
+        } else {
+            (value - min) / (max - min)
+        };
+        return PixelValue::Color(t);
+    }
+    
     let t = match scale {
-        Scale::Linear => {
-            if value <= min {
-                0.0
-            } else if value >= max {
-                1.0
-            } else {
-                (value - min) / (max - min)
-            }
-        }
+        Scale::Linear => unreachable!(),
 
         Scale::Log => {
             if value <= 0.0 || value < min {
