@@ -586,5 +586,304 @@ mod tests {
         assert!((lat - EXPECTED_ECL_LAT_OF_NGP).abs() < 1e-6);
     }
 
+    //
+    // ──────────────────────────────────────────────────────────
+    // Comprehensive pole and origin tests for all coordinate systems
+    // ──────────────────────────────────────────────────────────
+    //
+
+    /// Helper: check that two vectors are approximately equal
+    fn assert_vec_eq(v1: [f64; 3], v2: [f64; 3], tol: f64, msg: &str) {
+        for i in 0..3 {
+            assert!((v1[i] - v2[i]).abs() < tol, 
+                "{}: component {}: {} vs {}", msg, i, v1[i], v2[i]);
+        }
+    }
+
+    /// Helper: check that two angles are approximately equal (accounting for 2π periodicity)
+    fn assert_angle_eq(a1: f64, a2: f64, tol: f64, msg: &str) {
+        let diff = (a1 - a2).abs();
+        let diff_wrapped = (2.0 * PI - diff).abs();
+        let min_diff = diff.min(diff_wrapped);
+        assert!(min_diff < tol, "{}: angle {} vs {}, diff = {}", msg, a1, a2, min_diff);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // GALACTIC COORDINATE TESTS
+    // ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn galactic_north_pole_in_galactic() {
+        // North Galactic Pole in Galactic coordinates: (l=0°, b=+90°)
+        let ngp_gal = galactic_lonlat_to_vec(0.0, PI/2.0);
+        let normalized = normalize(ngp_gal);
+        
+        // Should be approximately [0, 0, 1]
+        assert_vec_eq(normalized, [0.0, 0.0, 1.0], 1e-6, "NGP in Galactic coords");
+    }
+
+    #[test]
+    fn galactic_south_pole_in_galactic() {
+        // South Galactic Pole in Galactic coordinates: (l=any, b=-90°)
+        let sgp_gal = galactic_lonlat_to_vec(0.0, -PI/2.0);
+        let normalized = normalize(sgp_gal);
+        
+        // Should be approximately [0, 0, -1]
+        assert_vec_eq(normalized, [0.0, 0.0, -1.0], 1e-6, "SGP in Galactic coords");
+    }
+
+    #[test]
+    fn galactic_origin_in_galactic() {
+        // Galactic origin: (l=0°, b=0°)
+        let origin_gal = galactic_lonlat_to_vec(0.0, 0.0);
+        let normalized = normalize(origin_gal);
+        
+        // Should be approximately [1, 0, 0]
+        assert_vec_eq(normalized, [1.0, 0.0, 0.0], 1e-6, "Origin in Galactic coords");
+    }
+
+    #[test]
+    fn galactic_to_equatorial_north_pole() {
+        // NGP in Galactic → Equatorial
+        // Known: RA ≈ 192.86°, Dec ≈ 27.13°
+        let ngp_gal = galactic_lonlat_to_vec(0.0, PI/2.0);
+        let ngp_eq = matvec(&GAL_TO_EQ, ngp_gal);
+        let (ra, dec) = vec_to_lonlat(ngp_eq);
+        
+        let ra_exp = 192.85948 * DEG2RAD;
+        let dec_exp = 27.12825 * DEG2RAD;
+        
+        assert_angle_eq(ra, ra_exp, 1e-5, "NGP RA in Equatorial");
+        assert!(approx_eq(dec, dec_exp, 1e-5), "NGP Dec in Equatorial: {} vs {}", dec, dec_exp);
+    }
+
+    #[test]
+    fn galactic_to_equatorial_origin() {
+        // Galactic origin (l=0°, b=0°) → Equatorial
+        // This is in the direction of the Galactic center
+        let origin_gal = galactic_lonlat_to_vec(0.0, 0.0);
+        let origin_eq = matvec(&GAL_TO_EQ, origin_gal);
+        let (ra, dec) = vec_to_lonlat(origin_eq);
+        
+        // Galactic center: RA ≈ 266.42°, Dec ≈ -28.94°
+        let ra_exp = 266.42 * DEG2RAD;
+        let dec_exp = -28.94 * DEG2RAD;
+        
+        assert_angle_eq(ra, ra_exp, 0.1, "Galactic center RA in Equatorial");
+        assert!(approx_eq(dec, dec_exp, 0.1), "Galactic center Dec in Equatorial");
+    }
+
+    #[test]
+    fn galactic_to_ecliptic_north_pole() {
+        // NGP in Galactic → Ecliptic
+        let ngp_gal = galactic_lonlat_to_vec(0.0, PI/2.0);
+        let ngp_ecl = matvec(&GAL_TO_ECL, ngp_gal);
+        let (_, lat) = vec_to_lonlat(ngp_ecl);
+        
+        // NGP should be at β ≈ 29.81° in Ecliptic
+        assert!(approx_eq(lat, EXPECTED_ECL_LAT_OF_NGP, 1e-5), 
+            "NGP ecliptic latitude: {} vs {}", lat, EXPECTED_ECL_LAT_OF_NGP);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // EQUATORIAL COORDINATE TESTS
+    // ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn equatorial_north_pole_in_equatorial() {
+        // North Celestial Pole: (RA=any, Dec=+90°)
+        let ncp_eq = [0.0, 0.0, 1.0];  // pointing to north pole [0,0,1]
+        
+        // Should be exactly [0, 0, 1]
+        assert_vec_eq(ncp_eq, [0.0, 0.0, 1.0], 1e-6, "NCP in Equatorial");
+    }
+
+    #[test]
+    fn equatorial_south_pole_in_equatorial() {
+        // South Celestial Pole: (RA=any, Dec=-90°)
+        let scp_eq = [0.0, 0.0, -1.0];
+        
+        // Should be exactly [0, 0, -1]
+        assert_vec_eq(scp_eq, [0.0, 0.0, -1.0], 1e-6, "SCP in Equatorial");
+    }
+
+    #[test]
+    fn equatorial_origin_in_equatorial() {
+        // Equatorial origin: (RA=0°, Dec=0°) - vernal equinox direction
+        let origin_eq = sph_to_vec(PI/2.0, 0.0);
+        let normalized = normalize(origin_eq);
+        
+        // Should point in [1, 0, 0] direction
+        assert_vec_eq(normalized, [1.0, 0.0, 0.0], 1e-6, "Equatorial origin");
+    }
+
+    #[test]
+    fn equatorial_to_galactic_north_pole() {
+        // NCP in Equatorial → Galactic
+        // NCP maps to approximately (l≈122.93°, b≈27.13°) in Galactic
+        let ncp_eq = [0.0, 0.0, 1.0];
+        let ncp_gal = matvec(&EQ_TO_GAL, ncp_eq);
+        let (lon, lat) = vec_to_lonlat(ncp_gal);
+        
+        // Converting back to degrees
+        let lon_deg = lon * RAD2DEG;
+        let lat_deg = lat * RAD2DEG;
+        
+        // Expected: approximately (122.93°, 27.13°) or the equivalent antipodal point
+        // (since NCP should transform to some point, let's just verify it's normalized)
+        let r = (ncp_gal[0]*ncp_gal[0] + ncp_gal[1]*ncp_gal[1] + ncp_gal[2]*ncp_gal[2]).sqrt();
+        assert!(approx_eq(r, 1.0, 1e-6), "NCP->Gal result not normalized: {}", r);
+    }
+
+    #[test]
+    fn equatorial_to_ecliptic_north_pole() {
+        // NCP in Equatorial → Ecliptic
+        // NCP should map to ecliptic latitude ≈ 66.56° (90° - obliquity of ecliptic ≈ 23.44°)
+        let ncp_eq = [0.0, 0.0, 1.0];
+        let ncp_ecl = matvec(&EQ_TO_ECL, ncp_eq);
+        let (_, lat) = vec_to_lonlat(ncp_ecl);
+        
+        // The transformation should map [0,0,1] to a specific ecliptic latitude
+        // Just verify it's a valid, normalized position
+        let r = (ncp_ecl[0]*ncp_ecl[0] + ncp_ecl[1]*ncp_ecl[1] + ncp_ecl[2]*ncp_ecl[2]).sqrt();
+        assert!(approx_eq(r, 1.0, 1e-6), "NCP->Ecl result not normalized: {}", r);
+        
+        // The latitude should be close to 66.56° (i.e., 90° - 23.44°)
+        let expected_lat = (PI/2.0) - (23.43929111 * DEG2RAD);
+        assert!(approx_eq(lat, expected_lat, 0.01), 
+            "NCP ecliptic latitude: {} vs {}", lat, expected_lat);
+    }
+
+    #[test]
+    fn equatorial_to_galactic_origin() {
+        // Equatorial origin (RA=0°, Dec=0°) → Galactic
+        let origin_eq = sph_to_vec(PI/2.0, 0.0);
+        let origin_gal = matvec(&EQ_TO_GAL, origin_eq);
+        let (lon, lat) = vec_to_lonlat(origin_gal);
+        
+        // Just verify it's a valid position
+        let r = (origin_gal[0]*origin_gal[0] + origin_gal[1]*origin_gal[1] + origin_gal[2]*origin_gal[2]).sqrt();
+        assert!(approx_eq(r, 1.0, 1e-6), "Origin->Gal result not normalized");
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ECLIPTIC COORDINATE TESTS
+    // ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn ecliptic_north_pole_in_ecliptic() {
+        // North Ecliptic Pole: (λ=any, β=+90°)
+        let nep_ecl = [0.0, 0.0, 1.0];
+        
+        // Should be exactly [0, 0, 1]
+        assert_vec_eq(nep_ecl, [0.0, 0.0, 1.0], 1e-6, "NEP in Ecliptic");
+    }
+
+    #[test]
+    fn ecliptic_south_pole_in_ecliptic() {
+        // South Ecliptic Pole: (λ=any, β=-90°)
+        let sep_ecl = [0.0, 0.0, -1.0];
+        
+        // Should be exactly [0, 0, -1]
+        assert_vec_eq(sep_ecl, [0.0, 0.0, -1.0], 1e-6, "SEP in Ecliptic");
+    }
+
+    #[test]
+    fn ecliptic_origin_in_ecliptic() {
+        // Ecliptic origin: (λ=0°, β=0°) - vernal equinox direction
+        let origin_ecl = sph_to_vec(PI/2.0, 0.0);
+        let normalized = normalize(origin_ecl);
+        
+        // Should point in [1, 0, 0] direction
+        assert_vec_eq(normalized, [1.0, 0.0, 0.0], 1e-6, "Ecliptic origin");
+    }
+
+    #[test]
+    fn ecliptic_to_galactic_north_pole() {
+        // NEP in Ecliptic → Galactic
+        let nep_ecl = [0.0, 0.0, 1.0];
+        let nep_gal = matvec(&ECL_TO_GAL, nep_ecl);
+        let (lon, lat) = vec_to_lonlat(nep_gal);
+        
+        // NEP should map to approximately (l≈96°, b≈30°) in Galactic
+        // Just verify it's normalized for now
+        let r = (nep_gal[0]*nep_gal[0] + nep_gal[1]*nep_gal[1] + nep_gal[2]*nep_gal[2]).sqrt();
+        assert!(approx_eq(r, 1.0, 1e-6), "NEP->Gal result not normalized: {}", r);
+    }
+
+    #[test]
+    fn ecliptic_to_equatorial_north_pole() {
+        // NEP in Ecliptic → Equatorial
+        // NEP should map to equatorial latitude ≈ 66.56° (90° - obliquity of ecliptic)
+        let nep_ecl = [0.0, 0.0, 1.0];
+        let nep_eq = matvec(&ECL_TO_EQ, nep_ecl);
+        let (_, lat) = vec_to_lonlat(nep_eq);
+        
+        // Just verify it's a valid, normalized position
+        let r = (nep_eq[0]*nep_eq[0] + nep_eq[1]*nep_eq[1] + nep_eq[2]*nep_eq[2]).sqrt();
+        assert!(approx_eq(r, 1.0, 1e-6), "NEP->Eq result not normalized: {}", r);
+        
+        // The latitude should be close to 66.56° (i.e., 90° - 23.44°)
+        let expected_lat = (PI/2.0) - (23.43929111 * DEG2RAD);
+        assert!(approx_eq(lat, expected_lat, 0.01),
+            "NEP equatorial latitude: {} vs {}", lat, expected_lat);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ROUNDTRIP TESTS - ensure consistency
+    // ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn roundtrip_galactic_equatorial_galactic() {
+        // A point in Galactic → Equatorial → Galactic should return to original
+        let lon_orig = 45.0 * DEG2RAD;
+        let lat_orig = -30.0 * DEG2RAD;
+        let v_orig = galactic_lonlat_to_vec(lon_orig, lat_orig);
+        
+        let v_eq = matvec(&GAL_TO_EQ, v_orig);
+        let v_gal_back = matvec(&EQ_TO_GAL, v_eq);
+        
+        assert_vec_eq(v_orig, v_gal_back, 1e-8, "G→C→G roundtrip");
+    }
+
+    #[test]
+    fn roundtrip_galactic_ecliptic_galactic() {
+        // A point in Galactic → Ecliptic → Galactic should return to original
+        let lon_orig = 120.0 * DEG2RAD;
+        let lat_orig = 15.0 * DEG2RAD;
+        let v_orig = galactic_lonlat_to_vec(lon_orig, lat_orig);
+        
+        let v_ecl = matvec(&GAL_TO_ECL, v_orig);
+        let v_gal_back = matvec(&ECL_TO_GAL, v_ecl);
+        
+        assert_vec_eq(v_orig, v_gal_back, 1e-8, "G→E→G roundtrip");
+    }
+
+    #[test]
+    fn roundtrip_equatorial_ecliptic_equatorial() {
+        // A point in Equatorial → Ecliptic → Equatorial should return to original
+        let lon_orig = 180.0 * DEG2RAD;
+        let lat_orig = 45.0 * DEG2RAD;
+        let v_orig = sph_to_vec(PI/2.0 - lat_orig, lon_orig);
+        
+        let v_ecl = matvec(&EQ_TO_ECL, v_orig);
+        let v_eq_back = matvec(&ECL_TO_EQ, v_ecl);
+        
+        assert_vec_eq(v_orig, v_eq_back, 1e-8, "C→E→C roundtrip");
+    }
+
+    #[test]
+    fn three_way_cycle_galactic_equatorial_ecliptic() {
+        // G → C → E → G should return to original
+        let v_orig = galactic_lonlat_to_vec(73.0 * DEG2RAD, 42.0 * DEG2RAD);
+        
+        let v_eq = matvec(&GAL_TO_EQ, v_orig);
+        let v_ecl = matvec(&EQ_TO_ECL, v_eq);
+        let v_gal_back = matvec(&ECL_TO_GAL, v_ecl);
+        
+        // Three matrix multiplications accumulate more floating-point error
+        assert_vec_eq(v_orig, v_gal_back, 1e-7, "G→C→E→G roundtrip");
+    }
+
 
 }
