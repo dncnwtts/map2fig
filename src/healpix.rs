@@ -463,6 +463,7 @@ pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
     xyf2nest(nside, ix, iy, face)
 }
 
+#[inline]
 pub fn sample_healpix(
     map: &[f64],
     meta: HealpixMeta,

@@ -804,8 +804,10 @@ pub fn render_projection_to_grid(
                     PixelValue::Bad => bad_color,
                 };
 
-                grid.set_pixel(px, py, rgba);
-                grid.set_valid(px, py, true);
+                // Use unchecked access for hot path (bounds guaranteed by loop)
+                unsafe {
+                    grid.set_pixel_unchecked(px, py, rgba);
+                }
             } else {
                 grid.set_valid(px, py, false);
             }

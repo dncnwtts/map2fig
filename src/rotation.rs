@@ -232,6 +232,7 @@ pub const EQ_TO_ECL: Mat3 = [
 
 
 #[inline(always)]
+#[inline]
 pub fn sph_to_vec(theta: f64, phi: f64) -> [f64; 3] {
     let st = theta.sin();
     [
