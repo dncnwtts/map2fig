@@ -2,6 +2,21 @@ use crate::PixelValue;
 use crate::NegMode;
 use crate::healpix::is_seen;
 use crate::colorbar::ColorbarTicks;
+use std::cmp::Ordering;
+
+/// Direct float comparison using std::cmp for faster sorting.
+/// This avoids the NaN check overhead since data is pre-validated.
+#[inline]
+pub fn unsafe_float_cmp(a: &f64, b: &f64) -> Ordering {
+    // Direct comparison - Rust will optimize this better than partial_cmp
+    if a < b {
+        Ordering::Less
+    } else if a > b {
+        Ordering::Greater
+    } else {
+        Ordering::Equal
+    }
+}
 
 pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) {
     if scale == &Scale::Log {
@@ -250,7 +265,7 @@ pub fn build_histogram_scale(
         };
     }
 
-    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    vals.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
     let n = vals.len();
 
     // 2. Compute minv / maxv based on HistogramRange
@@ -590,8 +605,8 @@ pub fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
         }
     }
 
-    major_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    minor_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    major_values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    minor_values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
 
     ColorbarTicks {
         major_positions: vec![],

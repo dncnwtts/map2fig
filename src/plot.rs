@@ -2,7 +2,7 @@ use image::{RgbaImage, Rgba};
 use crate::colormap::{Colormap};
 use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient, apply_gamma};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale, HistogramRange};
+use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale, HistogramRange, unsafe_float_cmp};
 use crate::layout::{compute_mollweide_layout, compute_gnomonic_layout, MollweideLayout};
 use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
@@ -37,7 +37,7 @@ pub fn compute_mollweide_scale(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
 
     let data_min = *values.first().unwrap();
     let data_max = *values.last().unwrap();
@@ -187,7 +187,7 @@ pub fn plot_mollweide_pdf(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
 
 
     let surface_pdf = PdfSurface::new(
@@ -398,7 +398,7 @@ pub fn plot_mollweide_png(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
 
     let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
         if transparent {0} else {255}]);

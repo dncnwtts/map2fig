@@ -9,6 +9,7 @@ pub mod layout;
 pub mod projection;
 pub mod mollweide;
 pub mod gnomonic;
+pub mod gnomonic_graticule;
 pub mod cli;
 pub mod pipeline;
 pub mod constants;

@@ -88,6 +88,9 @@ fn main() {
                 lon,
                 lat,
                 res,
+                args.gnom_graticule,
+                args.gnom_grat_dlon,
+                args.gnom_grat_dlat,
             );
         }
         _ => {

@@ -208,7 +208,7 @@ pub fn compute_major_tick_values(minv: f64, maxv: f64, scale: Scale, nticks: usi
                 }
             }
 
-            ticks.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            ticks.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
             ticks
         }
         Scale::Asinh { scale: _ } |

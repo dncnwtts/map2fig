@@ -65,7 +65,7 @@ pub fn latex_to_unicode(text: &str) -> String {
     }
 
     // Sort by length (longest first) to handle overlapping patterns
-    all_replacements.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    all_replacements.sort_unstable_by(|a, b| b.0.len().cmp(&a.0.len()));
 
     for (latex, unicode) in all_replacements {
         result = result.replace(&latex, &unicode);
