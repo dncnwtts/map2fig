@@ -1080,6 +1080,9 @@ pub fn plot_gnomonic_png(
     lon_deg: f64,
     lat_deg: f64,
     resolution_arcmin: f64,
+    show_graticule: bool,
+    grat_dlon: f64,
+    grat_dlat: f64,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
@@ -1119,6 +1122,12 @@ pub fn plot_gnomonic_png(
         hist_scale.as_ref(),
         view,
     );
+
+    // Add graticule if requested
+    if show_graticule {
+        use crate::gnomonic_graticule::render_gnomonic_local_grid;
+        render_gnomonic_local_grid(&mut grid, &proj, grat_dlon, grat_dlat);
+    }
 
     let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
         if transparent {0} else {255}]);
@@ -1213,7 +1222,7 @@ pub fn plot_gnomonic_pdf(
     minv: Option<f64>,
     maxv: Option<f64>,
     cmap: &Colormap,
-    _show_colorbar: bool,
+    show_colorbar: bool,
     _transparent: bool,
     gamma: f64,
     scale: Scale,
@@ -1227,22 +1236,18 @@ pub fn plot_gnomonic_pdf(
     lon_deg: f64,
     lat_deg: f64,
     resolution_arcmin: f64,
+    show_graticule: bool,
+    grat_dlon: f64,
+    grat_dlat: f64,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
+    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
+    
     let proj = GnomonicProjection::new(lon_deg, lat_deg, resolution_arcmin);
     let img_height = width; // Square image for gnomonic
 
-    // Create PDF surface
-    let surface = PdfSurface::new((width as f64) * 72.0 / 100.0, (img_height as f64) * 72.0 / 100.0, filename)
-        .expect("Failed to create PDF surface");
-    let cr = Context::new(&surface).expect("Failed to create Cairo context");
-
-    // Render to image first
-    let img_surface = ImageSurface::create(Format::ARgb32, width as i32, img_height as i32)
-        .expect("Failed to create image surface");
-    let img_context = Context::new(&img_surface).expect("Failed to create image context");
-
+    // Render to grid first (just the map region)
     let mut grid = RasterGrid::new(width, img_height);
     
     let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
@@ -1272,24 +1277,86 @@ pub fn plot_gnomonic_pdf(
         view,
     );
 
-    // Blit grid to image
-    for y in 0..img_height {
-        for x in 0..width {
-            if let Some(pixel) = grid.get_pixel_if_valid(x, y) {
-                let r = pixel[0] as f64 / 255.0;
-                let g = pixel[1] as f64 / 255.0;
-                let b = pixel[2] as f64 / 255.0;
-                img_context.set_source_rgb(r, g, b);
-                img_context.rectangle(x as f64, y as f64, 1.0, 1.0);
-                img_context.fill().expect("Failed to fill rectangle");
+    // Add graticule if requested
+    if show_graticule {
+        use crate::gnomonic_graticule::render_gnomonic_local_grid;
+        render_gnomonic_local_grid(&mut grid, &proj, grat_dlon, grat_dlat);
+    }
+
+    // Create image surface for the full layout (including colorbar)
+    let mut img_surface = ImageSurface::create(Format::ARgb32, layout.width as i32, layout.height as i32)
+        .expect("Failed to create image surface");
+    
+    // Fill with white background
+    {
+        let stride = img_surface.stride() as usize;
+        let mut data = img_surface.data().expect("Failed to get surface data");
+        
+        for idx in (0..data.len()).step_by(4) {
+            data[idx] = 255;     // B
+            data[idx + 1] = 255; // G
+            data[idx + 2] = 255; // R
+            data[idx + 3] = 255; // A
+        }
+    }
+
+    // Blit grid to image at map position
+    {
+        let stride = img_surface.stride() as usize;
+        let mut data = img_surface.data().expect("Failed to get surface data");
+        
+        for y in 0..img_height as usize {
+            for x in 0..width as usize {
+                if let Some(pixel) = grid.get_pixel_if_valid(x as u32, y as u32) {
+                    let img_x = layout.map_x as usize + x;
+                    let img_y = layout.map_y as usize + y;
+                    
+                    if img_x < layout.width as usize && img_y < layout.height as usize {
+                        let idx = img_y * stride + img_x * 4;
+                        if idx + 3 < data.len() {
+                            data[idx] = pixel[2];     // B
+                            data[idx + 1] = pixel[1]; // G
+                            data[idx + 2] = pixel[0]; // R
+                            data[idx + 3] = pixel[3]; // A
+                        }
+                    }
+                }
             }
         }
     }
 
-    img_context.set_source_surface(&img_surface, 0.0, 0.0).expect("Failed to set source");
+    // Flush to ensure data is written
+    img_surface.flush();
+
+    // Create PDF surface with matching layout dimensions
+    let pdf_surface = PdfSurface::new(layout.width, layout.height, filename)
+        .expect("Failed to create PDF surface");
+    let cr = Context::new(&pdf_surface).expect("Failed to create Cairo context");
+
+    // Paint the image surface onto the PDF at 1:1 scale
+    cr.set_source_surface(&img_surface, 0.0, 0.0).expect("Failed to set source");
     cr.paint().expect("Failed to paint");
 
-    surface.finish();
+    // Add proper colorbar with ticks and labels if requested
+    if show_colorbar {
+        use crate::render::pdf::draw_colorbar_pdf;
+        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar).1;
+        
+        draw_colorbar_pdf(
+            &cr,
+            cb_layout,
+            cmap,
+            minv.unwrap_or(0.0),
+            maxv.unwrap_or(1.0),
+            scale,
+            gamma,
+            hist_scale.as_ref(),
+            false, // latex_rendering
+            Some("μK_CMB"),
+        );
+    }
+
+    pdf_surface.finish();
 }
 
 /// Plot gnomonic projection with automatic format detection
@@ -1314,6 +1381,9 @@ pub fn plot_gnomonic_auto(
     lon_deg: f64,
     lat_deg: f64,
     resolution_arcmin: f64,
+    show_graticule: bool,
+    grat_dlon: f64,
+    grat_dlat: f64,
 ) {
     let ext = Path::new(filename)
         .extension()
@@ -1344,6 +1414,9 @@ pub fn plot_gnomonic_auto(
                 lon_deg,
                 lat_deg,
                 resolution_arcmin,
+                show_graticule,
+                grat_dlon,
+                grat_dlat,
             );
         }
         "pdf" => {
@@ -1368,6 +1441,9 @@ pub fn plot_gnomonic_auto(
                 lon_deg,
                 lat_deg,
                 resolution_arcmin,
+                show_graticule,
+                grat_dlon,
+                grat_dlat,
             );
         }
         _ => {

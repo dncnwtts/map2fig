@@ -128,9 +128,25 @@ pub struct Args {
     #[arg(long, allow_negative_numbers = true)]
     pub gnom_lat: Option<f64>,
 
+    /// Gnomonic field of view width in arcminutes
+    #[arg(long, default_value_t = 60.0)]
+    pub gnom_width: f64,
+
     /// Gnomonic resolution in arcmin/pixel
     #[arg(long, default_value_t = 1.0)]
     pub gnom_res: f64,
+
+    /// Enable local grid graticule for gnomonic projection
+    #[arg(long)]
+    pub gnom_graticule: bool,
+
+    /// Graticule spacing for gnomonic parallels [degrees]
+    #[arg(long, default_value_t = 1.0)]
+    pub gnom_grat_dlat: f64,
+
+    /// Graticule spacing for gnomonic meridians [degrees]
+    #[arg(long, default_value_t = 1.0)]
+    pub gnom_grat_dlon: f64,
 
     /// Allows for more verbose output
     #[arg(long)]

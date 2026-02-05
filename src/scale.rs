@@ -648,11 +648,15 @@ pub fn scale_value(
         Scale::Linear => unreachable!(),
 
         Scale::Log => {
-            if value <= 0.0 || value < min {
+            if value <= 0.0 {
+                // Negative values: apply neg_mode setting
                 return match neg_mode {
                     NegMode::Zero => PixelValue::Color(0.0),
                     NegMode::Unseen => PixelValue::Bad,
                 };
+            } else if value < min {
+                // Positive but under-range: always use minimum color
+                return PixelValue::Color(0.0);
             } else if value >= max {
                 1.0
             } else {

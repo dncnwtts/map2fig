@@ -114,9 +114,9 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
                 let base = 10_f64.powi(exp);
                 let coeff = (value / base).round();
                 if (coeff - 1.0).abs() < 1e-12 {
-                    format!("10^{{{}}}", exp)
+                    latex_to_unicode(&format!("10^{{{}}}", exp))
                 } else {
-                    format!("{} \\times 10^{{{}}}", coeff as i64, exp)
+                    latex_to_unicode(&format!("{} \\times 10^{{{}}}", coeff as i64, exp))
                 }
             }
             _ => {
@@ -130,11 +130,12 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
                     let exp = value.abs().log10().floor() as i32;
                     let base = 10_f64.powi(exp);
                     let coeff = (value / base).round();
-                    if (coeff - 1.0).abs() < 1e-12 {
+                    let latex_str = if (coeff - 1.0).abs() < 1e-12 {
                         format!("10^{{{}}}", exp)
                     } else {
                         format!("{} \\times 10^{{{}}}", coeff as i64, exp)
-                    }
+                    };
+                    latex_to_unicode(&latex_str)
                 }
             }
         }
