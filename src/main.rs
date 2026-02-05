@@ -63,9 +63,10 @@ fn main() {
             );
         }
         "gnomonic" => {
-            let lon = args.gnom_lon.unwrap_or(0.0);
-            let lat = args.gnom_lat.unwrap_or(0.0);
-            let res = args.gnom_res;
+            let lon = args.lon.unwrap_or(0.0);
+            let lat = args.lat.unwrap_or(0.0);
+            let fov = args.fov;
+            let res = args.res;
             
             plot_gnomonic_auto(
                 &data.map,
@@ -87,10 +88,11 @@ fn main() {
                 &view,
                 lon,
                 lat,
+                fov,
                 res,
-                args.gnom_graticule,
-                args.gnom_grat_dlon,
-                args.gnom_grat_dlat,
+                args.local_graticule,
+                args.local_grat_dlon,
+                args.local_grat_dlat,
             );
         }
         _ => {

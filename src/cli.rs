@@ -120,33 +120,33 @@ pub struct Args {
     #[arg(long, default_value = "mollweide")]
     pub projection: String,
 
-    /// Gnomonic center longitude [degrees]
-    #[arg(long, allow_negative_numbers = true)]
-    pub gnom_lon: Option<f64>,
+    /// Center longitude in degrees (gnomonic: projection center; mollweide: rotation center)
+    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true)]
+    pub lon: Option<f64>,
 
-    /// Gnomonic center latitude [degrees]
-    #[arg(long, allow_negative_numbers = true)]
-    pub gnom_lat: Option<f64>,
+    /// Center latitude in degrees (gnomonic: projection center; mollweide: rotation center)
+    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true)]
+    pub lat: Option<f64>,
 
-    /// Gnomonic field of view width in arcminutes
-    #[arg(long, default_value_t = 60.0)]
-    pub gnom_width: f64,
+    /// Field of view width in arcminutes (gnomonic projection only)
+    #[arg(long, alias = "gnom-width", default_value_t = 60.0)]
+    pub fov: f64,
 
-    /// Gnomonic resolution in arcmin/pixel
-    #[arg(long, default_value_t = 1.0)]
-    pub gnom_res: f64,
+    /// Resolution in arcmin/pixel (gnomonic projection only)
+    #[arg(long, alias = "gnom-res", default_value_t = 1.0)]
+    pub res: f64,
 
     /// Enable local grid graticule for gnomonic projection
-    #[arg(long)]
-    pub gnom_graticule: bool,
+    #[arg(long, alias = "gnom-graticule")]
+    pub local_graticule: bool,
 
-    /// Graticule spacing for gnomonic parallels [degrees]
-    #[arg(long, default_value_t = 1.0)]
-    pub gnom_grat_dlat: f64,
+    /// Graticule spacing for parallels [degrees] (gnomonic projection only)
+    #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0)]
+    pub local_grat_dlat: f64,
 
-    /// Graticule spacing for gnomonic meridians [degrees]
-    #[arg(long, default_value_t = 1.0)]
-    pub gnom_grat_dlon: f64,
+    /// Graticule spacing for meridians [degrees] (gnomonic projection only)
+    #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0)]
+    pub local_grat_dlon: f64,
 
     /// Allows for more verbose output
     #[arg(long)]
@@ -231,7 +231,42 @@ pub struct PlotConfig {
 }
 
 impl Args {
+    /// Validate that projection-specific arguments are only used with their respective projection
+    pub fn validate_projection_args(&self) -> Result<(), String> {
+        let projection = self.projection.to_lowercase();
+        
+        // Check gnomonic-only args (--lon and --lat are shared, used for rotation in mollweide)
+        let gnom_only_provided = self.fov != 60.0
+            || self.res != 1.0
+            || self.local_graticule
+            || self.local_grat_dlat != 1.0
+            || self.local_grat_dlon != 1.0;
+        
+        if gnom_only_provided && projection != "gnomonic" {
+            return Err(
+                "Gnomonic-specific arguments (--fov, --res, --local-graticule, \
+                 --local-grat-dlat, --local-grat-dlon) can only be used with \
+                 --projection gnomonic".to_string()
+            );
+        }
+        
+        // Check mollweide-specific args
+        let mollweide_args_provided = self.graticule;
+        
+        if mollweide_args_provided && projection != "mollweide" {
+            return Err(
+                "Mollweide projection arguments (--graticule, --grat-coord, --grat-par, \
+                 --grat-mer) can only be used with --projection mollweide".to_string()
+            );
+        }
+        
+        Ok(())
+    }
+
     pub fn resolve_config(&self) -> Result<PlotConfig, String> {
+        // Validate projection-specific arguments first
+        self.validate_projection_args()?;
+        
         // Resolve scale
         let (scale, cmap_name) = if self.planck_log {
             (
@@ -292,6 +327,9 @@ impl Args {
         let input = CoordSystem::from_str(&self.input_coord)?;
         let output = CoordSystem::from_str(&self.output_coord)?;
 
+        // Note: view_rotation is ONLY applied explicitly via --rotate-to
+        // For gnomonic: --lon/--lat are projection center (no view rotation)
+        // For mollweide: use --rotate-to to apply rotation if needed
         let view = if let Some(ref s) = self.rotate_to {
             let parts: Vec<_> = s.split(',').collect();
             if parts.len() != 2 {

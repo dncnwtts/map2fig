@@ -1079,6 +1079,7 @@ pub fn plot_gnomonic_png(
     view: &ViewTransform,
     lon_deg: f64,
     lat_deg: f64,
+    fov_arcmin: f64,
     resolution_arcmin: f64,
     show_graticule: bool,
     grat_dlon: f64,
@@ -1235,6 +1236,7 @@ pub fn plot_gnomonic_pdf(
     view: &ViewTransform,
     lon_deg: f64,
     lat_deg: f64,
+    fov_arcmin: f64,
     resolution_arcmin: f64,
     show_graticule: bool,
     grat_dlon: f64,
@@ -1362,7 +1364,7 @@ pub fn plot_gnomonic_pdf(
 /// Plot gnomonic projection with automatic format detection
 pub fn plot_gnomonic_auto(
     map: &[f64],
-    width: u32,
+    _width: u32,
     filename: &str,
     minv: Option<f64>,
     maxv: Option<f64>,
@@ -1380,11 +1382,16 @@ pub fn plot_gnomonic_auto(
     view: &ViewTransform,
     lon_deg: f64,
     lat_deg: f64,
+    fov_arcmin: f64,
     resolution_arcmin: f64,
     show_graticule: bool,
     grat_dlon: f64,
     grat_dlat: f64,
 ) {
+    // Compute image width from field of view and resolution
+    // This ensures the FOV parameter is actually respected
+    let width = (fov_arcmin / resolution_arcmin).ceil() as u32;
+    
     let ext = Path::new(filename)
         .extension()
         .and_then(|s| s.to_str())
@@ -1413,6 +1420,7 @@ pub fn plot_gnomonic_auto(
                 view,
                 lon_deg,
                 lat_deg,
+                fov_arcmin,
                 resolution_arcmin,
                 show_graticule,
                 grat_dlon,
@@ -1440,6 +1448,7 @@ pub fn plot_gnomonic_auto(
                 view,
                 lon_deg,
                 lat_deg,
+                fov_arcmin,
                 resolution_arcmin,
                 show_graticule,
                 grat_dlon,
