@@ -477,13 +477,13 @@ pub fn sample_healpix(
     // Direction on the screen / projection
     let v_view = sph_to_vec(theta, lon);
 
-    // Rotate BACK into map coordinates
-    let v_map = view.rotation.inverse().apply(v_view);
+    // Rotate BACK into map coordinates using pre-computed inverse
+    let v_map = view.apply_inverse(v_view);
 
-    let (theta_m, lon_m) = vec_to_sph(v_map);
+    let (mut theta_m, mut lon_m) = vec_to_sph(v_map);
 
-    let theta_m = theta_m.clamp(0.0, PI);
-    let lon_m = lon_m.rem_euclid(2.0 * PI);
+    theta_m = theta_m.clamp(0.0, PI);
+    lon_m = lon_m.rem_euclid(2.0 * PI);
 
     let ipix = ang2pix(meta, theta_m, lon_m) as usize;
     map.get(ipix).copied()

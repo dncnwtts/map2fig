@@ -151,6 +151,7 @@ pub fn view_rotation(lon: f64, lat: f64, roll: f64) -> Rotation {
 
 pub struct ViewTransform {
     pub rotation: Rotation,
+    pub rotation_inv: Rotation,  // Cache the inverse to avoid recomputation
 }
 
 impl ViewTransform {
@@ -170,11 +171,17 @@ impl ViewTransform {
             coord
         };
 
-        Self { rotation: rot }
+        let rotation_inv = rot.inverse();
+        Self { rotation: rot, rotation_inv }
     }
 
     pub fn apply(&self, v: [f64; 3]) -> [f64; 3] {
         self.rotation.apply(v)
+    }
+
+    #[inline(always)]
+    pub fn apply_inverse(&self, v: [f64; 3]) -> [f64; 3] {
+        self.rotation_inv.apply(v)
     }
 }
 
@@ -238,7 +245,7 @@ pub fn sph_to_vec(theta: f64, phi: f64) -> [f64; 3] {
 pub fn vec_to_sph(v: [f64; 3]) -> (f64, f64) {
     let z = v[2].clamp(-1.0, 1.0);
     let theta = z.acos();
-    let phi = v[1].atan2(v[0]).rem_euclid(2.0 * std::f64::consts::PI);
+    let phi = v[1].atan2(v[0]);
     (theta, phi)
 }
 
