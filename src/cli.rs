@@ -41,11 +41,11 @@ pub struct Args {
     pub no_cbar: bool,
 
     /// Lower color scale limit
-    #[arg(long)]
+    #[arg(long, allow_negative_numbers = true)]
     pub min: Option<f64>,
 
     /// Upper color scale limit
-    #[arg(long)]
+    #[arg(long, allow_negative_numbers = true)]
     pub max: Option<f64>,
 
     /// Gamma correction
