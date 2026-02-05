@@ -14,6 +14,7 @@ pub mod pipeline;
 pub mod constants;
 pub mod latex;
 pub mod rotation;
+pub mod graticule;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf};
@@ -299,6 +300,10 @@ mod tests {
             false,  // latex_rendering
             None,   // units
             &view,
+            false,  // show_graticule
+            None,   // grat_coord
+            15.0,   // dpar_deg
+            15.0,   // dmer_deg
         );
     }
     
@@ -462,6 +467,10 @@ mod tests {
             false,  // latex_rendering
             None,   // units
             &view,
+            false,  // show_graticule
+            None,   // grat_coord
+            15.0,   // dpar_deg
+            15.0,   // dmer_deg
         );
     }
     

@@ -135,6 +135,22 @@ pub struct Args {
     /// Allows for more verbose output
     #[arg(long)]
     pub verbose: bool,
+
+    /// Enable graticule overlay
+    #[arg(long)]
+    pub graticule: bool,
+
+    /// Graticule coordinate system: gal, eq, ecl
+    #[arg(long)]
+    pub grat_coord: Option<String>,
+
+    /// Graticule spacing for parallels [degrees]
+    #[arg(long, default_value_t = 15.0)]
+    pub grat_par: f64,
+
+    /// Graticule spacing for meridians [degrees]
+    #[arg(long, default_value_t = 15.0)]
+    pub grat_mer: f64,
 }
 
 /// Bad color option

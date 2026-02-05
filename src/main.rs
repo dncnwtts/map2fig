@@ -28,6 +28,15 @@ fn main() {
     
     match args.projection.to_lowercase().as_str() {
         "mollweide" => {
+            let grat_coord = if args.graticule {
+                args.grat_coord.as_ref().map(|s| {
+                    map2fig::rotation::CoordSystem::from_str(s)
+                        .expect("Invalid graticule coordinate system")
+                })
+            } else {
+                None
+            };
+
             plot_mollweide_auto(
                 &data.map,
                 args.width,
@@ -47,6 +56,10 @@ fn main() {
                 config.latex_rendering,
                 config.units.as_deref(),
                 &view,
+                args.graticule,
+                grat_coord,
+                args.grat_par,
+                args.grat_mer,
             );
         }
         "gnomonic" => {

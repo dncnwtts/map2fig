@@ -13,7 +13,7 @@ use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
-use crate::rotation::ViewTransform;
+use crate::rotation::{ViewTransform, CoordSystem};
 
 
 pub struct MollweideScale {
@@ -168,6 +168,10 @@ pub fn plot_mollweide_pdf(
     latex_rendering: bool,
     units: Option<&str>,
     view: &ViewTransform,
+    show_graticule: bool,
+    grat_coord: Option<CoordSystem>,
+    dpar_deg: f64,
+    dmer_deg: f64,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -278,6 +282,29 @@ pub fn plot_mollweide_pdf(
     );
     cr_pdf.paint().unwrap();
 
+    // Draw graticule BEFORE border (so border appears on top)
+    if show_graticule {
+        use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo};
+        
+        let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
+        
+        let graticule = render_graticule_mollweide_vectorized(
+            &view,
+            dpar_deg,
+            dmer_deg,
+            grat_coord_sys,
+            CoordSystem::G,
+        );
+        
+        render_graticule_cairo(
+            &graticule,
+            &cr_pdf,
+            layout.map_x,
+            layout.map_y,
+            layout.map_w,
+            layout.map_h,
+        );
+    }
 
     // Draw vector border ON TOP
     if draw_border {
@@ -346,6 +373,10 @@ pub fn plot_mollweide_png(
     latex_rendering: bool,
     units: Option<&str>,
     view: &ViewTransform,
+    show_graticule: bool,
+    grat_coord: Option<CoordSystem>,
+    dpar_deg: f64,
+    dmer_deg: f64,
 ) {
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
@@ -421,10 +452,10 @@ pub fn plot_mollweide_png(
         debug_overlay, // pass the optional overlay
     );
 
-    if draw_border {
+    if draw_border || show_graticule {
         use cairo::{ImageSurface, Context, Format};
 
-        // Creating a padded surface
+        // Creating a padded surface (shared for both border and graticule)
         let pad = layout.border_width_px.ceil() as i32; 
         let surf_w = layout.map_w as i32 + 2 * pad;
         let surf_h = layout.map_h as i32 + 2 * pad;
@@ -441,14 +472,41 @@ pub fn plot_mollweide_png(
             border_cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             border_cr.paint().unwrap();
 
-            draw_projection_border_pdf(
-                &border_cr,
-                pad as f64,
-                pad as f64,
-                layout.map_w,
-                layout.map_h,
-                layout.border_width_px,
-            );
+            // Draw graticule using Cairo (anti-aliased) before border
+            if show_graticule {
+                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo};
+                
+                let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
+                
+                let graticule = render_graticule_mollweide_vectorized(
+                    &view,
+                    dpar_deg,
+                    dmer_deg,
+                    grat_coord_sys,
+                    CoordSystem::G,
+                );
+                
+                // Render graticule on Cairo surface (anti-aliased)
+                render_graticule_cairo(
+                    &graticule,
+                    &border_cr,
+                    pad as f64,
+                    pad as f64,
+                    layout.map_w,
+                    layout.map_h,
+                );
+            }
+
+            if draw_border {
+                draw_projection_border_pdf(
+                    &border_cr,
+                    pad as f64,
+                    pad as f64,
+                    layout.map_w,
+                    layout.map_h,
+                    layout.border_width_px,
+                );
+            }
             // border_cr dropped here
         }
     
@@ -588,7 +646,56 @@ pub fn plot_mollweide_png(
         }
     }
 
+    // Render graticule if requested
+    if show_graticule {
+        // Determine the input coordinate system from the view transform
+        // For now, default to Galactic if not available
+        let input_coord = CoordSystem::G;
+        let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
 
+        // Create a temporary RasterGrid wrapper for the mollweide map region
+        let mut grid = RasterGrid {
+            width: layout.map_w as u32,
+            height: layout.map_h as u32,
+            buffer: vec![Rgba([0, 0, 0, 0]); (layout.map_w * layout.map_h) as usize],
+            valid: vec![true; (layout.map_w * layout.map_h) as usize],
+        };
+
+        // Copy the map region from the image
+        for y in 0..layout.map_h as u32 {
+            for x in 0..layout.map_w as u32 {
+                let src_x = (layout.map_x as u32 + x) as u32;
+                let src_y = (layout.map_y as u32 + y) as u32;
+                if src_x < img.width() && src_y < img.height() {
+                    let pixel = img.get_pixel(src_x, src_y);
+                    let idx = (y * grid.width + x) as usize;
+                    grid.buffer[idx] = *pixel;
+                }
+            }
+        }
+
+        // Render the graticule on the grid
+        crate::graticule::render_graticule_mollweide(
+            &mut grid,
+            &view,
+            dpar_deg,
+            dmer_deg,
+            grat_coord_sys,
+            input_coord,
+        );
+
+        // Copy the grid back to the image
+        for y in 0..layout.map_h as u32 {
+            for x in 0..layout.map_w as u32 {
+                let dst_x = (layout.map_x as u32 + x) as u32;
+                let dst_y = (layout.map_y as u32 + y) as u32;
+                if dst_x < img.width() && dst_y < img.height() {
+                    let idx = (y * grid.width + x) as usize;
+                    img.put_pixel(dst_x, dst_y, grid.buffer[idx]);
+                }
+            }
+        }
+    }
 
     img.save(filename).expect("Failed to save PNG");
 }
@@ -629,6 +736,10 @@ pub fn plot_mollweide_auto(
     latex_rendering: bool,
     units: Option<&str>,
     view: &ViewTransform,
+    show_graticule: bool,
+    grat_coord: Option<CoordSystem>,
+    dpar_deg: f64,
+    dmer_deg: f64,
 ) {
     let ext = Path::new(filename)
         .extension()
@@ -658,6 +769,10 @@ pub fn plot_mollweide_auto(
                 latex_rendering,
                 units,
                 &view,
+                show_graticule,
+                grat_coord,
+                dpar_deg,
+                dmer_deg,
             );
         }
         "pdf" => {
@@ -680,6 +795,10 @@ pub fn plot_mollweide_auto(
                 latex_rendering,
                 units,
                 &view,
+                show_graticule,
+                grat_coord,
+                dpar_deg,
+                dmer_deg,
             );
         }
         _ => {

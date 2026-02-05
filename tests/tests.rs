@@ -120,6 +120,10 @@ fn test_plot_smoke() {
         false,
         Some("str"),
         &view,
+        false,  // show_graticule
+        None,   // grat_coord
+        15.0,   // dpar_deg
+        15.0,   // dmer_deg
     );
 }
 
