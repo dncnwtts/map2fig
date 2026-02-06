@@ -14,6 +14,8 @@ pub struct GnomonicProjection {
     pub lat_center: f64,
     /// Resolution in arcmin per pixel
     pub resolution_arcmin: f64,
+    /// Roll angle in radians (rotation around the view axis)
+    pub roll_rad: f64,
 }
 
 impl GnomonicProjection {
@@ -24,10 +26,22 @@ impl GnomonicProjection {
     /// * `lat_deg` - Center latitude in degrees
     /// * `resolution_arcmin` - Resolution in arcmin per pixel
     pub fn new(lon_deg: f64, lat_deg: f64, resolution_arcmin: f64) -> Self {
+        Self::with_roll(lon_deg, lat_deg, resolution_arcmin, 0.0)
+    }
+
+    /// Create a new gnomonic projection with roll angle
+    /// 
+    /// # Arguments
+    /// * `lon_deg` - Center longitude in degrees
+    /// * `lat_deg` - Center latitude in degrees
+    /// * `resolution_arcmin` - Resolution in arcmin per pixel
+    /// * `roll_rad` - Roll angle in radians (rotation around view axis)
+    pub fn with_roll(lon_deg: f64, lat_deg: f64, resolution_arcmin: f64, roll_rad: f64) -> Self {
         Self {
             lon_center: lon_deg.to_radians(),
             lat_center: lat_deg.to_radians(),
             resolution_arcmin,
+            roll_rad,
         }
     }
 
@@ -36,8 +50,8 @@ impl GnomonicProjection {
         Self::new(0.0, 0.0, 1.0)
     }
 
-    /// Compute CPAC Euler rotation matrix to align center with north pole
-    /// CPAC: Make_CPAC_Euler_Matrix(lon0, -lat0, 0)
+    /// Compute CPAC Euler rotation matrix to align center with north pole, with optional roll
+    /// CPAC: Make_CPAC_Euler_Matrix(lon0, -lat0, roll)
     fn compute_rotation(&self) -> [[f64; 3]; 3] {
         let lon0 = self.lon_center;
         let lat0 = self.lat_center;
@@ -47,12 +61,38 @@ impl GnomonicProjection {
         let cos_lat = (-lat0).cos();
         let sin_lat = (-lat0).sin();
 
-        // Combined rotation matrix for CPAC Euler angles
-        [
+        // Base rotation matrix for CPAC Euler angles (positions center at pole)
+        let base = [
             [cos_lon * cos_lat, -sin_lon, cos_lon * sin_lat],
             [sin_lon * cos_lat, cos_lon, sin_lon * sin_lat],
             [-sin_lat, 0.0, cos_lat],
-        ]
+        ];
+
+        // If no roll, return base rotation
+        if self.roll_rad == 0.0 {
+            return base;
+        }
+
+        // Apply roll rotation around z-axis (rotation in the view plane)
+        let cos_roll = self.roll_rad.cos();
+        let sin_roll = self.roll_rad.sin();
+        
+        let roll_matrix = [
+            [cos_roll, -sin_roll, 0.0],
+            [sin_roll, cos_roll, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+
+        // Compose: roll_matrix @ base
+        let mut result = [[0.0; 3]; 3];
+        for i in 0..3 {
+            for j in 0..3 {
+                for k in 0..3 {
+                    result[i][j] += roll_matrix[i][k] * base[k][j];
+                }
+            }
+        }
+        result
     }
 
     /// Apply rotation matrix to 3D vector

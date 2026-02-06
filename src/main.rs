@@ -132,6 +132,7 @@ fn main() {
                 args.local_grat_dlat,
                 grat_overlay,
                 overlay_color,
+                args.roll,
             );
         }
         _ => {

@@ -1156,6 +1156,7 @@ pub fn plot_gnomonic_png(
     grat_dlat: f64,
     grat_overlay: Option<CoordSystem>,
     _overlay_color: Rgba<u8>,
+    roll_deg: f64,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
@@ -1165,7 +1166,8 @@ pub fn plot_gnomonic_png(
     let font = Font::try_from_bytes(font_data as &[u8])
         .expect("Failed to load font");
 
-    let proj = GnomonicProjection::new(lon_deg, lat_deg, resolution_arcmin);
+    let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
+    let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
     
     let mut grid = RasterGrid::new(width, width);
     
@@ -1331,12 +1333,14 @@ pub fn plot_gnomonic_pdf(
     grat_dlat: f64,
     grat_overlay: Option<CoordSystem>,
     _overlay_color: Rgba<u8>,
+    roll_deg: f64,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
     let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
     
-    let proj = GnomonicProjection::new(lon_deg, lat_deg, resolution_arcmin);
+    let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
+    let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
     let img_height = width; // Square image for gnomonic
 
     // Render to grid first (just the map region)
@@ -1495,6 +1499,7 @@ pub fn plot_gnomonic_auto(
     grat_dlat: f64,
     grat_overlay: Option<CoordSystem>,
     overlay_color: Rgba<u8>,
+    roll_deg: f64,
 ) {
     // Compute image width from field of view and resolution
     // This ensures the FOV parameter is actually respected
@@ -1535,6 +1540,7 @@ pub fn plot_gnomonic_auto(
                 grat_dlat,
                 grat_overlay,
                 overlay_color,
+                roll_deg,
             );
         }
         "pdf" => {
@@ -1565,6 +1571,7 @@ pub fn plot_gnomonic_auto(
                 grat_dlat,
                 grat_overlay,
                 overlay_color,
+                roll_deg,
             );
         }
         _ => {

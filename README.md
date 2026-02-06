@@ -137,6 +137,29 @@ This renders:
 
 The overlay graticule shows how different coordinate systems relate on the same sky patch. The overlay lines may curve or appear distorted due to the projection, which is physically correct—it shows the true relationship between the coordinate systems on the curved sky.
 
+**Important**: The overlay coordinate system (e.g., ecliptic) must intersect the visible field of view. For very small FOVs (e.g., < 1 degree), overlay lines may not appear if they don't pass through that region. To ensure visibility, use a larger FOV or position the map center where the overlay coordinates are present.
+
+Example: Ecliptic overlays work best when the center is near the ecliptic plane (around galactic longitude 0° or 180°).
+
+---
+
+### 4b. Gnomonic with Image Rotation
+
+**Use Case**: Rotate the gnomonic projection around the center for custom viewing angles
+
+```bash
+./map2fig -f sky_map.fits \
+  --projection gnomonic \
+  --lon 0 --lat 0 \
+  --fov 600 \
+  --roll 45 \
+  -o rotated_view.png
+```
+
+**Parameters**:
+- `--roll 45`: Rotate the image 45° counterclockwise around the projection center
+- Works with both graticule modes (local and overlay)
+
 ---
 
 ### 5. Multi-Panel Comparison: Mollweide with Dual Graticules
@@ -303,18 +326,19 @@ Generate consistent publication figures for all data products.
 | `--lon, --lat` | Center coordinates (degrees) |
 | `--fov` | Field of view in arcmin (gnomonic only) |
 | `--res` | Resolution in arcmin/pixel (gnomonic only) |
+| `--roll` | Rotation angle in degrees around center (gnomonic only) |
 
 ### Graticules
 | Option | Description |
 |--------|-------------|
-| `--graticule` | Enable coordinate grid |
+| `--graticule` | Enable coordinate grid (mollweide) |
 | `--grat-coord` | Primary system: gal, eq, ecl |
 | `--grat-coord-overlay` | Secondary system (e.g., show both gal+eq) |
 | `--grat-overlay-color` | Color for secondary (hex #RRGGBB) |
-| `--grat-par, --grat-mer` | Spacing for parallels/meridians (°) |
+| `--grat-par, --grat-mer` | Spacing for parallels/meridians (°) (mollweide) |
 | `--grat-labels` | Show lat/lon values on grid lines |
 | `--local-graticule` | Local grid for gnomonic (gnomonic only) |
-| `--local-grat-dlat, --local-grat-dlon` | Local grid spacing (°) |
+| `--local-grat-dlat, --local-grat-dlon` | Local grid spacing (°) (gnomonic) |
 
 ### Styling
 | Option | Description |
@@ -387,11 +411,17 @@ For batch processing, use shell loops (embarrassingly parallel).
 - For wider views: `--fov 600` (10 degrees)
 - Default resolution is 1 arcmin/pixel; adjust with `--res`
 
-**Graticule overlay lines curved or distorted on gnomonic**
-- This is correct! The overlay coordinate system's grid lines naturally curve when projected onto the gnomonic tangent plane
-- The curvature shows the true geometric relationship between coordinate systems
-- To hide certain lines, use `--grat-par` and `--grat-mer` to adjust spacing
-- Overlay color can be customized with `--grat-overlay-color #RRGGBB`
+**Graticule overlay not showing on gnomonic with small FOV**
+- With very small fields of view (< 2 degrees), overlay coordinate systems may not intersect the visible region
+- The overlay graticule (e.g., ecliptic) may genuinely not pass through that tiny patch of sky
+- **Solution**: Use a larger FOV (`--fov`), or position the center where the overlay coordinates are present
+- Example: Ecliptic overlays work best near ecliptic coordinates (galactic longitude 0°, 180°, or ±90°)
+- Test with equatorial overlay first (`--grat-coord-overlay eq`) as it's more widely distributed
+
+**Roll parameter not rotating the image**
+- The `--roll` parameter works for gnomonic projections and rotates the image around the projection center
+- Example: `--projection gnomonic --roll 45` rotates 45° counterclockwise
+- Works independently (no need for `--rotate-to`)
 
 **"Could not parse FITS file"**
 - Ensure file is valid FITS with HEALPix metadata
