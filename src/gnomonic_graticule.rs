@@ -463,16 +463,20 @@ mod tests {
         let lons = generate_graticule_degrees(30.0, false);
         let lats = generate_graticule_degrees(30.0, true);
         
-        // Should include cardinal meridians
+        // Function generates lines within ±60° to avoid horizon distortion in gnomonic projection
+        // Meridians within that range
         assert!(lons.contains(&0.0));
-        assert!(lons.contains(&90.0));
-        assert!(lons.contains(&180.0));
-        assert!(lons.contains(&270.0));
+        assert!(lons.contains(&30.0));
+        assert!(lons.contains(&-30.0));
+        assert!(lons.contains(&60.0));
+        assert!(lons.contains(&-60.0));
         
-        // Should include equator and poles
+        // Should include equator and parallels within range
         assert!(lats.contains(&0.0));
-        assert!(lats.contains(&90.0));
-        assert!(lats.contains(&-90.0));
+        assert!(lats.contains(&30.0));
+        assert!(lats.contains(&-30.0));
+        assert!(lats.contains(&60.0));
+        assert!(lats.contains(&-60.0));
     }
 
     #[test]

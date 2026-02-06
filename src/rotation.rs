@@ -732,9 +732,9 @@ mod tests {
         let ncp_gal = matvec(&EQ_TO_GAL, ncp_eq);
         let (lon, lat) = vec_to_lonlat(ncp_gal);
         
-        // Converting back to degrees
-        let lon_deg = lon * RAD2DEG;
-        let lat_deg = lat * RAD2DEG;
+        // Converting back to degrees (for potential debugging)
+        let _lon_deg = lon * RAD2DEG;
+        let _lat_deg = lat * RAD2DEG;
         
         // Expected: approximately (122.93°, 27.13°) or the equivalent antipodal point
         // (since NCP should transform to some point, let's just verify it's normalized)
@@ -766,7 +766,7 @@ mod tests {
         // Equatorial origin (RA=0°, Dec=0°) → Galactic
         let origin_eq = sph_to_vec(PI/2.0, 0.0);
         let origin_gal = matvec(&EQ_TO_GAL, origin_eq);
-        let (lon, lat) = vec_to_lonlat(origin_gal);
+        let (_lon, _lat) = vec_to_lonlat(origin_gal);
         
         // Just verify it's a valid position
         let r = (origin_gal[0]*origin_gal[0] + origin_gal[1]*origin_gal[1] + origin_gal[2]*origin_gal[2]).sqrt();
@@ -810,7 +810,7 @@ mod tests {
         // NEP in Ecliptic → Galactic
         let nep_ecl = [0.0, 0.0, 1.0];
         let nep_gal = matvec(&ECL_TO_GAL, nep_ecl);
-        let (lon, lat) = vec_to_lonlat(nep_gal);
+        let (_lon, _lat) = vec_to_lonlat(nep_gal);
         
         // NEP should map to approximately (l≈96°, b≈30°) in Galactic
         // Just verify it's normalized for now
