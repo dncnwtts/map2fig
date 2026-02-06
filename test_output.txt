@@ -1,0 +1,3 @@
+Warning: Coordinate system overlay (--grat-coord-overlay) is not yet implemented for gnomonic projections.
+The local graticule is shown, but the overlay graticule is not rendered.
+For dual-coordinate visualization, use --projection mollweide instead.

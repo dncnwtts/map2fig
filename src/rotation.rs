@@ -154,6 +154,8 @@ pub fn view_rotation(lon: f64, lat: f64, roll: f64) -> Rotation {
 pub struct ViewTransform {
     pub rotation: Rotation,
     pub rotation_inv: Rotation,  // Cache the inverse to avoid recomputation
+    pub input_coord: CoordSystem,
+    pub output_coord: CoordSystem,
 }
 
 impl ViewTransform {
@@ -174,7 +176,12 @@ impl ViewTransform {
         };
 
         let rotation_inv = rot.inverse();
-        Self { rotation: rot, rotation_inv }
+        Self { 
+            rotation: rot, 
+            rotation_inv,
+            input_coord: input,
+            output_coord: output,
+        }
     }
 
     pub fn apply(&self, v: [f64; 3]) -> [f64; 3] {
@@ -885,5 +892,64 @@ mod tests {
         assert_vec_eq(v_orig, v_gal_back, 1e-7, "G→C→E→G roundtrip");
     }
 
+    #[test]
+    fn graticule_transform_identity() {
+        // When graticule_coord == input_coord, transform should be identity
+        let rot = coord_rotation(CoordSystem::G, CoordSystem::G);
+        let identity = Rotation::identity();
+        assert_eq!(rot.matrix, identity.matrix, "Galactic → Galactic should be identity");
+        
+        let rot = coord_rotation(CoordSystem::C, CoordSystem::C);
+        assert_eq!(rot.matrix, identity.matrix, "Equatorial → Equatorial should be identity");
+    }
 
+    #[test]
+    fn graticule_at_origin() {
+        // Galactic origin (lon=0, lat=0) in Galactic coords should be (1,0,0) in vec
+        let lon_gal: f64 = 0.0;
+        let lat_gal: f64 = 0.0;
+        let v_x = lon_gal.cos() * lat_gal.cos();
+        let v_y = lon_gal.sin() * lat_gal.cos();
+        let v_z = lat_gal.sin();
+        assert!((v_x - 1.0).abs() < 1e-10, "x component");
+        assert!(v_y.abs() < 1e-10, "y component");
+        assert!(v_z.abs() < 1e-10, "z component");
+    }
+
+    #[test]
+    fn graticule_north_pole() {
+        // North pole (lat=90°) should be [0, 0, 1]
+        let lat_north: f64 = PI / 2.0;
+        let v_z = lat_north.sin();
+        assert!((v_z - 1.0).abs() < 1e-10, "z component at pole");
+    }
+
+    #[test]
+    fn specific_galactic_center_in_equatorial() {
+        // Galactic center (lon=0, lat=0) in Galactic should transform to ~RA=266°, Dec=-29°
+        // when converted to Equatorial
+        let rot = coord_rotation(CoordSystem::G, CoordSystem::C);
+        
+        // Point at Galactic center: lon=0, lat=0
+        let v_gal = [1.0, 0.0, 0.0]; // lon=0, lat=0 in spherical coords
+        
+        let v_eq = rot.apply(v_gal);
+        
+        // Convert back to lon/lat
+        let r = (v_eq[0]*v_eq[0] + v_eq[1]*v_eq[1] + v_eq[2]*v_eq[2]).sqrt();
+        let mut lon_eq = v_eq[1].atan2(v_eq[0]);
+        let lat_eq = (v_eq[2] / r).asin();
+        
+        // Normalize longitude to [0, 360)
+        lon_eq = lon_eq.rem_euclid(2.0 * PI);
+        
+        let lon_eq_deg = lon_eq * RAD2DEG;
+        let lat_eq_deg = lat_eq * RAD2DEG;
+        
+        // Should be close to Galactic center location (~RA=266°, Dec=-29°)
+        assert!((lon_eq_deg - 266.4).abs() < 5.0, 
+            "Galactic center should be ~RA=266°, got {}", lon_eq_deg);
+        assert!((lat_eq_deg + 28.9).abs() < 5.0, 
+            "Galactic center should be ~Dec=-29°, got {}", lat_eq_deg);
+    }
 }

@@ -170,6 +170,9 @@ pub fn plot_mollweide_pdf(
     view: &ViewTransform,
     show_graticule: bool,
     grat_coord: Option<CoordSystem>,
+    grat_overlay: Option<CoordSystem>,
+    overlay_color: Rgba<u8>,
+    _show_labels: bool,
     dpar_deg: f64,
     dmer_deg: f64,
 ) {
@@ -284,7 +287,7 @@ pub fn plot_mollweide_pdf(
 
     // Draw graticule BEFORE border (so border appears on top)
     if show_graticule {
-        use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo};
+        use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
         
         let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
         
@@ -293,9 +296,10 @@ pub fn plot_mollweide_pdf(
             dpar_deg,
             dmer_deg,
             grat_coord_sys,
-            CoordSystem::G,
+            view.input_coord,
         );
         
+        // Render primary graticule in black
         render_graticule_cairo(
             &graticule,
             &cr_pdf,
@@ -304,6 +308,34 @@ pub fn plot_mollweide_pdf(
             layout.map_w,
             layout.map_h,
         );
+
+        // Render secondary graticule overlay if specified
+        if let Some(overlay_sys) = grat_overlay {
+            let overlay_graticule = render_graticule_mollweide_vectorized(
+                &view,
+                dpar_deg,
+                dmer_deg,
+                overlay_sys,
+                view.input_coord,
+            );
+            
+            // Convert RGBA color to normalized RGB for Cairo
+            let r = overlay_color[0] as f64 / 255.0;
+            let g = overlay_color[1] as f64 / 255.0;
+            let b = overlay_color[2] as f64 / 255.0;
+            
+            render_graticule_cairo_with_color(
+                &overlay_graticule,
+                &cr_pdf,
+                layout.map_x,
+                layout.map_y,
+                layout.map_w,
+                layout.map_h,
+                r,
+                g,
+                b,
+            );
+        }
     }
 
     // Draw vector border ON TOP
@@ -375,6 +407,9 @@ pub fn plot_mollweide_png(
     view: &ViewTransform,
     show_graticule: bool,
     grat_coord: Option<CoordSystem>,
+    grat_overlay: Option<CoordSystem>,
+    overlay_color: Rgba<u8>,
+    _show_labels: bool,
     dpar_deg: f64,
     dmer_deg: f64,
 ) {
@@ -474,7 +509,7 @@ pub fn plot_mollweide_png(
 
             // Draw graticule using Cairo (anti-aliased) before border
             if show_graticule {
-                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo};
+                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
                 
                 let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
                 
@@ -483,10 +518,10 @@ pub fn plot_mollweide_png(
                     dpar_deg,
                     dmer_deg,
                     grat_coord_sys,
-                    CoordSystem::G,
+                    view.input_coord,
                 );
                 
-                // Render graticule on Cairo surface (anti-aliased)
+                // Render primary graticule on Cairo surface (anti-aliased)
                 render_graticule_cairo(
                     &graticule,
                     &border_cr,
@@ -495,6 +530,34 @@ pub fn plot_mollweide_png(
                     layout.map_w,
                     layout.map_h,
                 );
+
+                // Render secondary graticule overlay if specified
+                if let Some(overlay_sys) = grat_overlay {
+                    let overlay_graticule = render_graticule_mollweide_vectorized(
+                        &view,
+                        dpar_deg,
+                        dmer_deg,
+                        overlay_sys,
+                        view.input_coord,
+                    );
+                    
+                    // Convert RGBA color to normalized RGB for Cairo
+                    let r = overlay_color[0] as f64 / 255.0;
+                    let g = overlay_color[1] as f64 / 255.0;
+                    let b = overlay_color[2] as f64 / 255.0;
+                    
+                    render_graticule_cairo_with_color(
+                        &overlay_graticule,
+                        &border_cr,
+                        pad as f64,
+                        pad as f64,
+                        layout.map_w,
+                        layout.map_h,
+                        r,
+                        g,
+                        b,
+                    );
+                }
             }
 
             if draw_border {
@@ -648,9 +711,7 @@ pub fn plot_mollweide_png(
 
     // Render graticule if requested
     if show_graticule {
-        // Determine the input coordinate system from the view transform
-        // For now, default to Galactic if not available
-        let input_coord = CoordSystem::G;
+        // Get the input coordinate system from the view transform
         let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
 
         // Create a temporary RasterGrid wrapper for the mollweide map region
@@ -681,7 +742,7 @@ pub fn plot_mollweide_png(
             dpar_deg,
             dmer_deg,
             grat_coord_sys,
-            input_coord,
+            view.input_coord,
         );
 
         // Copy the grid back to the image
@@ -738,6 +799,9 @@ pub fn plot_mollweide_auto(
     view: &ViewTransform,
     show_graticule: bool,
     grat_coord: Option<CoordSystem>,
+    grat_overlay: Option<CoordSystem>,
+    overlay_color: Rgba<u8>,
+    _show_labels: bool,
     dpar_deg: f64,
     dmer_deg: f64,
 ) {
@@ -771,6 +835,9 @@ pub fn plot_mollweide_auto(
                 &view,
                 show_graticule,
                 grat_coord,
+                grat_overlay,
+                overlay_color,
+                _show_labels,
                 dpar_deg,
                 dmer_deg,
             );
@@ -797,6 +864,9 @@ pub fn plot_mollweide_auto(
                 &view,
                 show_graticule,
                 grat_coord,
+                grat_overlay,
+                overlay_color,
+                _show_labels,
                 dpar_deg,
                 dmer_deg,
             );
@@ -1079,11 +1149,13 @@ pub fn plot_gnomonic_png(
     view: &ViewTransform,
     lon_deg: f64,
     lat_deg: f64,
-    fov_arcmin: f64,
+    _fov_arcmin: f64,
     resolution_arcmin: f64,
     show_graticule: bool,
     grat_dlon: f64,
     grat_dlat: f64,
+    grat_overlay: Option<CoordSystem>,
+    _overlay_color: Rgba<u8>,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
@@ -1126,8 +1198,24 @@ pub fn plot_gnomonic_png(
 
     // Add graticule if requested
     if show_graticule {
-        use crate::gnomonic_graticule::render_gnomonic_local_grid;
+        use crate::gnomonic_graticule::{render_gnomonic_local_grid, render_gnomonic_sky_overlay};
+        
+        // Always render local graticule in black
         render_gnomonic_local_grid(&mut grid, &proj, grat_dlon, grat_dlat);
+        
+        // Render overlay if specified
+        if let Some(overlay_sys) = grat_overlay {
+            render_gnomonic_sky_overlay(
+                &mut grid,
+                &proj,
+                &view,
+                grat_dlon,
+                grat_dlat,
+                overlay_sys,
+                view.input_coord,
+                _overlay_color,
+            );
+        }
     }
 
     let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
@@ -1236,11 +1324,13 @@ pub fn plot_gnomonic_pdf(
     view: &ViewTransform,
     lon_deg: f64,
     lat_deg: f64,
-    fov_arcmin: f64,
+    _fov_arcmin: f64,
     resolution_arcmin: f64,
     show_graticule: bool,
     grat_dlon: f64,
     grat_dlat: f64,
+    grat_overlay: Option<CoordSystem>,
+    _overlay_color: Rgba<u8>,
 ) {
     use crate::gnomonic::GnomonicProjection;
 
@@ -1281,8 +1371,24 @@ pub fn plot_gnomonic_pdf(
 
     // Add graticule if requested
     if show_graticule {
-        use crate::gnomonic_graticule::render_gnomonic_local_grid;
+        use crate::gnomonic_graticule::{render_gnomonic_local_grid, render_gnomonic_sky_overlay};
+        
+        // Always render local graticule in black
         render_gnomonic_local_grid(&mut grid, &proj, grat_dlon, grat_dlat);
+        
+        // Render overlay if specified
+        if let Some(overlay_sys) = grat_overlay {
+            render_gnomonic_sky_overlay(
+                &mut grid,
+                &proj,
+                &view,
+                grat_dlon,
+                grat_dlat,
+                overlay_sys,
+                CoordSystem::G,  // Map input is Galactic by default
+                _overlay_color,
+            );
+        }
     }
 
     // Create image surface for the full layout (including colorbar)
@@ -1291,7 +1397,7 @@ pub fn plot_gnomonic_pdf(
     
     // Fill with white background
     {
-        let stride = img_surface.stride() as usize;
+        let _stride = img_surface.stride() as usize;
         let mut data = img_surface.data().expect("Failed to get surface data");
         
         for idx in (0..data.len()).step_by(4) {
@@ -1387,6 +1493,8 @@ pub fn plot_gnomonic_auto(
     show_graticule: bool,
     grat_dlon: f64,
     grat_dlat: f64,
+    grat_overlay: Option<CoordSystem>,
+    overlay_color: Rgba<u8>,
 ) {
     // Compute image width from field of view and resolution
     // This ensures the FOV parameter is actually respected
@@ -1425,6 +1533,8 @@ pub fn plot_gnomonic_auto(
                 show_graticule,
                 grat_dlon,
                 grat_dlat,
+                grat_overlay,
+                overlay_color,
             );
         }
         "pdf" => {
@@ -1453,6 +1563,8 @@ pub fn plot_gnomonic_auto(
                 show_graticule,
                 grat_dlon,
                 grat_dlat,
+                grat_overlay,
+                overlay_color,
             );
         }
         _ => {

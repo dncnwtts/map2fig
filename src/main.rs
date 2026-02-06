@@ -37,6 +37,23 @@ fn main() {
                 None
             };
 
+            let grat_overlay = if let Some(ref overlay_str) = args.grat_coord_overlay {
+                match map2fig::rotation::CoordSystem::from_str(overlay_str) {
+                    Ok(coord) => Some(coord),
+                    Err(e) => panic!("Invalid overlay coordinate system: {}", e),
+                }
+            } else {
+                None
+            };
+
+            let overlay_color = if args.grat_coord_overlay.is_some() {
+                use map2fig::cli::parse_hex_color;
+                parse_hex_color(&args.grat_overlay_color, 200)
+                    .expect("Invalid overlay color format (use #RRGGBB)")
+            } else {
+                image::Rgba([255, 255, 0, 0])
+            };
+
             plot_mollweide_auto(
                 &data.map,
                 args.width,
@@ -58,6 +75,9 @@ fn main() {
                 &view,
                 args.graticule,
                 grat_coord,
+                grat_overlay,
+                overlay_color,
+                args.grat_labels,
                 args.grat_par,
                 args.grat_mer,
             );
@@ -67,6 +87,23 @@ fn main() {
             let lat = args.lat.unwrap_or(0.0);
             let fov = args.fov;
             let res = args.res;
+
+            let grat_overlay = if let Some(ref overlay_str) = args.grat_coord_overlay {
+                match map2fig::rotation::CoordSystem::from_str(overlay_str) {
+                    Ok(coord) => Some(coord),
+                    Err(e) => panic!("Invalid overlay coordinate system: {}", e),
+                }
+            } else {
+                None
+            };
+
+            let overlay_color = if args.grat_coord_overlay.is_some() {
+                use map2fig::cli::parse_hex_color;
+                parse_hex_color(&args.grat_overlay_color, 200)
+                    .expect("Invalid overlay color format (use #RRGGBB)")
+            } else {
+                image::Rgba([255, 255, 0, 0])
+            };
             
             plot_gnomonic_auto(
                 &data.map,
@@ -93,6 +130,8 @@ fn main() {
                 args.local_graticule,
                 args.local_grat_dlon,
                 args.local_grat_dlat,
+                grat_overlay,
+                overlay_color,
             );
         }
         _ => {

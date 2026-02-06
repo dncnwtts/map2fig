@@ -129,7 +129,7 @@ pub struct Args {
     pub lat: Option<f64>,
 
     /// Field of view width in arcminutes (gnomonic projection only)
-    #[arg(long, alias = "gnom-width", default_value_t = 60.0)]
+    #[arg(long, alias = "gnom-width", default_value_t = 300.0)]
     pub fov: f64,
 
     /// Resolution in arcmin/pixel (gnomonic projection only)
@@ -152,13 +152,28 @@ pub struct Args {
     #[arg(long)]
     pub verbose: bool,
 
-    /// Enable graticule overlay
+    /// Enable graticule overlay (primary coordinate system for mollweide map)
     #[arg(long)]
     pub graticule: bool,
 
-    /// Graticule coordinate system: gal, eq, ecl
+    /// Primary graticule coordinate system: gal, eq, ecl
+    /// (defaults to the map's input coordinate system)
     #[arg(long)]
     pub grat_coord: Option<String>,
+
+    /// Secondary graticule coordinate system to overlay (e.g., show FK5 over Galactic)
+    /// Specify one of: gal, eq, ecl. If set with --grat-coord, both systems will be displayed.
+    #[arg(long)]
+    pub grat_coord_overlay: Option<String>,
+
+    /// Color for secondary graticule overlay (hex #RRGGBB format)
+    /// Default: yellow (#FFFF00) for good contrast on dark colormaps
+    #[arg(long, default_value = "#FFFF00")]
+    pub grat_overlay_color: String,
+
+    /// Show coordinate labels on graticule lines (shows lat/lon values)
+    #[arg(long)]
+    pub grat_labels: bool,
 
     /// Graticule spacing for parallels [degrees]
     #[arg(long, default_value_t = 15.0)]
@@ -219,6 +234,24 @@ pub fn resolve_input_color(input: Option<InputColor>, cmap: &Colormap, transpare
     }
 }
 
+/// Parse hex color string (e.g., "#FFFF00" or "FFFF00") to RGBA
+pub fn parse_hex_color(hex: &str, alpha: u8) -> Result<Rgba<u8>, String> {
+    let hex = hex.trim_start_matches('#');
+    
+    if hex.len() != 6 {
+        return Err(format!("Hex color must be 6 digits, got: {}", hex));
+    }
+    
+    let r = u8::from_str_radix(&hex[0..2], 16)
+        .map_err(|_| format!("Invalid hex color: {}", hex))?;
+    let g = u8::from_str_radix(&hex[2..4], 16)
+        .map_err(|_| format!("Invalid hex color: {}", hex))?;
+    let b = u8::from_str_radix(&hex[4..6], 16)
+        .map_err(|_| format!("Invalid hex color: {}", hex))?;
+    
+    Ok(Rgba([r, g, b, alpha]))
+}
+
 /// Resolved configuration for plotting
 pub struct PlotConfig {
     pub scale: Scale,
@@ -236,7 +269,7 @@ impl Args {
         let projection = self.projection.to_lowercase();
         
         // Check gnomonic-only args (--lon and --lat are shared, used for rotation in mollweide)
-        let gnom_only_provided = self.fov != 60.0
+        let gnom_only_provided = self.fov != 300.0
             || self.res != 1.0
             || self.local_graticule
             || self.local_grat_dlat != 1.0

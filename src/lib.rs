@@ -303,6 +303,9 @@ mod tests {
             &view,
             false,  // show_graticule
             None,   // grat_coord
+            None,   // grat_overlay
+            bad_color,  // overlay_color
+            false,  // _show_labels
             15.0,   // dpar_deg
             15.0,   // dmer_deg
         );
@@ -470,6 +473,9 @@ mod tests {
             &view,
             false,  // show_graticule
             None,   // grat_coord
+            None,   // grat_overlay
+            bad_color,  // overlay_color
+            false,  // _show_labels
             15.0,   // dpar_deg
             15.0,   // dmer_deg
         );
