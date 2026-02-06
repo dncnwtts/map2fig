@@ -47,9 +47,9 @@ fn main() {
             };
 
             let overlay_color = if args.grat_coord_overlay.is_some() {
-                use map2fig::cli::parse_hex_color;
-                parse_hex_color(&args.grat_overlay_color, 200)
-                    .expect("Invalid overlay color format (use #RRGGBB)")
+                use map2fig::cli::resolve_color_with_alpha;
+                resolve_color_with_alpha(&args.grat_overlay_color, 200)
+                    .expect("Invalid overlay color format")
             } else {
                 image::Rgba([255, 255, 0, 0])
             };
@@ -98,9 +98,9 @@ fn main() {
             };
 
             let overlay_color = if args.grat_coord_overlay.is_some() {
-                use map2fig::cli::parse_hex_color;
-                parse_hex_color(&args.grat_overlay_color, 200)
-                    .expect("Invalid overlay color format (use #RRGGBB)")
+                use map2fig::cli::resolve_color_with_alpha;
+                resolve_color_with_alpha(&args.grat_overlay_color, 200)
+                    .expect("Invalid overlay color format")
             } else {
                 image::Rgba([255, 255, 0, 0])
             };

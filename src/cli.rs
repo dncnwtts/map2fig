@@ -148,6 +148,10 @@ pub struct Args {
     #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0)]
     pub local_grat_dlon: f64,
 
+    /// Graticule line width in pixels (applies to both local and mollweide graticules)
+    #[arg(long, default_value_t = 1)]
+    pub grat_line_width: u32,
+
     /// Allows for more verbose output
     #[arg(long)]
     pub verbose: bool,
@@ -166,10 +170,10 @@ pub struct Args {
     #[arg(long)]
     pub grat_coord_overlay: Option<String>,
 
-    /// Color for secondary graticule overlay (hex #RRGGBB format)
+    /// Color for secondary graticule overlay (hex #RRGGBB or r,g,b,a format)
     /// Default: yellow (#FFFF00) for good contrast on dark colormaps
     #[arg(long, default_value = "#FFFF00")]
-    pub grat_overlay_color: String,
+    pub grat_overlay_color: InputColor,
 
     /// Show coordinate labels on graticule lines (shows lat/lon values)
     #[arg(long)]
@@ -184,7 +188,7 @@ pub struct Args {
     pub grat_mer: f64,
 }
 
-/// Bad color option
+/// Color option supporting hex (#RRGGBB), RGBA (r,g,b,a), or special keywords
 #[derive(Clone, Debug)]
 pub enum InputColor {
     Gray,
@@ -192,27 +196,36 @@ pub enum InputColor {
     Overflow,
     Transparent,
     Rgba(u8, u8, u8, u8),
+    Hex(String), // Store for later parsing with alpha
 }
 
 impl FromStr for InputColor {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.to_lowercase();
-        match s.as_str() {
+        let s_lower = s.to_lowercase();
+        match s_lower.as_str() {
             "under" => Ok(InputColor::Underflow),
             "over"  => Ok(InputColor::Overflow),
             "gray" | "grey" => Ok(InputColor::Gray),
+            "transparent" | "trans" => Ok(InputColor::Transparent),
             _ => {
+                // Try hex color first
+                if s.starts_with('#') || (s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit())) {
+                    return Ok(InputColor::Hex(s.to_string()));
+                }
+                
+                // Try RGBA format
                 let parts: Vec<_> = s.split(',').collect();
-                if parts.len() != 4 {
-                    return Err("Expected r,g,b,a".into());
+                if parts.len() == 4 {
+                    let vals: Result<Vec<u8>, _> = parts.iter().map(|x| x.trim().parse()).collect();
+                    return match vals {
+                        Ok(v) => Ok(InputColor::Rgba(v[0], v[1], v[2], v[3])),
+                        Err(_) => Err("RGBA values must be 0–255".into())
+                    };
                 }
-                let vals: Result<Vec<u8>, _> = parts.iter().map(|x| x.parse()).collect();
-                match vals {
-                    Ok(v) => Ok(InputColor::Rgba(v[0], v[1], v[2], v[3])),
-                    Err(_) => Err("RGBA values must be 0–255".into())
-                }
+                
+                Err(format!("Invalid color format: '{}'. Expected hex (#RRGGBB), RGBA (r,g,b,a), or keyword (gray/transparent)", s))
             }
         }
     }
@@ -231,6 +244,15 @@ pub fn resolve_input_color(input: Option<InputColor>, cmap: &Colormap, transpare
         InputColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
         InputColor::Transparent => Rgba([255,255,255,0]),
         InputColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
+        InputColor::Hex(hex_str) => {
+            match parse_hex_color(&hex_str, if transparent { 0 } else { 255 }) {
+                Ok(color) => color,
+                Err(e) => {
+                    eprintln!("Warning: Failed to parse hex color '{}': {}, using gray", hex_str, e);
+                    Rgba([128, 128, 128, if transparent { 0 } else { 255 }])
+                }
+            }
+        }
     }
 }
 
@@ -250,6 +272,19 @@ pub fn parse_hex_color(hex: &str, alpha: u8) -> Result<Rgba<u8>, String> {
         .map_err(|_| format!("Invalid hex color: {}", hex))?;
     
     Ok(Rgba([r, g, b, alpha]))
+}
+
+/// Resolve an InputColor to RGBA with specified alpha value
+/// This is useful for overlay colors where you want specific transparency
+pub fn resolve_color_with_alpha(color: &InputColor, alpha: u8) -> Result<Rgba<u8>, String> {
+    match color {
+        InputColor::Hex(hex_str) => parse_hex_color(hex_str, alpha),
+        InputColor::Rgba(r, g, b, _) => Ok(Rgba([*r, *g, *b, alpha])), // Override alpha
+        InputColor::Gray => Ok(Rgba([128, 128, 128, alpha])),
+        InputColor::Transparent => Ok(Rgba([255, 255, 255, 0])), // Transparent is always fully transparent
+        InputColor::Underflow => Ok(Rgba([100, 100, 100, alpha])), // Fallback colors
+        InputColor::Overflow => Ok(Rgba([200, 200, 200, alpha])),
+    }
 }
 
 /// Resolved configuration for plotting

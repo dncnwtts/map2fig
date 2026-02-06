@@ -122,6 +122,9 @@ fn test_plot_smoke() {
         &view,
         false,  // show_graticule
         None,   // grat_coord
+        None,   // grat_overlay
+        image::Rgba([255, 255, 0, 200]),  // overlay_color
+        false,  // show_labels
         15.0,   // dpar_deg
         15.0,   // dmer_deg
     );
