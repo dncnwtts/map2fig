@@ -4,16 +4,14 @@ use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient, ap
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
 use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale, HistogramRange, unsafe_float_cmp};
 use crate::layout::{compute_mollweide_layout, compute_gnomonic_layout, MollweideLayout};
-use crate::healpix::HealpixMeta;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
 use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
 use crate::healpix::{is_seen, sample_healpix};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
-use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
-use crate::rotation::{ViewTransform, CoordSystem};
+use crate::rotation::CoordSystem;
 use crate::params::{MollweideParams, GnomonicParams};
 
 pub struct MollweideScale {
@@ -754,6 +752,86 @@ pub fn plot_mollweide_png(params: MollweideParams) {
         }
     }
 
+    // Draw units label below colorbar
+    if show_colorbar {
+        if let Some(units_str) = units {
+            let scale = layout.width / 1200.0;
+            let units_y = (cb_layout.tick_label_pad + 30.0 * scale) as i32;
+            
+            if latex_rendering {
+                // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
+                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
+                // Try to render LaTeX and composite onto image
+                if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
+                    // Composite the rendered LaTeX PNG onto the main image
+                    let latex_img = image::load_from_memory(&rendered.image_data)
+                        .expect("Failed to load rendered LaTeX");
+                    let latex_rgba = latex_img.to_rgba8();
+                    
+                    // Center horizontally
+                    let x_offset = (layout.cbar_pad + layout.cbar_w / 2.0 - latex_rgba.width() as f64 / 2.0) as i32;
+                    
+                    // Composite with alpha blending
+                    for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
+                        let img_x = x_offset + lx as i32;
+                        let img_y = units_y + ly as i32;
+                        
+                        if img_x >= 0 && img_x < layout.width as i32 && 
+                           img_y >= 0 && img_y < layout.height as i32 {
+                            let alpha = pixel[3] as f32 / 255.0;
+                            if alpha > 0.01 {
+                                let existing = img.get_pixel(img_x as u32, img_y as u32);
+                                let blended = Rgba([
+                                    ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
+                                    ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
+                                    ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                    255,
+                                ]);
+                                img.put_pixel(img_x as u32, img_y as u32, blended);
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to stripped LaTeX text if rendering fails
+                    let units_label = units_str
+                        .strip_prefix('$').unwrap_or(units_str)
+                        .strip_suffix('$').unwrap_or(units_str);
+                    
+                    let text_width_est = (units_label.len() as f32 * 
+                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let center_x = (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                    
+                    draw_text_mut(
+                        &mut img,
+                        Rgba([0, 0, 0, 255]),
+                        center_x,
+                        units_y,
+                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        &font,
+                        units_label,
+                    );
+                }
+            } else {
+                // Non-LaTeX: render as plain text
+                if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
+                    let text_width_est = (units_label.len() as f32 * 
+                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let center_x = (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                    
+                    draw_text_mut(
+                        &mut img,
+                        Rgba([0, 0, 0, 255]),
+                        center_x,
+                        units_y,
+                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        &font,
+                        &units_label,
+                    );
+                }
+            }
+        }
+    }
+
     img.save(filename).expect("Failed to save PNG");
 }
 
@@ -1204,6 +1282,84 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 &font,
                 &label,
             );
+        }
+
+        // Draw units label below colorbar
+        if let Some(units_str) = units {
+            let scale = layout.width / 1200.0;
+            let units_y = (cb_layout.tick_label_pad + 25.0 * scale) as i32;
+            
+            if latex_rendering {
+                // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
+                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
+                // Try to render LaTeX and composite onto image
+                if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
+                    // Composite the rendered LaTeX PNG onto the main image
+                    let latex_img = image::load_from_memory(&rendered.image_data)
+                        .expect("Failed to load rendered LaTeX");
+                    let latex_rgba = latex_img.to_rgba8();
+                    
+                    // Center horizontally
+                    let x_offset = (layout.cbar_x + layout.cbar_w / 2.0 - latex_rgba.width() as f64 / 2.0) as i32;
+                    
+                    // Composite with alpha blending
+                    for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
+                        let img_x = x_offset + lx as i32;
+                        let img_y = units_y + ly as i32;
+                        
+                        if img_x >= 0 && img_x < layout.width as i32 && 
+                           img_y >= 0 && img_y < layout.height as i32 {
+                            let alpha = pixel[3] as f32 / 255.0;
+                            if alpha > 0.01 {
+                                let existing = img.get_pixel(img_x as u32, img_y as u32);
+                                let blended = Rgba([
+                                    ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
+                                    ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
+                                    ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                    255,
+                                ]);
+                                img.put_pixel(img_x as u32, img_y as u32, blended);
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to stripped LaTeX text if rendering fails
+                    let units_label = units_str
+                        .strip_prefix('$').unwrap_or(units_str)
+                        .strip_suffix('$').unwrap_or(units_str);
+                    
+                    let text_width_est = (units_label.len() as f32 * 
+                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                    
+                    draw_text_mut(
+                        &mut img,
+                        Rgba([0, 0, 0, 255]),
+                        center_x,
+                        units_y,
+                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        &font,
+                        units_label,
+                    );
+                }
+            } else {
+                // Non-LaTeX: render as plain text
+                if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
+                    let text_width_est = (units_label.len() as f32 * 
+                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                    
+                    draw_text_mut(
+                        &mut img,
+                        Rgba([0, 0, 0, 255]),
+                        center_x,
+                        units_y,
+                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        &font,
+                        &units_label,
+                    );
+                }
+            }
         }
     }
 

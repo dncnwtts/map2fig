@@ -14,6 +14,7 @@ pub mod cli;
 pub mod pipeline;
 pub mod constants;
 pub mod latex;
+pub mod latex_render;
 pub mod rotation;
 pub mod graticule;
 pub mod params;

@@ -12,6 +12,9 @@ fitsrs = "0.4.1"
 rand = "0.8"
 clap = { version = "4", features = ["derive"] }
 cairo-rs = { version = "0.19", features = ["pdf"] }
+sha2 = "0.10"
+tempfile = "3"
+directories = "5.0"
 
 [features]
 debug_overlay = []

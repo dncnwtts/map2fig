@@ -1,5 +1,5 @@
 /// Default output width in pixels
-pub const DEFAULT_WIDTH: u32 = 1200;
+pub const DEFAULT_WIDTH: u32 = 1600;
 
 /// NSIDE threshold above which maps are automatically downgraded for performance
 pub const HIGH_RES_NSIDE_THRESHOLD: i64 = 1024;

@@ -95,7 +95,10 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
 
 #[inline]
 pub fn is_seen(v: f64) -> bool {
-    v.is_finite() && v > HPX_UNSEEN
+    // Use -1e30 threshold instead of exact HPX_UNSEEN constant to account for
+    // floating-point precision variations in FITS files (e.g., CLASS files use
+    // -1.637499996306027e+30 which is slightly different from -1.6375e30)
+    v.is_finite() && v > -1e30
 }
 
 #[inline]
@@ -622,6 +625,47 @@ fn test_ang_pix_ang_consistency() {
         let d = ang_dist(theta, phi, pix2ang_ring(nside, pix2).0, pix2ang_ring(nside, pix2).1);
         assert!(d < EPSILON, "Too far: d={}", d);
     }
+}
+
+#[test]
+fn test_is_seen_filters_exact_unseen_value() {
+    // Test that exact UNSEEN sentinel is filtered
+    assert!(!is_seen(HPX_UNSEEN), "Exact HPX_UNSEEN should be filtered");
+}
+
+#[test]
+fn test_is_seen_filters_fits_class_unseen_value() {
+    // CLASS FITS files use a slightly different floating-point representation
+    // of the UNSEEN value: -1.637499996306027e+30 vs -1.6375e30
+    // Our filter should catch both due to using -1e30 threshold
+    let class_unseen = -1.637499996306027e30;
+    assert!(!is_seen(class_unseen), "CLASS FITS UNSEEN value should be filtered");
+}
+
+#[test]
+fn test_is_seen_filters_very_negative_values() {
+    // Any value much more negative than -1e30 should be filtered
+    assert!(!is_seen(-2.0e30), "Very negative values should be filtered");
+    assert!(!is_seen(-1.5e30), "Values near UNSEEN threshold should be filtered");
+    assert!(!is_seen(f64::NEG_INFINITY), "Negative infinity should be filtered (non-finite)");
+}
+
+#[test]
+fn test_is_seen_passes_valid_data() {
+    // Valid scientific data values should NOT be filtered
+    assert!(is_seen(1.234e-5), "Positive scientific value should pass");
+    assert!(is_seen(-1.0e-6), "Small negative value should pass");
+    assert!(is_seen(0.0), "Zero should pass");
+    assert!(is_seen(1.0), "Positive value should pass");
+    assert!(is_seen(-0.5e30), "Large negative value > -1e30 should pass");
+}
+
+#[test]
+fn test_is_seen_filters_non_finite() {
+    // Non-finite values should be filtered regardless of magnitude
+    assert!(!is_seen(f64::NAN), "NaN should be filtered");
+    assert!(!is_seen(f64::INFINITY), "Infinity should be filtered");
+    assert!(!is_seen(f64::NEG_INFINITY), "Negative infinity should be filtered");
 }
 
 

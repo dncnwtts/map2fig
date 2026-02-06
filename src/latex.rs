@@ -9,6 +9,10 @@ use std::collections::HashMap;
 pub fn latex_to_unicode(text: &str) -> String {
     let mut result = text.to_string();
 
+    // Handle text formatting commands: \mathrm{...}, \mathbf{...}, etc.
+    // These are stripped or simplified - we just keep the content
+    result = handle_text_formatting(&result);
+
     // Greek letters (lowercase)
     let greek_lower: HashMap<&str, char> = [
         ("\\alpha", 'α'), ("\\beta", 'β'), ("\\gamma", 'γ'), ("\\delta", 'δ'),
@@ -80,6 +84,35 @@ pub fn latex_to_unicode(text: &str) -> String {
     result
 }
 
+/// Handle LaTeX text formatting commands like \mathrm{...}, \mathbf{...}
+/// Currently strips the formatting and keeps only the content
+fn handle_text_formatting(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // List of formatting commands to strip
+    let commands = vec![
+        "\\mathrm", "\\mathbf", "\\mathit", "\\mathtt", "\\mathsf",
+        "\\mathnormal", "\\mathcal", "\\mathbb", "\\mathfrak", "\\mathscr",
+        "\\text", "\\rm", "\\bf", "\\it", "\\tt",
+    ];
+
+    for cmd in commands {
+        // Look for \mathrm{...} pattern and strip the command, keeping contents
+        let pattern = format!("{}{{", cmd);
+        while let Some(start) = result.find(&pattern) {
+            if let Some(end) = result[start..].find('}') {
+                let end_pos = start + end;
+                let content = result[start + pattern.len()..end_pos].to_string();
+                result.replace_range(start..=end_pos, &content);
+            } else {
+                break; // malformed, stop processing
+            }
+        }
+    }
+
+    result
+}
+
 /// Convert LaTeX superscript notation to Unicode superscripts
 fn handle_superscripts(text: &str) -> String {
     let mut result = text.to_string();
@@ -141,7 +174,9 @@ fn handle_subscripts(text: &str) -> String {
             let subscript_content = &result[start + 2..end_pos];
             let mut unicode_sub = String::new();
 
-            for ch in subscript_content.chars() {
+            // Convert subscript content to lowercase for better Unicode support
+            // (Unicode has more complete lowercase subscript coverage)
+            for ch in subscript_content.to_lowercase().chars() {
                 if let Some(sub_ch) = subscript_map.get(&ch) {
                     unicode_sub.push(*sub_ch);
                 } else {
@@ -189,5 +224,22 @@ mod tests {
     fn test_mixed_expressions() {
         assert_eq!(latex_to_unicode("\\mu m"), "μm");
         assert_eq!(latex_to_unicode("10^{-6} \\mu m"), "10⁻⁶ μm");
+    }
+
+    #[test]
+    fn test_text_formatting() {
+        // \mathrm should strip and keep content
+        assert_eq!(latex_to_unicode("\\mathrm{K}"), "K");
+        assert_eq!(latex_to_unicode("\\mathrm{CMB}"), "CMB");
+        
+        // Combined with greek letters
+        assert_eq!(latex_to_unicode("\\mathrm{\\mu K}"), "μ K");
+        
+        // Subscripts with uppercase letters get converted to lowercase
+        // (Unicode has better coverage for lowercase subscripts)
+        let result = latex_to_unicode("K_{CMB}");
+        assert!(result.contains("K")); // Base stays as K
+        // CMB is converted to lowercase then subscripted
+        assert!(!result.contains("_{"));  // The _{...} syntax should be gone
     }
 }

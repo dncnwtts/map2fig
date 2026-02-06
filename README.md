@@ -15,10 +15,28 @@ A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollwe
 ## Installation
 
 ### Requirements
-- Rust 1.70+ (uses 2024 edition)
-- Cairo development libraries (for PDF output)
+- **Rust 1.70+** (uses 2024 edition) — [Install from rustup.rs](https://rustup.rs)
+- **LaTeX/pdflatex** (for equation rendering) — *Optional but recommended*
+  - Ubuntu/Debian: `sudo apt-get install texlive-latex-base texlive-latex-extra`
+  - macOS: `brew install basictex`
+  - Fedora: `sudo dnf install texlive-latex`
+- **Tectonic** (for superior LaTeX rendering) — *Optional; pdflatex used as fallback*
+- **Cairo development libraries** (for PDF output)
 
-### Build
+### Quick Install (Recommended)
+```bash
+git clone <repository>
+cd healpix_plotter
+./install.sh
+```
+
+The `install.sh` script will:
+1. Verify Rust is installed
+2. Check for LaTeX (pdflatex) and guide installation if needed
+3. Offer to install **tectonic** for improved LaTeX rendering
+4. Build the release binary
+
+### Manual Build
 ```bash
 git clone <repository>
 cd healpix_plotter
@@ -26,6 +44,21 @@ cargo build --release
 ```
 
 The compiled binary will be at `target/release/map2fig`.
+
+### Enabling Tectonic (Optional)
+For superior LaTeX rendering with better spacing control:
+```bash
+cargo install tectonic
+```
+
+Once installed, tectonic will be automatically used for all LaTeX rendering. If tectonic is not available, the system pdflatex will be used as a fallback.
+
+**Note**: Tectonic provides more reliable PDF generation with self-contained compilation. The build script (`build.rs`) checks for tectonic availability and provides guidance during the build process.
+
+**⚠️ Build Issues?** See [TECTONIC_INSTALL.md](TECTONIC_INSTALL.md) for detailed troubleshooting, including:
+- Missing harfbuzz development headers (common on Linux)
+- Platform-specific dependency installation
+- Fallback behavior if tectonic doesn't work
 
 ## Basic Usage
 
@@ -353,7 +386,40 @@ Symlog creates a linear region in the middle (±linthresh) and logarithmic scali
 
 ---
 
-### 9. Coordinate Rotation: Ecliptic View
+### 9. LaTeX Units & Mathematical Notation in Colorbar
+
+**Use Case**: Publication-quality figures with proper mathematical symbols and formatting in labels
+
+```bash
+./map2fig -f npipe_nodip.fits \
+  --latex \
+  --units '$\mathrm{\mu K_{CMB}}$' \
+  --cmap viridis \
+  -o cmb_with_units.pdf
+```
+
+**Parameters**:
+- `--latex`: Enable LaTeX rendering for units and labels
+- `--units '$\mathrm{\mu K_{CMB}}$'`: Display units with proper formatting
+  - `\mathrm{...}`: Roman (upright) text font
+  - `\mu`: Greek letter μ (mu)
+  - `_{CMB}`: Subscript notation
+- `--cmap viridis`: High-quality perceptually uniform colormap
+
+**Supported LaTeX Features**:
+- Greek letters: `\mu`, `\sigma`, `\pi`, `\omega`, etc.
+- Superscripts: `10^{-6}`, `x^{2}`
+- Subscripts: `K_{CMB}`, `x_{1}`
+- Text formatting: `\mathrm{...}`, `\mathbf{...}`, `\text{...}`
+- Mathematical operators: `\pm`, `\times`, `\leq`, `\infty`, etc.
+
+**Output**: Generates `cmb_with_units.pdf`—full-sky map with colorbar showing properly formatted units μK_{CMB} using Unicode mathematical symbols.
+
+![Example 9: LaTeX units in colorbar](examples/outputs/example9_latex_units.pdf)
+
+---
+
+### 10. Coordinate Rotation: Ecliptic View
 
 **Use Case**: Transform map to show ecliptic coordinates (e.g., for zodiacal light studies)
 
@@ -371,7 +437,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 
 ---
 
-### 10. Negative/Invalid Data Handling
+### 11. Negative/Invalid Data Handling
 
 **Use Case**: Maps with masked regions (e.g., point source masks, bad pixels)
 
@@ -392,7 +458,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 
 ---
 
-### 11. Batch Processing Multiple FITS Files
+### 12. Batch Processing Multiple FITS Files
 
 **Use Case**: Generate plots for all frequency bands of a survey
 
@@ -418,7 +484,7 @@ Generate consistent publication figures for all data products.
 
 ---
 
-### 12. Asymmetric Scaling for Bipolar Data
+### 13. Asymmetric Scaling for Bipolar Data
 
 **Use Case**: CMB temperature maps or velocity fields (symmetric around zero)
 
@@ -491,8 +557,8 @@ Generate consistent publication figures for all data products.
 | `--transparent` | Transparent background |
 | `--bg-color` | Background color |
 | `--bad-color` | Color for masked/invalid pixels |
-| `--units` | Colorbar units string |
-| `--latex` | Enable LaTeX rendering for labels |
+| `--units` | Colorbar units string (LaTeX supported with `--latex`) |
+| `--latex` | Enable LaTeX rendering for colorbar labels and units |
 
 ### Coordinates
 | Option | Description | Values |
@@ -524,6 +590,81 @@ Generate consistent publication figures for all data products.
 - PNG for web/presentations: `-o map.png`
 - PDF for publication: `-o map.pdf` (scalable)
 - Higher pixel width for detail: `-w 2400` (default 1200)
+
+### LaTeX Support for Units & Labels
+
+When using the `--latex` flag, colorbar units and labels are rendered using your system's **LaTeX/TeX installation** for publication-quality mathematical notation.
+
+#### How It Works
+1. **LaTeX Compilation**: LaTeX strings are compiled to PDF using `pdflatex`
+2. **Vector Conversion**: PDFs are converted to SVG (vector format) using `pdf2svg` or `convert`
+3. **Rasterization**: SVG/PDF content is rendered to PNG for embedding in the final PDF
+4. **Caching**: Rendered images are cached in `~/.cache/map2fig/latex/` to avoid re-rendering
+5. **Fallback Chain**: SVG → High-DPI PNG (300 DPI) → Standard PNG (150 DPI) → Unicode
+
+#### Requirements
+For full LaTeX rendering, you need:
+- `pdflatex` (usually part of TeX Live or MacTeX)
+- **Either** `pdf2svg` **or** ImageMagick `convert` for vector PDF conversion
+- `pdftoppm` (from poppler-utils) as final fallback
+
+Install with:
+```bash
+# Ubuntu/Debian
+sudo apt-get install texlive-latex-base poppler-utils pdf2svg imagemagick
+
+# macOS (Homebrew)
+brew install basictex poppler pdf2svg imagemagick
+
+# Or TeX Live directly + system package manager
+```
+
+#### Rendering Pipeline
+```
+LaTeX → pdflatex → PDF → [pdf2svg | convert] → SVG/PNG → Cairo PDF
+```
+
+The vector-to-raster conversion preserves mathematical quality through careful scaling and high-DPI rendering.
+
+#### Supported LaTeX Features
+- **Full math mode**: All LaTeX mathematical environments and packages
+- **Greek letters**: `\mu`, `\sigma`, `\pi`, `\omega`, `\Gamma`, etc.
+- **Superscripts/Subscripts**: `10^{-6}`, `K_{CMB}`, `T_{\mathrm{eff}}`
+- **Text formatting**: `\mathrm{text}`, `\mathbf{bold}`, `\mathit{italic}`, `\text{...}`
+- **Mathematical symbols**: `\pm`, `\times`, `\leq`, `\approx`, `\propto`, `\infty`
+- **Advanced packages**: Supports `amsmath`, `amssymb`, `mathtools`
+
+#### Examples
+```bash
+# Perfect subscripts and text formatting (uses SVG pipeline if available)
+./map2fig -f map.fits --latex --units '$K_{\mathrm{CMB}}$' -o map.pdf
+
+# Scientific notation with Greek letters
+./map2fig -f map.fits --latex --units '$10^{-6}\,\mu\mathrm{Jy}$' -o map.pdf
+
+# Temperature with subscript and units
+./map2fig -f map.fits --latex --units '$T_{\mathrm{eff}} = 5800\,\mathrm{K}$' -o map.pdf
+
+# Complex expressions
+./map2fig -f map.fits --latex --units '$\sigma = 10^{-3}\,K_{\mathrm{CMB}}$' -o map.pdf
+```
+
+**Tip**: Wrap LaTeX strings in single quotes `'...'` in bash to prevent shell interpretation:
+```bash
+# ✓ Correct (single quotes)
+./map2fig -f map.fits --latex --units '$K_{CMB}$' -o map.pdf
+
+# ✗ Wrong (double quotes will expand $ and \)
+./map2fig -f map.fits --latex --units "$K_{CMB}$" -o map.pdf
+```
+
+#### Performance
+- **First render**: Takes ~1-2 seconds per unique LaTeX string (depends on system and PDF conversion tool)
+- **Subsequent renders**: Instant (cached from `~/.cache/map2fig/latex/`)
+- **Runtime impact**: Negligible for typical plots with 1-3 units labels
+
+#### Example Output
+See [example10_latex_rendering.pdf](examples/outputs/example10_latex_rendering.pdf) for publication-quality rendered units.
 
 ### Coordinate Systems
 - **Galactic (gal)**: Standard for CMB/ISM science

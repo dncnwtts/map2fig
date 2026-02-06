@@ -40,17 +40,21 @@ pub fn compute_mollweide_layout(
     width: f64,
     show_colorbar: bool,
 ) -> (MollweideLayout, ColorbarLayout) {
-    let outer_pad = 24.0;      // margin around everything
-    let cbar_pad  = 16.0;      // space between map and colorbar
-    let label_pad = 14.0;      // space for text descenders
+    // Scale all dimensions with width (reference: 1200px)
+    let scale = width / 1200.0;
+    
+    let outer_pad = 24.0 * scale;      // margin around everything
+    let cbar_pad  = 16.0 * scale;      // space between map and colorbar
+    let label_pad = 14.0 * scale;      // space for text descenders
+    let units_pad = if show_colorbar { -4.0 * scale } else { 0.0 };  // negative to remove bottom whitespace
 
-    let border_width_px = (width * 0.0025).max(2.0);
-    let map_pad = border_width_px.ceil() + 2.0;
+    let border_width_px = (width * 0.0025).max(2.0 * scale);
+    let map_pad = border_width_px.ceil() + 2.0 * scale;
 
     let map_w = width - 2.0 * outer_pad;
     let map_h = map_w / 2.0;
     let cbar_h = if show_colorbar { map_h / 20.0} else { 0.0 };
-    let label_h = if show_colorbar { 18.0 } else { 0.0 };
+    let label_h = if show_colorbar { 70.0 * scale } else { 0.0 };
 
     let height =
         outer_pad +
@@ -59,6 +63,7 @@ pub fn compute_mollweide_layout(
         cbar_pad + 
         cbar_h +
         label_h +
+        units_pad +
         outer_pad;
 
     let map_x = outer_pad;
@@ -84,12 +89,16 @@ pub fn compute_mollweide_layout(
         cbar_pad,
         border_width_px,
     },
-    compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad)
+    compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad, width)
     )
 }
 
 
-fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pad:f64) -> ColorbarLayout {
+fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pad:f64, width: f64) -> ColorbarLayout {
+    // Scale tick font size using actual image width (base 12pt at 1200px reference width)
+    let scale = width / 1200.0;
+    let tick_font_size = (12.0 * scale).max(7.0).min(24.0);
+    
     ColorbarLayout {
         x: cbar_x,
         y: cbar_y,
@@ -102,7 +111,7 @@ fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pa
         major_tick_width: (cbar_w * 0.002).round().max(1.0),
         minor_tick_width: (cbar_w * 0.001).round().max(1.0),
 
-        tick_font_size: (cbar_h * 0.3).max(10.0),
+        tick_font_size,
         tick_label_pad: cbar_h + cbar_y + label_pad,
     }
 }
@@ -112,17 +121,21 @@ pub fn compute_gnomonic_layout(
     map_size: f64,
     show_colorbar: bool,
 ) -> (MollweideLayout, ColorbarLayout) {
-    let outer_pad = 24.0;      // margin around everything
-    let cbar_pad  = 8.0;       // minimal gap between map and colorbar
-    let label_pad = 14.0;      // space for text descenders
+    // Scale all dimensions with map size (reference: 1200px)
+    let scale = map_size / 1200.0;
+    
+    let outer_pad = 24.0 * scale;      // margin around everything
+    let cbar_pad  = 8.0 * scale;       // minimal gap between map and colorbar
+    let label_pad = 14.0 * scale;      // space for text descenders
+    let units_pad = if show_colorbar { -4.0 * scale } else { 0.0 };  // negative to remove bottom whitespace
 
-    let border_width_px = (map_size * 0.0025).max(2.0);
-    let map_pad = border_width_px.ceil() + 2.0;
+    let border_width_px = (map_size * 0.0025).max(2.0 * scale);
+    let map_pad = border_width_px.ceil() + 2.0 * scale;
 
     let map_w = map_size;
     let map_h = map_size;
     let cbar_h = if show_colorbar { map_h / 25.0 } else { 0.0 };
-    let label_h = if show_colorbar { 18.0 } else { 0.0 };
+    let label_h = if show_colorbar { 70.0 * scale } else { 0.0 };
 
     let height =
         outer_pad +
@@ -130,6 +143,7 @@ pub fn compute_gnomonic_layout(
         cbar_pad +
         cbar_h +
         label_h +
+        units_pad +
         outer_pad;
 
     let map_x = outer_pad;
@@ -156,6 +170,6 @@ pub fn compute_gnomonic_layout(
         cbar_pad,
         border_width_px,
     },
-    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad)
+    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad, width)
     )
 }
