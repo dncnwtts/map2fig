@@ -1,4 +1,4 @@
-use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HealpixOrdering,HPX_UNSEEN};
+use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HealpixOrdering,HPX_UNSEEN, is_seen};
 use crate::fits::read_healpix_column;
 use crate::generate_index_map;
 use crate::rotation::CoordSystem;
@@ -70,4 +70,186 @@ pub fn load_and_process_data(
     };
 
     Ok(ProcessedData { map: final_map, meta: final_meta })
+}
+
+/// Subtract monopole (and optionally dipole) from a HEALPix map.
+///
+/// Uses least-squares fitting to compute the monopole and dipole components,
+/// then subtracts them from the map. This follows the algorithm used in map_editor.
+///
+/// # Arguments
+/// * `map`: Mutable reference to the map data
+/// * `meta`: Metadata about the map
+/// * `remove_monopole`: If true, remove the monopole
+/// * `remove_dipole`: If true, remove the dipole (monopole is always included)
+/// * `mask`: Optional mask (1.0 = good pixel, 0.0 = bad). If None, all UNSEEN pixels are masked.
+/// * `verbose`: If true, print dipole parameters to stdout
+///
+/// The fit is performed only on pixels where mask == 1.0 (or not UNSEEN if no mask provided).
+#[allow(clippy::collapsible_if, clippy::needless_range_loop)]
+pub fn subtract_mono_dipole(
+    map: &mut [f64],
+    meta: HealpixMeta,
+    remove_monopole: bool,
+    remove_dipole: bool,
+    mask: Option<&[f64]>,
+    verbose: bool,
+) {
+    if !remove_monopole && !remove_dipole {
+        return;
+    }
+
+    let npix = map.len();
+    let nside = meta.nside;
+
+    // Build harmonics: [1.0, x, y, z] for each pixel
+    // where (x, y, z) is the unit vector in Cartesian coordinates
+    let mut harmonics = vec![[0.0; 4]; npix];
+    let mut valid_count = 0;
+
+    for i in 0..npix {
+        // Check if pixel is valid (not UNSEEN and not masked out)
+        let is_valid = if let Some(m) = mask {
+            is_seen(map[i]) && m[i] > 0.5
+        } else {
+            is_seen(map[i])
+        };
+
+        if is_valid {
+            // Get pixel spherical coordinates
+            let (theta, phi) = crate::healpix::pix2ang_ring(nside, i as i64);
+            // Convert to Cartesian unit vector
+            let vec = crate::rotation::sph_to_vec(theta, phi);
+
+            harmonics[i][0] = 1.0;
+            harmonics[i][1] = vec[0];
+            harmonics[i][2] = vec[1];
+            harmonics[i][3] = vec[2];
+            valid_count += 1;
+        }
+    }
+
+    if valid_count == 0 {
+        if verbose {
+            eprintln!("Warning: No valid pixels found for dipole/monopole fit");
+        }
+        return;
+    }
+
+    // Build the normal equations: A * x = b
+    // A[j][k] = sum of harmonics[i][j] * harmonics[i][k] for all valid pixels
+    // b[j] = sum of map[i] * harmonics[i][j] for all valid pixels
+    #[allow(non_snake_case)]
+    let mut A = [[0.0; 4]; 4];
+    let mut b = [0.0; 4];
+
+    for i in 0..npix {
+        if !is_seen(map[i]) {
+            continue;
+        }
+        if let Some(m) = mask {
+            if m[i] <= 0.5 {
+                continue;
+            }
+        }
+
+        for j in 0..4 {
+            b[j] += map[i] * harmonics[i][j];
+            for k in j..4 {
+                A[j][k] += harmonics[i][j] * harmonics[i][k];
+            }
+        }
+    }
+
+    // Symmetrize the matrix
+    for j in 0..4 {
+        for k in (j + 1)..4 {
+            A[k][j] = A[j][k];
+        }
+    }
+
+    // Solve the 4x4 linear system using Gaussian elimination with partial pivoting
+    let multipoles = solve_4x4(A, b);
+
+    if verbose {
+        println!(
+            "Monopole/Dipole fit: m={:.6e}, dx={:.6e}, dy={:.6e}, dz={:.6e}",
+            multipoles[0], multipoles[1], multipoles[2], multipoles[3]
+        );
+
+        // Compute dipole amplitude and direction
+        let dipole_amp = (multipoles[1] * multipoles[1]
+            + multipoles[2] * multipoles[2]
+            + multipoles[3] * multipoles[3])
+        .sqrt();
+        if dipole_amp > 0.0 {
+            let lat = (multipoles[3] / dipole_amp).asin().to_degrees();
+            let lon = multipoles[2].atan2(multipoles[1]).to_degrees();
+            let lon = if lon < 0.0 { lon + 360.0 } else { lon };
+            println!(
+                "Dipole: Amplitude={:.6e}, Longitude={:.2}°, Latitude={:.2}°",
+                dipole_amp, lon, lat
+            );
+        }
+    }
+
+    // Subtract the fit from the map
+    let num_terms = if remove_dipole { 4 } else { 1 };
+
+    for i in 0..npix {
+        if is_seen(map[i]) {
+            for j in 0..num_terms {
+                map[i] -= multipoles[j] * harmonics[i][j];
+            }
+        }
+    }
+}
+
+/// Solve a 4x4 linear system Ax = b using Gaussian elimination with partial pivoting.
+#[allow(non_snake_case, clippy::needless_range_loop)]
+fn solve_4x4(mut A: [[f64; 4]; 4], mut b: [f64; 4]) -> [f64; 4] {
+    // Forward elimination with partial pivoting
+    for col in 0..4 {
+        // Find pivot
+        let mut pivot_row = col;
+        for row in (col + 1)..4 {
+            if A[row][col].abs() > A[pivot_row][col].abs() {
+                pivot_row = row;
+            }
+        }
+
+        // Swap rows
+        if pivot_row != col {
+            for j in col..4 {
+                (A[col][j], A[pivot_row][j]) = (A[pivot_row][j], A[col][j]);
+            }
+            b.swap(col, pivot_row);
+        }
+
+        // Check for singularity
+        if A[col][col].abs() < 1e-15 {
+            return [0.0; 4];
+        }
+
+        // Eliminate column
+        for row in (col + 1)..4 {
+            let factor = A[row][col] / A[col][col];
+            for j in (col + 1)..4 {
+                A[row][j] -= factor * A[col][j];
+            }
+            b[row] -= factor * b[col];
+        }
+    }
+
+    // Back substitution
+    let mut x = [0.0; 4];
+    for i in (0..4).rev() {
+        x[i] = b[i];
+        for j in (i + 1)..4 {
+            x[i] -= A[i][j] * x[j];
+        }
+        x[i] /= A[i][i];
+    }
+
+    x
 }

@@ -280,7 +280,6 @@ This creates:
 ```bash
 ./map2fig -f npipe_nodip.fits \
   --hist \
-  --min 0.1 --max 0.9 \
   --cmap inferno \
   -w 1600 \
   --bg-color "26,26,26,255" \
@@ -288,9 +287,9 @@ This creates:
 ```
 
 **Parameters**:
-- `--hist`: Use histogram equalization instead of linear scaling
-- `--min/--max`: Define the percentile range (0.1 to 0.9 = 10th to 90th percentile)
+- `--hist`: Use histogram equalization instead of linear scaling (flattens the histogram to reveal subtle features)
 - `--bg-color "26,26,26,255"`: Dark background (RGB + alpha) for astronomy publication style (note: format is RGBA values, not hex)
+- Optional: `--min/--max`: Explicit data range limits for histogram; omit to auto-detect full dynamic range
 
 **Output**: Generates `survey_equalized.pdf`—1600×800 pixel PDF with histogram-equalized Inferno colormap and dark charcoal background, revealing subtle features across the full dynamic range.
 
