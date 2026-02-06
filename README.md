@@ -297,7 +297,63 @@ This creates:
 
 ---
 
-### 7. Coordinate Rotation: Ecliptic View
+### 7. Arcsinh Scaling for Symmetric Data
+
+**Use Case**: Bipolar data (e.g., CMB temperature maps, velocity fields) with asymmetric noise properties
+
+```bash
+./map2fig -f npipe_nodip.fits \
+  --asinh \
+  --scale 1e6 \
+  --min -1000 --max 1000 \
+  --cmap rdbu-r \
+  -o cmb_asinh.pdf
+```
+
+**Parameters**:
+- `--asinh`: Inverse hyperbolic sine scaling (smooth transition between linear and logarithmic)
+- `--scale 1e6`: Unit conversion factor (e.g., μK × 1e6 for sensitivity maps)
+- `--min/--max`: Symmetric data range limits
+- `--cmap rdbu-r`: Red-Blue reversed colormap (red for positive, blue for negative)
+
+Arcsinh scaling is ideal for data where you need to see both small and large deviations from zero without artificial discontinuities. It's mathematically defined as `sinh⁻¹(x) = ln(x + √(1 + x²))`.
+
+**Output**: Generates `cmb_asinh.pdf`—full-sky map with arcsinh-scaled Red-Blue colormap, ideal for publication-quality CMB or other symmetric data visualizations.
+
+![Example 7: Arcsinh scaling](examples/outputs/example7_asinh_scaling.pdf)
+
+---
+
+### 8. Symmetric Logarithmic Scaling with Linear Core
+
+**Use Case**: Data with extreme dynamic range around a well-defined center (e.g., bipolar CMB, residual maps)
+
+```bash
+./map2fig -f npipe_nodip.fits \
+  --symlog \
+  --linthresh 10 \
+  --scale 1e6 \
+  --min -1000 --max 1000 \
+  --cmap rdbu-r \
+  -o cmb_symlog.pdf
+```
+
+**Parameters**:
+- `--symlog`: Symmetric logarithmic scaling (preserves sign, linear near zero)
+- `--linthresh 10`: Linear region threshold (±10 μK) to avoid log(0) singularities
+- `--scale 1e6`: Unit conversion factor
+- `--min/--max`: Symmetric data range limits
+- `--cmap rdbu-r`: Red-Blue reversed colormap
+
+Symlog creates a linear region in the middle (±linthresh) and logarithmic scaling beyond, allowing visualization of both tiny residuals near zero and extreme outliers. Perfect for differential maps showing deviations from a reference.
+
+**Output**: Generates `cmb_symlog.pdf`—full-sky map with symlog-scaled Red-Blue colormap showing both small-scale structure and extreme features.
+
+![Example 8: Symlog scaling](examples/outputs/example8_symlog_scaling.pdf)
+
+---
+
+### 9. Coordinate Rotation: Ecliptic View
 
 **Use Case**: Transform map to show ecliptic coordinates (e.g., for zodiacal light studies)
 
@@ -315,7 +371,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 
 ---
 
-### 8. Negative/Invalid Data Handling
+### 10. Negative/Invalid Data Handling
 
 **Use Case**: Maps with masked regions (e.g., point source masks, bad pixels)
 
@@ -336,7 +392,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 
 ---
 
-### 9. Batch Processing Multiple FITS Files
+### 11. Batch Processing Multiple FITS Files
 
 **Use Case**: Generate plots for all frequency bands of a survey
 
@@ -362,7 +418,7 @@ Generate consistent publication figures for all data products.
 
 ---
 
-### 10. Asymmetric Scaling for Bipolar Data
+### 12. Asymmetric Scaling for Bipolar Data
 
 **Use Case**: CMB temperature maps or velocity fields (symmetric around zero)
 
@@ -371,7 +427,7 @@ Generate consistent publication figures for all data products.
   --symlog \
   --linthresh 10 \
   --min -300 --max 300 \
-  --cmap RdBu_r \
+  --cmap rdbu-r \
   --units "Temperature [$\mu$K]" \
   --latex \
   -o cmb_symlog.pdf
