@@ -1,0 +1,4 @@
+# Allow example output files for documentation purposes
+!*.pdf
+!*.png
+!README.md

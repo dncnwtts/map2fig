@@ -40,7 +40,7 @@ The compiled binary will be at `target/release/map2fig`.
 **Use Case**: Quick visualization of a full-sky HEALPix map
 
 ```bash
-./map2fig -f cosmoglobe.fits -o map.pdf
+./map2fig -f npipe_nodip.fits -o map.pdf
 ```
 
 This creates a default Mollweide projection with:
@@ -50,7 +50,9 @@ This creates a default Mollweide projection with:
 - 1200×600 pixel output
 - Colorbar showing data range
 
-**Output**: PDF with professional formatting and colorbar.
+**Output**: Generates `map.pdf`—full-sky map with professional formatting, colorbar, and axis labels. The Mollweide projection displays the entire sky in an oval format suitable for astronomical publications.
+
+![Example 1: Mollweide projection](examples/outputs/example1_mollweide.pdf)
 
 ---
 
@@ -59,7 +61,7 @@ This creates a default Mollweide projection with:
 **Use Case**: Visualizing data with extreme dynamic range (e.g., instrumental sensitivity maps)
 
 ```bash
-./map2fig -f sensitivity_map.fits \
+./map2fig -f npipe_nodip.fits \
   --log \
   --min 1e-6 --max 1e-3 \
   --cmap plasma \
@@ -68,6 +70,10 @@ This creates a default Mollweide projection with:
 
 The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color scale limits. The Plasma colormap is good for perceptually uniform maps.
 
+**Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels.
+
+![Example 2: Log-scale with Plasma colormap](examples/outputs/example2_log_scale.pdf)
+
 ---
 
 ### 3. Zoomed Gnomonic Projection with Local Graticule
@@ -75,7 +81,7 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 **Use Case**: Detailed view of a specific sky region (e.g., Galactic center, Crab nebula)
 
 ```bash
-./map2fig -f sky_map.fits \
+./map2fig -f npipe_nodip.fits \
   --projection gnomonic \
   --lon 266.5 --lat -28.9 \
   --local-graticule \
@@ -95,7 +101,9 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 - Default resolution: 1 arcmin/pixel = 300×300 pixel map area
 - Adjust `--fov` (arcmin) and `--res` (arcmin/pixel) to change zoom level
 
-**Output**: PNG zoomed on region of interest with visible coordinate grid.
+**Output**: Generates `galactic_center.png`—zoomed 300×300 pixel PNG centered on the Galactic center region with visible 2° coordinate grid. Black lines show local tangent-plane coordinates.
+
+[![Example 3: Gnomonic view with local graticule](examples/outputs/example3_gnomonic_graticule_preview.png)](examples/outputs/example3_gnomonic_graticule.png)
 
 **Examples of different zoom levels**:
 ```bash
@@ -121,7 +129,7 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 Show local graticule with an overlay from a different coordinate system:
 
 ```bash
-./map2fig -f galactic_map.fits \
+./map2fig -f npipe_nodip.fits \
   --projection gnomonic \
   --lon 0 --lat 0 \
   --fov 600 \
@@ -137,9 +145,9 @@ This renders:
 
 The overlay graticule shows how different coordinate systems relate on the same sky patch. The overlay lines may curve or appear distorted due to the projection, which is physically correct—it shows the true relationship between the coordinate systems on the curved sky.
 
-**Important**: The overlay coordinate system (e.g., ecliptic) must intersect the visible field of view. For very small FOVs (e.g., < 1 degree), overlay lines may not appear if they don't pass through that region. To ensure visibility, use a larger FOV or position the map center where the overlay coordinates are present.
+**Output**: Generates `gal_with_eq_overlay.pdf`—600×600 pixel PDF with black local graticule and yellow equatorial overlay at 30° spacing, showing coordinate system relationships.
 
-Example: Ecliptic overlays work best when the center is near the ecliptic plane (around galactic longitude 0° or 180°).
+![Example 4: Overlay graticule](examples/outputs/example4_overlay_graticule.pdf)
 
 ---
 
@@ -148,7 +156,7 @@ Example: Ecliptic overlays work best when the center is near the ecliptic plane 
 **Use Case**: Rotate the gnomonic projection around the center for custom viewing angles
 
 ```bash
-./map2fig -f sky_map.fits \
+./map2fig -f npipe_nodip.fits \
   --projection gnomonic \
   --lon 0 --lat 0 \
   --fov 600 \
@@ -160,6 +168,77 @@ Example: Ecliptic overlays work best when the center is near the ecliptic plane 
 - `--roll 45`: Rotate the image 45° counterclockwise around the projection center
 - Works with both graticule modes (local and overlay)
 
+**Output**: Generates `rotated_view.png`—600×600 pixel PNG of the gnomonic projection rotated 45° counterclockwise. The projection center remains fixed while the map rotates around it.
+
+[![Example 4b: Gnomonic with 45° roll](examples/outputs/example4b_roll_preview.png)](examples/outputs/example4b_roll.png)
+
+---
+
+### 4c. Graticule Customization (Line Width & Overlay Colors)
+
+**Use Case**: Create publication-quality figures with customizable graticule appearance
+
+```bash
+./map2fig -f npipe_nodip.fits \
+  --projection gnomonic \
+  --lon 266.5 --lat -28.9 \
+  --fov 120 \
+  --local-graticule \
+  --grat-line-width 2 \
+  --grat-coord-overlay eq \
+  --grat-overlay-color "#FF6B6B" \
+  -o detailed_graticule.png
+```
+
+**Graticule Overlay Features**:
+- **`--grat-coord-overlay`**: Add secondary coordinate system overlay
+  - `eq` or `equatorial`: Show equatorial (FK5/ICRS) coordinates
+  - `gal` or `galactic`: Show galactic coordinates  
+  - `ecl` or `ecliptic`: Show ecliptic coordinates
+  - Works for both Mollweide and Gnomonic projections
+  
+- **`--grat-overlay-color`**: Custom hex color for overlay lines
+  - Format: `#RRGGBB` (e.g., `#FF0000` for red, `#00FF00` for green)
+  - Default: `#FFFF00` (yellow) for good contrast on dark maps
+  
+- **`--grat-line-width`**: Control thickness of graticule lines
+  - Default: 1 pixel (thin lines)
+  - Increase for high-resolution plots: 2-4 pixels recommended
+  - Example: `--grat-line-width 3` for 3-pixel thick lines
+  - Applies to both local graticule and overlay coordinates
+
+**Output**: Generates `detailed_graticule.png`—high-resolution 120×120 arcmin PNG with black local graticule and red equatorial overlay, both with 2-pixel line thickness.
+
+[![Example 4c: Customized graticule with thick red lines](examples/outputs/example4c_graticule_customization_preview.png)](examples/outputs/example4c_graticule_customization.png)
+
+**Advanced Example** - Publication figure with multiple overlays:
+
+```bash
+./map2fig -f npipe_nodip.fits \
+  --projection gnomonic \
+  --lon 0 --lat 0 \
+  --fov 360 \
+  --local-graticule \
+  --grat-line-width 2 \
+  --grat-coord-overlay eq \
+  --grat-overlay-color "#00D9FF" \
+  --grat-par 15 --grat-mer 15 \
+  --cmap twilight \
+  --width 2048 \
+  -o graticule_demo.png
+```
+
+This creates:
+- Local graticule in black (15° spacing)
+- Equatorial overlay in cyan (15° spacing)
+- 2-pixel thick lines for visibility at high resolution
+- 2048×2048 pixel output
+
+**Important Notes**:
+- Overlay coordinate lines only appear where they intersect the visible map region
+- For small field-of-view gnomonic plots (< 1°), overlay lines may not appear if they don't pass through the region—use a larger FOV or reposition the center
+- Thick lines (width > 2) work best at resolution ≥ 0.1 arcmin/pixel
+
 ---
 
 ### 5. Multi-Panel Comparison: Mollweide with Dual Graticules
@@ -167,7 +246,7 @@ Example: Ecliptic overlays work best when the center is near the ecliptic plane 
 **Use Case**: Publication figure comparing coordinate systems on full-sky map
 
 ```bash
-./map2fig -f combined_map.fits \
+./map2fig -f npipe_nodip.fits \
   --graticule \
   --grat-coord gal \
   --grat-coord-overlay eq \
@@ -188,6 +267,10 @@ Example: Ecliptic overlays work best when the center is near the ecliptic plane 
 - LaTeX-formatted colorbar with units
 - Publication-ready PDF output
 
+**Output**: Generates `publication_figure.pdf`—high-resolution 2400×1200 pixel PDF with Coolwarm colormap, black Galactic graticule, cyan Equatorial overlay, and LaTeX-formatted colorbar showing temperature in µK.
+
+![Example 5: Mollweide with dual graticules](examples/outputs/example5_dual_graticules.pdf)
+
 ---
 
 ### 6. High Dynamic Range with Histogram Equalization
@@ -195,19 +278,23 @@ Example: Ecliptic overlays work best when the center is near the ecliptic plane 
 **Use Case**: Revealing subtle features in maps with non-Gaussian distributions
 
 ```bash
-./map2fig -f survey_map.fits \
+./map2fig -f npipe_nodip.fits \
   --hist \
   --min 0.1 --max 0.9 \
   --cmap inferno \
   -w 1600 \
-  --bg-color "#1a1a1a" \
+  --bg-color "26,26,26,255" \
   -o survey_equalized.pdf
 ```
 
 **Parameters**:
 - `--hist`: Use histogram equalization instead of linear scaling
 - `--min/--max`: Define the percentile range (0.1 to 0.9 = 10th to 90th percentile)
-- Dark background for astronomy publication style
+- `--bg-color "26,26,26,255"`: Dark background (RGB + alpha) for astronomy publication style (note: format is RGBA values, not hex)
+
+**Output**: Generates `survey_equalized.pdf`—1600×800 pixel PDF with histogram-equalized Inferno colormap and dark charcoal background, revealing subtle features across the full dynamic range.
+
+![Example 6: Histogram equalization](examples/outputs/example6_histogram_equalization.pdf)
 
 ---
 
@@ -335,6 +422,7 @@ Generate consistent publication figures for all data products.
 | `--grat-coord` | Primary system: gal, eq, ecl |
 | `--grat-coord-overlay` | Secondary system (e.g., show both gal+eq) |
 | `--grat-overlay-color` | Color for secondary (hex #RRGGBB) |
+| `--grat-line-width` | Thickness of graticule lines in pixels (default: 1) |
 | `--grat-par, --grat-mer` | Spacing for parallels/meridians (°) (mollweide) |
 | `--grat-labels` | Show lat/lon values on grid lines |
 | `--local-graticule` | Local grid for gnomonic (gnomonic only) |
