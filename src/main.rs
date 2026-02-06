@@ -2,7 +2,9 @@ use clap::Parser;
 use map2fig::cli::Args;
 use map2fig::pipeline::load_and_process_data;
 use map2fig::{plot_mollweide_auto, plot_gnomonic_auto};
+use map2fig::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams, GnomonicParams};
 use std::time::Instant;
+use std::str::FromStr;
 
 fn main() {
     let args = Args::parse();
@@ -54,33 +56,45 @@ fn main() {
                 image::Rgba([255, 255, 0, 0])
             };
 
-            plot_mollweide_auto(
-                &data.map,
-                args.width,
-                &args.out,
-                args.min,
-                args.max,
-                config.colormap,
-                !args.no_cbar,
-                args.transparent,
-                !args.no_border,
-                args.gamma,
-                config.scale,
-                config.neg_mode,
-                config.bad_color_rgba,
-                config.bg_color_rgba,
-                data.meta,
-                config.latex_rendering,
-                config.units.as_deref(),
-                &view,
-                args.graticule,
-                grat_coord,
-                grat_overlay,
-                overlay_color,
-                args.grat_labels,
-                args.grat_par,
-                args.grat_mer,
-            );
+            let params = MollweideParams {
+                plot: PlotData {
+                    map: &data.map,
+                    width: args.width,
+                    filename: &args.out,
+                },
+                scale: ScaleParams {
+                    minv: args.min,
+                    maxv: args.max,
+                    gamma: args.gamma,
+                    scale: config.scale,
+                    neg_mode: config.neg_mode,
+                },
+                color: ColorParams {
+                    cmap: config.colormap,
+                    bad_color: config.bad_color_rgba,
+                    bg_color: config.bg_color_rgba,
+                },
+                display: DisplayParams {
+                    show_colorbar: !args.no_cbar,
+                    transparent: args.transparent,
+                    draw_border: !args.no_border,
+                    latex_rendering: config.latex_rendering,
+                    units: config.units,
+                },
+                graticule: GraticuleParams {
+                    show_graticule: args.graticule,
+                    grat_coord,
+                    grat_overlay,
+                    overlay_color,
+                    show_labels: args.grat_labels,
+                    dpar_deg: args.grat_par,
+                    dmer_deg: args.grat_mer,
+                },
+                meta: data.meta,
+                view: &view,
+            };
+
+            plot_mollweide_auto(params);
         }
         "gnomonic" => {
             let lon = args.lon.unwrap_or(0.0);
@@ -105,35 +119,51 @@ fn main() {
                 image::Rgba([255, 255, 0, 0])
             };
             
-            plot_gnomonic_auto(
-                &data.map,
-                args.width,
-                &args.out,
-                args.min,
-                args.max,
-                config.colormap,
-                !args.no_cbar,
-                args.transparent,
-                args.gamma,
-                config.scale,
-                config.neg_mode,
-                config.bad_color_rgba,
-                config.bg_color_rgba,
-                data.meta,
-                config.latex_rendering,
-                config.units.as_deref(),
-                &view,
-                lon,
-                lat,
-                fov,
-                res,
-                args.local_graticule,
-                args.local_grat_dlon,
-                args.local_grat_dlat,
-                grat_overlay,
-                overlay_color,
-                args.roll,
-            );
+            let params = GnomonicParams {
+                plot: PlotData {
+                    map: &data.map,
+                    width: args.width,
+                    filename: &args.out,
+                },
+                scale: ScaleParams {
+                    minv: args.min,
+                    maxv: args.max,
+                    gamma: args.gamma,
+                    scale: config.scale,
+                    neg_mode: config.neg_mode,
+                },
+                color: ColorParams {
+                    cmap: config.colormap,
+                    bad_color: config.bad_color_rgba,
+                    bg_color: config.bg_color_rgba,
+                },
+                display: DisplayParams {
+                    show_colorbar: !args.no_cbar,
+                    transparent: args.transparent,
+                    draw_border: false,
+                    latex_rendering: config.latex_rendering,
+                    units: config.units,
+                },
+                graticule: GraticuleParams {
+                    show_graticule: args.local_graticule,
+                    grat_coord: None,
+                    grat_overlay,
+                    overlay_color,
+                    show_labels: false,
+                    dpar_deg: args.local_grat_dlon,
+                    dmer_deg: args.local_grat_dlat,
+                },
+                meta: data.meta,
+                view: &view,
+                lon_deg: lon,
+                lat_deg: lat,
+                fov_arcmin: fov,
+                resolution_arcmin: res,
+                roll_deg: args.roll,
+                grat_line_width: args.grat_line_width,
+            };
+
+            plot_gnomonic_auto(params);
         }
         _ => {
             panic!(
@@ -145,3 +175,4 @@ fn main() {
     
     if args.verbose {println!("Plot generation completed in {:.2}s", start.elapsed().as_secs_f64());}
 }
+

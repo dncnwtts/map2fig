@@ -147,6 +147,11 @@ impl RasterGrid {
     }
 
     /// Set a pixel from Rgba<u8> without bounds checking
+    /// 
+    /// # Safety
+    /// 
+    /// The caller must ensure that `x < self.width` and `y < self.height`, otherwise
+    /// this will access memory out of bounds.
     #[inline]
     pub unsafe fn set_pixel_unchecked(&mut self, x: u32, y: u32, color: Rgba<u8>) {
         let idx = (y * self.width + x) as usize;
@@ -157,6 +162,11 @@ impl RasterGrid {
     }
 
     /// Set validity without bounds checking
+    /// 
+    /// # Safety
+    /// 
+    /// The caller must ensure that `x < self.width` and `y < self.height`, otherwise
+    /// this will access memory out of bounds.
     #[inline]
     pub unsafe fn set_valid_unchecked(&mut self, x: u32, y: u32, validity: bool) {
         let idx = (y * self.width + x) as usize;

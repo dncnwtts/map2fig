@@ -16,6 +16,7 @@ pub mod constants;
 pub mod latex;
 pub mod rotation;
 pub mod graticule;
+pub mod params;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf};
@@ -268,6 +269,8 @@ mod tests {
     fn test_plot_small_map() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
         use crate::rotation::{CoordSystem,ViewTransform};
+        use crate::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams};
+        
         let map = generate_index_map(1); // 12 pixels
         let cmap = get_colormap("viridis");
         let bad_color = Rgba([128, 128, 128, 255]);
@@ -282,33 +285,31 @@ mod tests {
         let view = ViewTransform::new(input,output,rot);
     
         // Should not panic
-        plot_mollweide_png(
-            &map,
-            100,
-            "test.png",
-            None,
-            None,
-            cmap,
-            true,   // colorbar
-            false,  // not transparent
-            true,   // border
-            1.0,    // gamma
-            scale,
-            neg_mode,
-            bad_color,
-            bad_color,
+        let params = MollweideParams {
+            plot: PlotData { map: &map, width: 100, filename: "test.png" },
+            scale: ScaleParams { minv: None, maxv: None, gamma: 1.0, scale, neg_mode },
+            color: ColorParams { cmap, bad_color, bg_color: bad_color },
+            display: DisplayParams { 
+                show_colorbar: true, 
+                transparent: false, 
+                draw_border: true, 
+                latex_rendering: false, 
+                units: None 
+            },
+            graticule: GraticuleParams { 
+                show_graticule: false, 
+                grat_coord: None, 
+                grat_overlay: None, 
+                overlay_color: bad_color, 
+                show_labels: false, 
+                dpar_deg: 15.0, 
+                dmer_deg: 15.0 
+            },
             meta,
-            false,  // latex_rendering
-            None,   // units
-            &view,
-            false,  // show_graticule
-            None,   // grat_coord
-            None,   // grat_overlay
-            bad_color,  // overlay_color
-            false,  // _show_labels
-            15.0,   // dpar_deg
-            15.0,   // dmer_deg
-        );
+            view: &view,
+        };
+        
+        plot_mollweide_png(params);
     }
     
     
@@ -438,6 +439,8 @@ mod tests {
     fn test_plot_extreme_options() {
         use crate::healpix::{HealpixMeta, HealpixOrdering};
         use crate::rotation::{CoordSystem, ViewTransform};
+        use crate::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams};
+        
         let map = generate_index_map(1);
         let cmap = get_colormap("plasma");
         let bad_color = Rgba([255, 0, 255, 255]);
@@ -452,33 +455,31 @@ mod tests {
         let rot = None;
         let view = ViewTransform::new(input,output,rot);
     
-        plot_mollweide_png(
-            &map,
-            64,
-            "test_extreme.png",
-            Some(-100.0),
-            Some(100.0),
-            cmap,
-            false,  // no colorbar
-            true,   // transparent
-            false,  // no border
-            2.2,    // gamma
-            scale,
-            NegMode::Unseen,
-            bad_color,
-            bad_color,
+        let params = MollweideParams {
+            plot: PlotData { map: &map, width: 64, filename: "test_extreme.png" },
+            scale: ScaleParams { minv: Some(-100.0), maxv: Some(100.0), gamma: 2.2, scale, neg_mode: NegMode::Unseen },
+            color: ColorParams { cmap, bad_color, bg_color: bad_color },
+            display: DisplayParams { 
+                show_colorbar: false, 
+                transparent: true, 
+                draw_border: false, 
+                latex_rendering: false, 
+                units: None 
+            },
+            graticule: GraticuleParams { 
+                show_graticule: false, 
+                grat_coord: None, 
+                grat_overlay: None, 
+                overlay_color: bad_color, 
+                show_labels: false, 
+                dpar_deg: 15.0, 
+                dmer_deg: 15.0 
+            },
             meta,
-            false,  // latex_rendering
-            None,   // units
-            &view,
-            false,  // show_graticule
-            None,   // grat_coord
-            None,   // grat_overlay
-            bad_color,  // overlay_color
-            false,  // _show_labels
-            15.0,   // dpar_deg
-            15.0,   // dmer_deg
-        );
+            view: &view,
+        };
+        
+        plot_mollweide_png(params);
     }
     
     

@@ -93,6 +93,8 @@ fn test_neg_mode_behavior() {
 fn test_plot_smoke() {
     use map2fig::healpix::{HealpixMeta, HealpixOrdering};
     use map2fig::rotation::{CoordSystem,ViewTransform};
+    use map2fig::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams};
+    
     let map = map2fig::generate_index_map(1);
     let cmap = map2fig::get_colormap("viridis");
     let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
@@ -101,32 +103,40 @@ fn test_plot_smoke() {
     let rot = None;
     let view = ViewTransform::new(input,output,rot);
 
-    map2fig::plot_mollweide_png(
-        &map,
-        32,
-        "smoke.png",
-        None,
-        None,
-        cmap,
-        false,
-        true,
-        false,
-        1.0,
-        map2fig::scale::Scale::Linear,
-        map2fig::NegMode::Zero,
-        image::Rgba([0, 0, 0, 0]),
-        image::Rgba([0, 0, 0, 0]),
+    let params = MollweideParams {
+        plot: PlotData { map: &map, width: 32, filename: "smoke.png" },
+        scale: ScaleParams { 
+            minv: None, 
+            maxv: None, 
+            gamma: 1.0, 
+            scale: map2fig::scale::Scale::Linear, 
+            neg_mode: map2fig::NegMode::Zero 
+        },
+        color: ColorParams { 
+            cmap, 
+            bad_color: image::Rgba([0, 0, 0, 0]), 
+            bg_color: image::Rgba([0, 0, 0, 0]) 
+        },
+        display: DisplayParams { 
+            show_colorbar: false, 
+            transparent: true, 
+            draw_border: false, 
+            latex_rendering: false, 
+            units: Some("str".to_string()) 
+        },
+        graticule: GraticuleParams { 
+            show_graticule: false, 
+            grat_coord: None, 
+            grat_overlay: None, 
+            overlay_color: image::Rgba([255, 255, 0, 200]), 
+            show_labels: false, 
+            dpar_deg: 15.0, 
+            dmer_deg: 15.0 
+        },
         meta,
-        false,
-        Some("str"),
-        &view,
-        false,  // show_graticule
-        None,   // grat_coord
-        None,   // grat_overlay
-        image::Rgba([255, 255, 0, 200]),  // overlay_color
-        false,  // show_labels
-        15.0,   // dpar_deg
-        15.0,   // dmer_deg
-    );
+        view: &view,
+    };
+
+    map2fig::plot_mollweide_png(params);
 }
 

@@ -237,21 +237,14 @@ pub fn draw_colorbar_pdf_labels(
 pub fn draw_colorbar_pdf(
     cr: &Context,
     cb_layout: ColorbarLayout,
-    cmap: &Colormap,
-    minv: f64,
-    maxv: f64,
-    scale: Scale,
-    gamma: f64,
-    hist: Option<&HistogramScale>,
-    latex_rendering: bool,
-    units: Option<&str>,
+    params: crate::params::ColorbarParams,
 ) {
 
         let ticks = generate_colorbar_ticks(
-            minv,
-            maxv,
-            &scale,
-            hist,
+            params.minv,
+            params.maxv,
+            &params.scale_type,
+            params.hist_scale,
         );
 
 
@@ -266,15 +259,14 @@ pub fn draw_colorbar_pdf(
         surf_cr.set_antialias(cairo::Antialias::None);
 
 
-
         let surf = rasterize_to_surface(cb_layout.w as u32, cb_layout.h as u32, |sink| {
             render_colorbar_gradient(
                 0,
                 0,
                 cb_layout.w as u32,
                 cb_layout.h as u32,
-                cmap,
-                gamma,
+                params.cmap,
+                params.gamma,
                 sink,
             );
         });
@@ -292,9 +284,9 @@ pub fn draw_colorbar_pdf(
             cr,
             cb_layout,
             &ticks,
-            scale,
-            latex_rendering,
-            units,
+            params.scale_type,
+            params.latex_rendering,
+            params.units,
         );
 
 }

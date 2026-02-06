@@ -54,6 +54,12 @@ pub struct GraticulePolyline {
     pub points: Vec<(f64, f64)>,
 }
 
+impl Default for GraticulePolyline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraticulePolyline {
     pub fn new() -> Self {
         Self { points: Vec::new() }
@@ -76,6 +82,12 @@ impl GraticulePolyline {
 #[derive(Clone, Debug)]
 pub struct GraticuleLineSegments {
     pub polylines: Vec<GraticulePolyline>,
+}
+
+impl Default for GraticuleLineSegments {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GraticuleLineSegments {
@@ -207,7 +219,7 @@ pub fn render_graticule_mollweide(
 
     // Meridians: constant longitude in graticule coords
     for &mer_deg_start in &meridian_degrees {
-        let lon_grat = mer_deg_start as f64 * PI / 180.0;
+        let lon_grat = mer_deg_start * PI / 180.0;
         let mut line_segments: Vec<Vec<(f64, f64)>> = Vec::new();
         let mut current_segment: Vec<(f64, f64)> = Vec::new();
 
@@ -228,8 +240,8 @@ pub fn render_graticule_mollweide(
             // Project to Mollweide
             if let Some((u, v)) = proj.forward(lon_final, lat_final) {
                 // Check for discontinuities using analytical derivative
-                if !current_segment.is_empty() {
-                    if let Some(last_point) = current_segment.last() {
+                if !current_segment.is_empty()
+                    && let Some(last_point) = current_segment.last() {
                         let prev_u = last_point.0;
                         let prev_v = last_point.1;
                         
@@ -250,7 +262,6 @@ pub fn render_graticule_mollweide(
                             current_segment = Vec::new();
                         }
                     }
-                }
                 current_segment.push((u, v));
             } else {
                 // Projection failed - save current segment and start a new one
@@ -276,7 +287,7 @@ pub fn render_graticule_mollweide(
 
     // Parallels: constant latitude in graticule coords
     for &par_deg in &parallel_degrees {
-        let lat_grat = par_deg as f64 * PI / 180.0;
+        let lat_grat = par_deg * PI / 180.0;
         let mut line_segments: Vec<Vec<(f64, f64)>> = Vec::new();
         let mut current_segment: Vec<(f64, f64)> = Vec::new();
 
@@ -312,8 +323,8 @@ pub fn render_graticule_mollweide(
                 // Project to Mollweide
                 if let Some((u, v)) = proj.forward(lon_final, lat_final) {
                     // Check for discontinuities using analytical derivative
-                    if !current_segment.is_empty() {
-                        if let Some(last_point) = current_segment.last() {
+                    if !current_segment.is_empty()
+                        && let Some(last_point) = current_segment.last() {
                             let prev_u = last_point.0;
                             let prev_v = last_point.1;
                             
@@ -334,7 +345,6 @@ pub fn render_graticule_mollweide(
                                 current_segment = Vec::new();
                             }
                         }
-                    }
                     current_segment.push((u, v));
                 } else {
                     // Projection failed - save current segment and start a new one
@@ -387,7 +397,7 @@ pub fn render_graticule_mollweide_vectorized(
 
     // Meridians: constant longitude in graticule coords
     for &mer_deg_start in &meridian_degrees {
-        let lon_grat = mer_deg_start as f64 * PI / 180.0;
+        let lon_grat = mer_deg_start * PI / 180.0;
         let mut line_segments: Vec<Vec<(f64, f64)>> = Vec::new();
         let mut current_segment: Vec<(f64, f64)> = Vec::new();
 
@@ -407,8 +417,8 @@ pub fn render_graticule_mollweide_vectorized(
             // Project to Mollweide
             if let Some((u, v)) = proj.forward(lon_final, lat_final) {
                 // Check for discontinuities using analytical derivative
-                if !current_segment.is_empty() {
-                    if let Some(last_point) = current_segment.last() {
+                if !current_segment.is_empty()
+                    && let Some(last_point) = current_segment.last() {
                         let prev_u = last_point.0;
                         let prev_v = last_point.1;
                         
@@ -429,7 +439,6 @@ pub fn render_graticule_mollweide_vectorized(
                             current_segment = Vec::new();
                         }
                     }
-                }
                 current_segment.push((u, v));
             } else {
                 // Projection failed - save current segment and start a new one
@@ -457,7 +466,7 @@ pub fn render_graticule_mollweide_vectorized(
 
     // Parallels: constant latitude in graticule coords
     for &par_deg in &parallel_degrees {
-        let lat_grat = par_deg as f64 * PI / 180.0;
+        let lat_grat = par_deg * PI / 180.0;
         
         // Check if this is a pole latitude - poles are points, not line segments
         let is_pole = (par_deg - 90.0).abs() < 0.1 || (par_deg + 90.0).abs() < 0.1;
@@ -487,8 +496,8 @@ pub fn render_graticule_mollweide_vectorized(
             // Project to Mollweide
             if let Some((u, v)) = proj.forward(lon_final, lat_final) {
                 // Check for discontinuities using analytical derivative
-                if !current_segment.is_empty() {
-                    if let Some(last_point) = current_segment.last() {
+                if !current_segment.is_empty()
+                    && let Some(last_point) = current_segment.last() {
                         let prev_u = last_point.0;
                         let prev_v = last_point.1;
                         
@@ -509,7 +518,6 @@ pub fn render_graticule_mollweide_vectorized(
                             current_segment = Vec::new();
                         }
                     }
-                }
                 current_segment.push((u, v));
             } else {
                 // Projection failed - save current segment and start a new one

@@ -265,7 +265,7 @@ pub fn build_histogram_scale(
         };
     }
 
-    vals.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    vals.sort_unstable_by(unsafe_float_cmp);
     let n = vals.len();
 
     // 2. Compute minv / maxv based on HistogramRange
@@ -605,8 +605,8 @@ pub fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
         }
     }
 
-    major_values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
-    minor_values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    major_values.sort_unstable_by(unsafe_float_cmp);
+    minor_values.sort_unstable_by(unsafe_float_cmp);
 
     ColorbarTicks {
         major_positions: vec![],

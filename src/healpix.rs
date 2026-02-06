@@ -670,7 +670,7 @@ pub fn downgrade_healpix_map_ang(
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![0.0; target_npix];
 
-    for target_pix in 0..target_npix {
+    for (target_pix, result_elem) in result.iter_mut().enumerate() {
         let mut sum = 0.0;
         let mut count = 0;
 
@@ -705,7 +705,7 @@ pub fn downgrade_healpix_map_ang(
             }
         }
 
-        result[target_pix] = if count > 0 { sum / count as f64 } else { HPX_UNSEEN };
+        *result_elem = if count > 0 { sum / count as f64 } else { HPX_UNSEEN };
     }
 
     result
@@ -729,7 +729,7 @@ pub fn downgrade_healpix_map_xyf(
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![HPX_UNSEEN; target_npix];
 
-    for target_pix in 0..target_npix {
+    for (target_pix, result_elem) in result.iter_mut().enumerate() {
         // Convert target pixel to (x, y, face)
         let (x, y, face) = match ordering {
             HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
@@ -763,7 +763,7 @@ pub fn downgrade_healpix_map_xyf(
         }
 
         if hits >= min_hits {
-            result[target_pix] = sum / hits as f64;
+            *result_elem = sum / hits as f64;
         }
     }
 

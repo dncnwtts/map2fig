@@ -14,7 +14,7 @@ use std::path::Path;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
 use crate::rotation::{ViewTransform, CoordSystem};
-
+use crate::params::{MollweideParams, GnomonicParams};
 
 pub struct MollweideScale {
     pub minv: f64,
@@ -37,7 +37,7 @@ pub fn compute_mollweide_scale(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    values.sort_unstable_by(unsafe_float_cmp);
 
     let data_min = *values.first().unwrap();
     let data_max = *values.last().unwrap();
@@ -72,18 +72,9 @@ pub fn compute_mollweide_scale(
 
 
 pub fn render_mollweide_pixels(
-    map: &[f64],
+    params: crate::params::RenderMollweideParams,
     layout: MollweideLayout,
-    scale_params: &MollweideScale,
-    cmap: &Colormap,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
     sink: &mut dyn PixelSink,
-    hist_scale: Option<&HistogramScale>,
-    view: &ViewTransform,
     debug_overlay: Option<DebugOverlay>, 
 ) {
     use crate::mollweide::MollweideProjection;
@@ -96,20 +87,21 @@ pub fn render_mollweide_pixels(
             fill_grid_background(&mut grid);
         }
 
-
     render_projection_to_grid(
-        map,
-        &proj,
+        crate::params::RenderGridParams {
+            map: params.map,
+            proj: &proj,
+            scale: params.scale,
+            cmap: params.cmap,
+            scale_type: params.scale_type,
+            neg_mode: params.neg_mode,
+            gamma: params.gamma,
+            bad_color: params.bad_color,
+            meta: params.meta,
+            hist_scale: params.hist_scale,
+            view: params.view,
+        },
         &mut grid,
-        scale_params,
-        cmap,
-        scale,
-        neg_mode,
-        gamma,
-        bad_color,
-        meta,
-        hist_scale,
-        &view,
     );
 
     // Draw debug overlay only if provided
@@ -149,33 +141,32 @@ where
 }
 
 
-pub fn plot_mollweide_pdf(
-    map: &[f64],
-    width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    transparent: bool,
-    draw_border: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    _bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    latex_rendering: bool,
-    units: Option<&str>,
-    view: &ViewTransform,
-    show_graticule: bool,
-    grat_coord: Option<CoordSystem>,
-    grat_overlay: Option<CoordSystem>,
-    overlay_color: Rgba<u8>,
-    _show_labels: bool,
-    dpar_deg: f64,
-    dmer_deg: f64,
-) {
+pub fn plot_mollweide_pdf(params: MollweideParams) {
+    let map = params.plot.map;
+    let width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let transparent = params.display.transparent;
+    let draw_border = params.display.draw_border;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let _bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
+    let view = params.view;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_coord = params.graticule.grat_coord;
+    let grat_overlay = params.graticule.grat_overlay;
+    let overlay_color = params.graticule.overlay_color;
+    let _show_labels = params.graticule.show_labels;
+    let dpar_deg = params.graticule.dpar_deg;
+    let dmer_deg = params.graticule.dmer_deg;
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
 
@@ -190,7 +181,7 @@ pub fn plot_mollweide_pdf(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    values.sort_unstable_by(unsafe_float_cmp);
 
 
     let surface_pdf = PdfSurface::new(
@@ -255,19 +246,21 @@ pub fn plot_mollweide_pdf(
     };
     
     render_mollweide_pixels(
-        map,
+        crate::params::RenderMollweideParams {
+            map,
+            scale: &scale_params,
+            cmap,
+            gamma,
+            scale_type: scale,
+            neg_mode,
+            bad_color,
+            meta,
+            hist_scale,
+            view,
+        },
         layout,
-        &scale_params,
-        cmap,
-        gamma,
-        scale,
-        neg_mode,
-        bad_color,
-        meta,
         &mut sink,
-        hist_scale,
-        &view,
-        debug_overlay, // pass the optional overlay
+        debug_overlay,
     );
 
 
@@ -292,7 +285,7 @@ pub fn plot_mollweide_pdf(
         let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
         
         let graticule = render_graticule_mollweide_vectorized(
-            &view,
+            view,
             dpar_deg,
             dmer_deg,
             grat_coord_sys,
@@ -312,7 +305,7 @@ pub fn plot_mollweide_pdf(
         // Render secondary graticule overlay if specified
         if let Some(overlay_sys) = grat_overlay {
             let overlay_graticule = render_graticule_mollweide_vectorized(
-                &view,
+                view,
                 dpar_deg,
                 dmer_deg,
                 overlay_sys,
@@ -354,14 +347,16 @@ pub fn plot_mollweide_pdf(
         draw_colorbar_pdf(
             &cr_pdf,
             cb_layout,
-            cmap,
-            scale_params.minv,
-            scale_params.maxv,
-            scale,
-            gamma,
-            hist_scale,
-            latex_rendering,
-            units,
+            crate::params::ColorbarParams {
+                cmap,
+                minv: scale_params.minv,
+                maxv: scale_params.maxv,
+                scale_type: scale,
+                gamma,
+                hist_scale,
+                latex_rendering,
+                units,
+            },
         );
     }
 
@@ -386,33 +381,32 @@ pub trait RenderBackend {
 }
 
 
-pub fn plot_mollweide_png(
-    map: &[f64],
-    width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    transparent: bool,
-    draw_border: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    latex_rendering: bool,
-    units: Option<&str>,
-    view: &ViewTransform,
-    show_graticule: bool,
-    grat_coord: Option<CoordSystem>,
-    grat_overlay: Option<CoordSystem>,
-    overlay_color: Rgba<u8>,
-    _show_labels: bool,
-    dpar_deg: f64,
-    dmer_deg: f64,
-) {
+pub fn plot_mollweide_png(params: MollweideParams) {
+    let map = params.plot.map;
+    let width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let transparent = params.display.transparent;
+    let draw_border = params.display.draw_border;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
+    let view = params.view;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_coord = params.graticule.grat_coord;
+    let grat_overlay = params.graticule.grat_overlay;
+    let overlay_color = params.graticule.overlay_color;
+    let _show_labels = params.graticule.show_labels;
+    let dpar_deg = params.graticule.dpar_deg;
+    let dmer_deg = params.graticule.dmer_deg;
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
 
@@ -433,7 +427,7 @@ pub fn plot_mollweide_png(
         panic!("Map contains no valid HEALPix values");
     }
 
-    values.sort_unstable_by(|a, b| unsafe_float_cmp(a, b));
+    values.sort_unstable_by(unsafe_float_cmp);
 
     let bg = Rgba([bg_color[0], bg_color[1], bg_color[2], 
         if transparent {0} else {255}]);
@@ -472,19 +466,21 @@ pub fn plot_mollweide_png(
     };
     
     render_mollweide_pixels(
-        map,
+        crate::params::RenderMollweideParams {
+            map,
+            scale: &scale_params,
+            cmap,
+            gamma,
+            scale_type: scale,
+            neg_mode,
+            bad_color,
+            meta,
+            hist_scale,
+            view,
+        },
         layout,
-        &scale_params,
-        cmap,
-        gamma,
-        scale,
-        neg_mode,
-        bad_color,
-        meta,
         &mut sink,
-        hist_scale,
-        &view,
-        debug_overlay, // pass the optional overlay
+        debug_overlay,
     );
 
     if draw_border || show_graticule {
@@ -514,7 +510,7 @@ pub fn plot_mollweide_png(
                 let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
                 
                 let graticule = render_graticule_mollweide_vectorized(
-                    &view,
+                    view,
                     dpar_deg,
                     dmer_deg,
                     grat_coord_sys,
@@ -534,7 +530,7 @@ pub fn plot_mollweide_png(
                 // Render secondary graticule overlay if specified
                 if let Some(overlay_sys) = grat_overlay {
                     let overlay_graticule = render_graticule_mollweide_vectorized(
-                        &view,
+                        view,
                         dpar_deg,
                         dmer_deg,
                         overlay_sys,
@@ -725,8 +721,8 @@ pub fn plot_mollweide_png(
         // Copy the map region from the image
         for y in 0..layout.map_h as u32 {
             for x in 0..layout.map_w as u32 {
-                let src_x = (layout.map_x as u32 + x) as u32;
-                let src_y = (layout.map_y as u32 + y) as u32;
+                let src_x = layout.map_x as u32 + x;
+                let src_y = layout.map_y as u32 + y;
                 if src_x < img.width() && src_y < img.height() {
                     let pixel = img.get_pixel(src_x, src_y);
                     let idx = (y * grid.width + x) as usize;
@@ -738,7 +734,7 @@ pub fn plot_mollweide_png(
         // Render the graticule on the grid
         crate::graticule::render_graticule_mollweide(
             &mut grid,
-            &view,
+            view,
             dpar_deg,
             dmer_deg,
             grat_coord_sys,
@@ -748,8 +744,8 @@ pub fn plot_mollweide_png(
         // Copy the grid back to the image
         for y in 0..layout.map_h as u32 {
             for x in 0..layout.map_w as u32 {
-                let dst_x = (layout.map_x as u32 + x) as u32;
-                let dst_y = (layout.map_y as u32 + y) as u32;
+                let dst_x = layout.map_x as u32 + x;
+                let dst_y = layout.map_y as u32 + y;
                 if dst_x < img.width() && dst_y < img.height() {
                     let idx = (y * grid.width + x) as usize;
                     img.put_pixel(dst_x, dst_y, grid.buffer[idx]);
@@ -778,99 +774,16 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 
 
 
-pub fn plot_mollweide_auto(
-    map: &[f64],
-    width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    transparent: bool,
-    draw_border: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    latex_rendering: bool,
-    units: Option<&str>,
-    view: &ViewTransform,
-    show_graticule: bool,
-    grat_coord: Option<CoordSystem>,
-    grat_overlay: Option<CoordSystem>,
-    overlay_color: Rgba<u8>,
-    _show_labels: bool,
-    dpar_deg: f64,
-    dmer_deg: f64,
-) {
-    let ext = Path::new(filename)
+pub fn plot_mollweide_auto(params: MollweideParams) {
+    let ext = Path::new(params.plot.filename)
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
 
-
     match ext.as_str() {
-        "png" => {
-            plot_mollweide_png(
-                map,
-                width,
-                filename,
-                minv,
-                maxv,
-                cmap,
-                show_colorbar,
-                transparent,
-                draw_border,
-                gamma,
-                scale,
-                neg_mode,
-                bad_color,
-                bg_color,
-                meta,
-                latex_rendering,
-                units,
-                &view,
-                show_graticule,
-                grat_coord,
-                grat_overlay,
-                overlay_color,
-                _show_labels,
-                dpar_deg,
-                dmer_deg,
-            );
-        }
-        "pdf" => {
-            plot_mollweide_pdf(
-                map,
-                width,
-                filename,
-                minv,
-                maxv,
-                cmap,
-                show_colorbar,
-                transparent,
-                draw_border,
-                gamma,
-                scale,
-                neg_mode,
-                bad_color,
-                bg_color,
-                meta,
-                latex_rendering,
-                units,
-                &view,
-                show_graticule,
-                grat_coord,
-                grat_overlay,
-                overlay_color,
-                _show_labels,
-                dpar_deg,
-                dmer_deg,
-            );
-        }
+        "png" => plot_mollweide_png(params),
+        "pdf" => plot_mollweide_pdf(params),
         _ => {
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",
@@ -879,6 +792,7 @@ pub fn plot_mollweide_auto(
         }
     }
 }
+
 
 
 
@@ -921,43 +835,33 @@ pub fn pixel_value_to_rgba(
 }
 
 pub fn render_projection_to_grid(
-    map: &[f64],
-    proj: &dyn Projection,
+    params: crate::params::RenderGridParams,
     grid: &mut RasterGrid,
-    scale_params: &MollweideScale,
-    cmap: &Colormap,
-    scale: Scale,
-    neg_mode: NegMode,
-    gamma: f64,
-    bad_color: Rgba<u8>,
-    meta: HealpixMeta,
-    hist_scale: Option<&HistogramScale>,
-    view: &ViewTransform,
 ) {
     let width = grid.width;
     let height = grid.height;
 
     // Precompute gamma value to avoid repeated checks
-    let gamma_inv = if (gamma - 1.0).abs() < f64::EPSILON {
+    let gamma_inv = if (params.gamma - 1.0).abs() < f64::EPSILON {
         1.0
     } else {
-        gamma
+        params.gamma
     };
 
     for py in 0..height {
         for px in 0..width {
             // Use pixel_to_ang for all projections (handles each type correctly)
-            if let Some((lon, lat)) = proj.pixel_to_ang(px, py, grid) {
+            if let Some((lon, lat)) = params.proj.pixel_to_ang(px, py, grid) {
                 let theta = std::f64::consts::PI / 2.0 - lat;
 
-                let pixel_val = match sample_healpix(map, meta, &view, theta, lon) {
+                let pixel_val = match sample_healpix(params.map, params.meta, params.view, theta, lon) {
                     Some(val) => scale_value(
                         val,
-                        scale_params.minv,
-                        scale_params.maxv,
-                        scale,
-                        neg_mode,
-                        hist_scale,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        params.scale_type,
+                        params.neg_mode,
+                        params.hist_scale,
                     ),
                     None => PixelValue::Bad,
                 };
@@ -966,18 +870,18 @@ pub fn render_projection_to_grid(
                 let rgba = match pixel_val {
                     PixelValue::Color(t) => {
                         let t = if gamma_inv == 1.0 { t } else { t.powf(gamma_inv) };
-                        let c = cmap.sample(t);
+                        let c = params.cmap.sample(t);
                         Rgba([c[0], c[1], c[2], 255])
                     }
                     PixelValue::Underflow => {
-                        let c = cmap.sample(0.0);
+                        let c = params.cmap.sample(0.0);
                         Rgba([c[0], c[1], c[2], 255])
                     }
                     PixelValue::Overflow => {
-                        let c = cmap.sample(1.0);
+                        let c = params.cmap.sample(1.0);
                         Rgba([c[0], c[1], c[2], 255])
                     }
-                    PixelValue::Bad => bad_color,
+                    PixelValue::Bad => params.bad_color,
                 };
 
                 // Use unchecked access for hot path (bounds guaranteed by loop)
@@ -1129,35 +1033,35 @@ fn fill_grid_background(grid: &mut RasterGrid) {
 // ============================================================================
 
 /// Plot a gnomonic projection to PNG
-pub fn plot_gnomonic_png(
-    map: &[f64],
-    width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    transparent: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    latex_rendering: bool,
-    units: Option<&str>,
-    view: &ViewTransform,
-    lon_deg: f64,
-    lat_deg: f64,
-    _fov_arcmin: f64,
-    resolution_arcmin: f64,
-    show_graticule: bool,
-    grat_dlon: f64,
-    grat_dlat: f64,
-    grat_overlay: Option<CoordSystem>,
-    _overlay_color: Rgba<u8>,
-    roll_deg: f64,
-) {
+pub fn plot_gnomonic_png(params: GnomonicParams) {
+    let map = params.plot.map;
+    let width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let transparent = params.display.transparent;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
+    let view = params.view;
+    let lon_deg = params.lon_deg;
+    let lat_deg = params.lat_deg;
+    let _fov_arcmin = params.fov_arcmin;
+    let resolution_arcmin = params.resolution_arcmin;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_dlon = params.graticule.dpar_deg;
+    let grat_dlat = params.graticule.dmer_deg;
+    let grat_overlay = params.graticule.grat_overlay;
+    let _overlay_color = params.graticule.overlay_color;
+    let roll_deg = params.roll_deg;
+
     use crate::gnomonic::GnomonicProjection;
 
     let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
@@ -1184,18 +1088,20 @@ pub fn plot_gnomonic_png(
     };
 
     render_projection_to_grid(
-        map,
-        &proj,
+        crate::params::RenderGridParams {
+            map,
+            proj: &proj,
+            scale: &scale_params,
+            cmap,
+            scale_type: scale,
+            neg_mode,
+            gamma,
+            bad_color,
+            meta,
+            hist_scale: hist_scale.as_ref(),
+            view,
+        },
         &mut grid,
-        &scale_params,
-        cmap,
-        scale,
-        neg_mode,
-        gamma,
-        bad_color,
-        meta,
-        hist_scale.as_ref(),
-        view,
     );
 
     // Add graticule if requested
@@ -1210,7 +1116,7 @@ pub fn plot_gnomonic_png(
             render_gnomonic_sky_overlay(
                 &mut grid,
                 &proj,
-                &view,
+                view,
                 grat_dlon,
                 grat_dlat,
                 overlay_sys,
@@ -1306,35 +1212,35 @@ pub fn plot_gnomonic_png(
 }
 
 /// Plot a gnomonic projection to PDF
-pub fn plot_gnomonic_pdf(
-    map: &[f64],
-    width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    _transparent: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    _bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    _latex_rendering: bool,
-    _units: Option<&str>,
-    view: &ViewTransform,
-    lon_deg: f64,
-    lat_deg: f64,
-    _fov_arcmin: f64,
-    resolution_arcmin: f64,
-    show_graticule: bool,
-    grat_dlon: f64,
-    grat_dlat: f64,
-    grat_overlay: Option<CoordSystem>,
-    _overlay_color: Rgba<u8>,
-    roll_deg: f64,
-) {
+pub fn plot_gnomonic_pdf(params: GnomonicParams) {
+    let map = params.plot.map;
+    let width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let _transparent = params.display.transparent;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let _bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let _latex_rendering = params.display.latex_rendering;
+    let _units = params.display.units.as_deref();
+    let view = params.view;
+    let lon_deg = params.lon_deg;
+    let lat_deg = params.lat_deg;
+    let _fov_arcmin = params.fov_arcmin;
+    let resolution_arcmin = params.resolution_arcmin;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_dlon = params.graticule.dpar_deg;
+    let grat_dlat = params.graticule.dmer_deg;
+    let grat_overlay = params.graticule.grat_overlay;
+    let _overlay_color = params.graticule.overlay_color;
+    let roll_deg = params.roll_deg;
+
     use crate::gnomonic::GnomonicProjection;
 
     let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
@@ -1359,18 +1265,20 @@ pub fn plot_gnomonic_pdf(
     };
 
     render_projection_to_grid(
-        map,
-        &proj,
+        crate::params::RenderGridParams {
+            map,
+            proj: &proj,
+            scale: &scale_params,
+            cmap,
+            scale_type: scale,
+            neg_mode,
+            gamma,
+            bad_color,
+            meta,
+            hist_scale: hist_scale.as_ref(),
+            view,
+        },
         &mut grid,
-        &scale_params,
-        cmap,
-        scale,
-        neg_mode,
-        gamma,
-        bad_color,
-        meta,
-        hist_scale.as_ref(),
-        view,
     );
 
     // Add graticule if requested
@@ -1385,7 +1293,7 @@ pub fn plot_gnomonic_pdf(
             render_gnomonic_sky_overlay(
                 &mut grid,
                 &proj,
-                &view,
+                view,
                 grat_dlon,
                 grat_dlat,
                 overlay_sys,
@@ -1457,14 +1365,16 @@ pub fn plot_gnomonic_pdf(
         draw_colorbar_pdf(
             &cr,
             cb_layout,
-            cmap,
-            minv.unwrap_or(0.0),
-            maxv.unwrap_or(1.0),
-            scale,
-            gamma,
-            hist_scale.as_ref(),
-            false, // latex_rendering
-            Some("μK_CMB"),
+            crate::params::ColorbarParams {
+                cmap,
+                minv: minv.unwrap_or(0.0),
+                maxv: maxv.unwrap_or(1.0),
+                scale_type: scale,
+                gamma,
+                hist_scale: hist_scale.as_ref(),
+                latex_rendering: false,
+                units: Some("μK_CMB"),
+            },
         );
     }
 
@@ -1472,35 +1382,35 @@ pub fn plot_gnomonic_pdf(
 }
 
 /// Plot gnomonic projection with automatic format detection
-pub fn plot_gnomonic_auto(
-    map: &[f64],
-    _width: u32,
-    filename: &str,
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    cmap: &Colormap,
-    show_colorbar: bool,
-    transparent: bool,
-    gamma: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    bad_color: Rgba<u8>,
-    bg_color: Rgba<u8>,
-    meta: HealpixMeta,
-    latex_rendering: bool,
-    units: Option<&str>,
-    view: &ViewTransform,
-    lon_deg: f64,
-    lat_deg: f64,
-    fov_arcmin: f64,
-    resolution_arcmin: f64,
-    show_graticule: bool,
-    grat_dlon: f64,
-    grat_dlat: f64,
-    grat_overlay: Option<CoordSystem>,
-    overlay_color: Rgba<u8>,
-    roll_deg: f64,
-) {
+pub fn plot_gnomonic_auto(params: GnomonicParams) {
+    let map = params.plot.map;
+    let _width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let transparent = params.display.transparent;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
+    let view = params.view;
+    let lon_deg = params.lon_deg;
+    let lat_deg = params.lat_deg;
+    let fov_arcmin = params.fov_arcmin;
+    let resolution_arcmin = params.resolution_arcmin;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_dlon = params.graticule.dpar_deg;
+    let grat_dlat = params.graticule.dmer_deg;
+    let grat_overlay = params.graticule.grat_overlay;
+    let overlay_color = params.graticule.overlay_color;
+    let roll_deg = params.roll_deg;
+
     // Compute image width from field of view and resolution
     // This ensures the FOV parameter is actually respected
     let width = (fov_arcmin / resolution_arcmin).ceil() as u32;
@@ -1511,69 +1421,54 @@ pub fn plot_gnomonic_auto(
         .unwrap_or("")
         .to_ascii_lowercase();
 
+    // Reconstruct bundled params for dispatch
+    let bundled_params = GnomonicParams {
+        plot: crate::params::PlotData {
+            map,
+            width,
+            filename,
+        },
+        scale: crate::params::ScaleParams {
+            minv,
+            maxv,
+            gamma,
+            scale,
+            neg_mode,
+        },
+        color: crate::params::ColorParams {
+            cmap,
+            bad_color,
+            bg_color,
+        },
+        display: crate::params::DisplayParams {
+            show_colorbar,
+            transparent,
+            draw_border: false,
+            latex_rendering,
+            units: units.map(|s| s.to_string()),
+        },
+        graticule: crate::params::GraticuleParams {
+            show_graticule,
+            grat_coord: None,
+            grat_overlay,
+            overlay_color,
+            show_labels: false,
+            dpar_deg: grat_dlon,
+            dmer_deg: grat_dlat,
+        },
+        meta,
+        view,
+        lon_deg,
+        lat_deg,
+        fov_arcmin,
+        resolution_arcmin,
+        roll_deg,
+        grat_line_width: 1,
+    };
+
     match ext.as_str() {
-        "png" => {
-            plot_gnomonic_png(
-                map,
-                width,
-                filename,
-                minv,
-                maxv,
-                cmap,
-                show_colorbar,
-                transparent,
-                gamma,
-                scale,
-                neg_mode,
-                bad_color,
-                bg_color,
-                meta,
-                latex_rendering,
-                units,
-                view,
-                lon_deg,
-                lat_deg,
-                fov_arcmin,
-                resolution_arcmin,
-                show_graticule,
-                grat_dlon,
-                grat_dlat,
-                grat_overlay,
-                overlay_color,
-                roll_deg,
-            );
-        }
-        "pdf" => {
-            plot_gnomonic_pdf(
-                map,
-                width,
-                filename,
-                minv,
-                maxv,
-                cmap,
-                show_colorbar,
-                transparent,
-                gamma,
-                scale,
-                neg_mode,
-                bad_color,
-                bg_color,
-                meta,
-                latex_rendering,
-                units,
-                view,
-                lon_deg,
-                lat_deg,
-                fov_arcmin,
-                resolution_arcmin,
-                show_graticule,
-                grat_dlon,
-                grat_dlat,
-                grat_overlay,
-                overlay_color,
-                roll_deg,
-            );
-        }
+        "png" => plot_gnomonic_png(bundled_params),
+        "pdf" => plot_gnomonic_pdf(bundled_params),
         _ => {
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",
