@@ -328,8 +328,12 @@ pub fn draw_colorbar_extends(
     let half_height = (gradient_bottom - gradient_top) as f64 / 2.0;
     let base_top_y_f = tip_y as f64 - half_height;
     let base_bottom_y_f = tip_y as f64 + half_height;
-    let base_top_y = base_top_y_f.floor() as i32;
-    let base_bottom_y = base_bottom_y_f.ceil() as i32;
+    let mut base_top_y = base_top_y_f.floor() as i32;
+    let mut base_bottom_y = base_bottom_y_f.ceil() as i32;
+    
+    // Clamp to gradient bounds to ensure triangles don't extend beyond the colorbar
+    base_top_y = base_top_y.max(gradient_top);
+    base_bottom_y = base_bottom_y.min(gradient_bottom);
     
 
 
