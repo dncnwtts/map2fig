@@ -1,6 +1,3 @@
-use map2fig::{cli::Extend, get_colormap};
-use image::{Rgba, RgbaImage};
-
 #[test]
 fn test_triangle_vertices() {
     // Simulate extend triangle creation

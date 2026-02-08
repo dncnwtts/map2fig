@@ -16,7 +16,7 @@ fn test_symmetric_triangles() {
     let tip_distance = 50i32;
     let cbar_left_x = 0i32;
     let cbar_right_x = 399i32;
-    let cbar_h = 100i32;
+    let _cbar_h = 100i32;
     let tip_y = 100i32;
     let base_top_y = 50i32;
     let base_bottom_y = 150i32;

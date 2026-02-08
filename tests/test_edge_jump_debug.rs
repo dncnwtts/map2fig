@@ -1,7 +1,3 @@
-use map2fig::colorbar::render_colorbar_standalone;
-use map2fig::colormap;
-use map2fig::cli::Extend;
-
 #[test]
 fn test_edge_jump_at_y77() {
     // Debug the specific Y coordinate where the jump happens
@@ -37,7 +33,7 @@ fn test_edge_jump_at_y77() {
     let y = 77i32;
     let tip_y = 100i32;
     let base_top_y = 50i32;
-    let base_bottom_y = 150i32;
+    let _base_bottom_y = 150i32;
     
     // LEFT triangle
     let tip_x_left = 1i32;

@@ -272,7 +272,11 @@ pub fn draw_colorbar_extends(
         return;
     }
 
-    // Isosceles triangles: tip distance is about half the colorbar height
+    // Calculate the Y bounds for clamping triangles to the colorbar region
+    let cbar_y_truncated = (cbar_y as u32) as f64;
+    let cbar_h_truncated = (cbar_h as u32) as i32;
+    let clamp_y_min = cbar_y_truncated as i32;
+    let clamp_y_max = clamp_y_min + cbar_h_truncated - 1;
     let tip_distance = (cbar_h * 0.5).round() as i32;
     
     // Get colors from colormap ends
@@ -291,15 +295,15 @@ pub fn draw_colorbar_extends(
     
     // Calculate center more carefully to handle even/odd widths symmetrically
     // For symmetric extends, center should be at the midpoint between left and right edges
-    let cbar_center_x_f64 = (cbar_left_x as f64 + cbar_right_x as f64) / 2.0;
+    let _cbar_center_x_f64 = (cbar_left_x as f64 + cbar_right_x as f64) / 2.0;
     
     // For integer pixel positioning: 
     // If we're using banker's rounding (round-half-to-even), the center rounds to:
-    let cbar_center_x = if cbar_center_x_f64.fract().abs() < 1e-10 {
-        cbar_center_x_f64 as i32  // Already integer
+    let _cbar_center_x = if _cbar_center_x_f64.fract().abs() < 1e-10 {
+        _cbar_center_x_f64 as i32  // Already integer
     } else {
         // Round half to even
-        let floor_x = cbar_center_x_f64.floor() as i32;
+        let floor_x = _cbar_center_x_f64.floor() as i32;
         if (floor_x & 1) == 0 {
             floor_x  // Even, so .5 rounds down
         } else {
@@ -314,7 +318,11 @@ pub fn draw_colorbar_extends(
     
     // The triangle base should align with the gradient bounds
     let gradient_top = cbar_y_truncated as i32;
-    let gradient_bottom = gradient_top + cbar_h_truncated - 1;
+    let gradient_bottom = gradient_top + cbar_h_truncated - 1;  // Original: gradient ends at y_top + height - 1
+    
+    // The clamping bounds: triangles should not exceed the colorbar region
+    let clamp_y_min = gradient_top;
+    let _clamp_y_max = gradient_bottom;
     
     // Tip should be at the floating-point center of the gradient for symmetry
     let gradient_center_f64 = (gradient_top as f64 + gradient_bottom as f64) / 2.0;
@@ -328,12 +336,8 @@ pub fn draw_colorbar_extends(
     let half_height = (gradient_bottom - gradient_top) as f64 / 2.0;
     let base_top_y_f = tip_y as f64 - half_height;
     let base_bottom_y_f = tip_y as f64 + half_height;
-    let mut base_top_y = base_top_y_f.floor() as i32;
-    let mut base_bottom_y = base_bottom_y_f.ceil() as i32;
-    
-    // Clamp to gradient bounds to ensure triangles don't extend beyond the colorbar
-    base_top_y = base_top_y.max(gradient_top);
-    base_bottom_y = base_bottom_y.min(gradient_bottom);
+    let base_top_y = base_top_y_f.floor() as i32;
+    let base_bottom_y = base_bottom_y_f.ceil() as i32;
     
 
 
@@ -349,7 +353,7 @@ pub fn draw_colorbar_extends(
             (base_x, base_top_y),
             (base_x, base_bottom_y),
         ];
-        fill_triangle(vertices, arrow_color, img);
+        fill_triangle_with_clamp(vertices, arrow_color, img, Some((clamp_y_min, clamp_y_max)));
     }
 
     // Draw max arrow (right side) if needed
@@ -364,13 +368,23 @@ pub fn draw_colorbar_extends(
             (base_x, base_top_y),
             (base_x, base_bottom_y),
         ];
-        fill_triangle(vertices, arrow_color, img);
+        fill_triangle_with_clamp(vertices, arrow_color, img, Some((clamp_y_min, clamp_y_max)));
     }
 }
 
 /// Fill a triangle using scanline algorithm with consistent Bresenham rasterization
 /// Ensures symmetric rendering regardless of triangle orientation
+/// Optional clamp_y: if Some((min, max)), clamp all Y pixels to this range
 pub fn fill_triangle(vertices: [(i32, i32); 3], color: Rgba<u8>, img: &mut image::RgbaImage) {
+    fill_triangle_with_clamp(vertices, color, img, None);
+}
+
+pub fn fill_triangle_with_clamp(
+    vertices: [(i32, i32); 3],
+    color: Rgba<u8>,
+    img: &mut image::RgbaImage,
+    clamp_y: Option<(i32, i32)>,
+) {
     let [v0, v1, v2] = vertices;
 
     // Find the y-range
@@ -425,7 +439,7 @@ pub fn fill_triangle(vertices: [(i32, i32); 3], color: Rgba<u8>, img: &mut image
                 // This forms a wedge. The base is a vertical line from base_v1 to base_v2.
                 // Fill the wedge by finding the X extent at each Y.
                 
-                let round_half_to_even = |x: f64| {
+                let _round_half_to_even = |x: f64| {
                     let floor_x = x.floor();
                     let frac = x - floor_x;
                     if frac < 0.5 {
@@ -465,11 +479,18 @@ pub fn fill_triangle(vertices: [(i32, i32); 3], color: Rgba<u8>, img: &mut image
                 };
                 
                 // Track previous edge positions to ensure monotonic stepping
-                let mut prev_x_edge: Option<i32> = None;
+                let _prev_x_edge: Option<i32> = None;
                 
                 for y in y_min..=y_max {
                     if y < 0 || y >= height {
                         continue;
+                    }
+                    
+                    // Clamp Y to the allowed range if specified
+                    if let Some((clamp_min, clamp_max)) = clamp_y {
+                        if y < clamp_min || y > clamp_max {
+                            continue;
+                        }
                     }
                     
                     // Find where the slanted edge (from tip to either top or bottom base) intersects this Y
@@ -490,8 +511,8 @@ pub fn fill_triangle(vertices: [(i32, i32); 3], color: Rgba<u8>, img: &mut image
                         let x_max_f = x_edge_f.max(base_x as f64);
                         
                         // Use floor for min edge and ceil for max edge to ensure monotonic coverage
-                        let mut x_min_i = x_min_f.floor() as i32;
-                        let mut x_max_i = x_max_f.ceil() as i32;
+                        let x_min_i = x_min_f.floor() as i32;
+                        let x_max_i = x_max_f.ceil() as i32;
                         
                         // Clamp before computing the fill range
                         let x_min_clamped = x_min_i.max(0);

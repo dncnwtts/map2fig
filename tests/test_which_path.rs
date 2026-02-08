@@ -1,6 +1,3 @@
-use map2fig::colorbar::fill_triangle;
-use image::Rgba;
-
 #[test]
 fn test_which_path() {
     println!("\n=== WHICH RASTERIZATION PATH ===");

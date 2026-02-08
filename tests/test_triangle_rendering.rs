@@ -529,13 +529,13 @@ fn test_triangle_vertex_symmetry_comprehensive() {
         
         // Left triangle
         let left_base_x = cbar_x_px;
-        let left_tip_x = cbar_x_px - tip_distance;
+        let _left_tip_x = cbar_x_px - tip_distance;
         let left_top_y = base_top_y;
         let left_bottom_y = base_bottom_y;
         
         // Right triangle
         let right_base_x = cbar_x_px + cbar_w_px - 1;
-        let right_tip_x = cbar_x_px + cbar_w_px - 1 + tip_distance;
+        let _right_tip_x = cbar_x_px + cbar_w_px - 1 + tip_distance;
         let right_top_y = base_top_y;
         let right_bottom_y = base_bottom_y;
         
@@ -850,7 +850,7 @@ fn test_triangle_base_to_tip_convergence() {
     let mut prev_width = converge_data[0].3;
     let mut width_changes = Vec::new();
     
-    for (i, (y, left, right, width, center)) in converge_data.iter().enumerate() {
+    for (i, (y, _left, _right, width, _center)) in converge_data.iter().enumerate() {
         let change = prev_width - width;
         width_changes.push(change);
         
@@ -1090,7 +1090,7 @@ fn test_triangle_pixel_extent_symmetry() {
     let mid_y = (20 + 180) / 2;  // Middle scanline
     let mut top_down_issues = 0;
     
-    for (y_top, left_top, right_top, w_top) in extents.iter() {
+    for (y_top, _left_top, _right_top, w_top) in extents.iter() {
         // Find corresponding scanline from bottom
         let distance_from_mid = if *y_top < mid_y as u32 {
             mid_y as u32 - y_top
@@ -1100,9 +1100,9 @@ fn test_triangle_pixel_extent_symmetry() {
         
         // Find a scanline approximately distance_from_mid from the other end
         let target_y_bottom = if *y_top < mid_y as u32 {
-            (mid_y as u32 + distance_from_mid)
+            mid_y as u32 + distance_from_mid
         } else {
-            (mid_y as u32 - distance_from_mid)
+            mid_y as u32 - distance_from_mid
         };
         
         if let Some((y_bottom, _left_bottom, _right_bottom, w_bottom)) = 
@@ -1165,7 +1165,7 @@ fn test_triangle_pixel_extent_symmetry() {
     println!("If truly rotationally symmetric, the patterns should match when reversed.");
     let mut rotational_asymmetries = 0;
     
-    for (i, (y_orig, left_orig, right_orig, w_orig)) in extents.iter().enumerate() {
+    for (_i, (y_orig, _left_orig, _right_orig, w_orig)) in extents.iter().enumerate() {
         // The flipped triangle should have reversed y-positions
         // y_orig=20 corresponds to tip, which is furthest from base
         // In flipped image, tip is at y=180, so y_flip=180 should match
@@ -1175,7 +1175,7 @@ fn test_triangle_pixel_extent_symmetry() {
         let dist_from_orig_tip = (*y_orig - 20) as i32;
         let y_flip = 180 - dist_from_orig_tip;
         
-        if let Some((_, left_flip, right_flip, w_flip)) = 
+        if let Some((_, _left_flip, _right_flip, w_flip)) = 
             flipped_extents.iter().find(|(y, _, _, _)| *y == y_flip as u32) {
             
             if w_orig != w_flip {
