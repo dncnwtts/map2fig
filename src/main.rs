@@ -80,6 +80,7 @@ fn main() {
                     draw_border: !args.no_border,
                     latex_rendering: config.latex_rendering,
                     units: config.units,
+                    extend: args.extend.parse().expect("Invalid extend option"),
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,
@@ -143,6 +144,7 @@ fn main() {
                     draw_border: false,
                     latex_rendering: config.latex_rendering,
                     units: config.units,
+                    extend: args.extend.parse().expect("Invalid extend option"),
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.local_graticule,

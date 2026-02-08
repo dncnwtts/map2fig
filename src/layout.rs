@@ -53,7 +53,16 @@ pub fn compute_mollweide_layout(
 
     let map_w = width - 2.0 * outer_pad;
     let map_h = map_w / 2.0;
-    let cbar_h = if show_colorbar { map_h / 20.0} else { 0.0 };
+    let cbar_h = if show_colorbar { 
+        // Ensure colorbar height is a multiple of 3 for proper triangle rendering
+        // Triangle rendering requires height % 3 == 0 to avoid asymmetries
+        let base_h = map_h / 20.0;
+        let rounded = base_h.round();
+        // Round to nearest multiple of 3
+        ((rounded / 3.0).round() * 3.0).max(12.0)
+    } else { 
+        0.0 
+    };
     let label_h = if show_colorbar { 70.0 * scale } else { 0.0 };
 
     let height =
@@ -134,7 +143,16 @@ pub fn compute_gnomonic_layout(
 
     let map_w = map_size;
     let map_h = map_size;
-    let cbar_h = if show_colorbar { map_h / 25.0 } else { 0.0 };
+    let cbar_h = if show_colorbar { 
+        // Ensure colorbar height is a multiple of 3 for proper triangle rendering
+        // Triangle rendering requires height % 3 == 0 to avoid asymmetries
+        let base_h = map_h / 25.0;
+        let rounded = base_h.round();
+        // Round to nearest multiple of 3
+        ((rounded / 3.0).round() * 3.0).max(12.0)
+    } else { 
+        0.0 
+    };
     let label_h = if show_colorbar { 70.0 * scale } else { 0.0 };
 
     let height =

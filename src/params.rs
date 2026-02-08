@@ -41,6 +41,7 @@ pub struct DisplayParams {
     pub draw_border: bool,
     pub latex_rendering: bool,
     pub units: Option<String>,
+    pub extend: crate::cli::Extend,
 }
 
 /// Graticule overlay parameters.
@@ -121,6 +122,7 @@ pub struct ColorbarParams<'a> {
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub latex_rendering: bool,
     pub units: Option<&'a str>,
+    pub extend: &'a crate::cli::Extend,
 }
 
 /// Graticule rendering parameters.

@@ -295,7 +295,8 @@ mod tests {
                 transparent: false, 
                 draw_border: true, 
                 latex_rendering: false, 
-                units: None 
+                units: None,
+                extend: crate::cli::Extend::None
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 
@@ -465,7 +466,8 @@ mod tests {
                 transparent: true, 
                 draw_border: false, 
                 latex_rendering: false, 
-                units: None 
+                units: None,
+                extend: crate::cli::Extend::None
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 

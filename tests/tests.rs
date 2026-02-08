@@ -122,7 +122,8 @@ fn test_plot_smoke() {
             transparent: true, 
             draw_border: false, 
             latex_rendering: false, 
-            units: Some("str".to_string()) 
+            units: Some("str".to_string()),
+            extend: map2fig::cli::Extend::None,
         },
         graticule: GraticuleParams { 
             show_graticule: false, 

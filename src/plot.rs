@@ -354,6 +354,7 @@ pub fn plot_mollweide_pdf(params: MollweideParams) {
                 hist_scale,
                 latex_rendering,
                 units,
+                extend: &params.display.extend,
             },
         );
     }
@@ -638,6 +639,17 @@ pub fn plot_mollweide_png(params: MollweideParams) {
             scale_params.maxv,
             &scale,
             hist_scale,
+        );
+
+        // Draw extend arrows first so ticks render on top
+        crate::colorbar::draw_colorbar_extends(
+            &params.display.extend,
+            layout.cbar_pad,
+            layout.cbar_y,
+            layout.cbar_w,
+            layout.cbar_h,
+            cmap,
+            &mut img,
         );
 
         // Scale tick heights relative to colorbar
@@ -1284,6 +1296,17 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             );
         }
 
+        // Draw colorbar extend arrows if needed
+        crate::colorbar::draw_colorbar_extends(
+            &params.display.extend,
+            layout.cbar_x,
+            layout.cbar_y,
+            layout.cbar_w,
+            layout.cbar_h,
+            cmap,
+            &mut img,
+        );
+
         // Draw units label below colorbar
         if let Some(units_str) = units {
             let scale = layout.width / 1200.0;
@@ -1530,6 +1553,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 hist_scale: hist_scale.as_ref(),
                 latex_rendering: false,
                 units: Some("μK_CMB"),
+                extend: &params.display.extend,
             },
         );
     }
@@ -1602,6 +1626,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             draw_border: false,
             latex_rendering,
             units: units.map(|s| s.to_string()),
+            extend: params.display.extend.clone(),
         },
         graticule: crate::params::GraticuleParams {
             show_graticule,

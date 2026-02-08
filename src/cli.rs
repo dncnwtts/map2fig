@@ -186,6 +186,33 @@ pub struct Args {
     /// Graticule spacing for meridians [degrees]
     #[arg(long, default_value_t = 15.0)]
     pub grat_mer: f64,
+
+    /// Extend colorbar with arrows at the ends: none, min, max, or both
+    #[arg(long, default_value = "none")]
+    pub extend: String,
+}
+
+/// Colorbar extend option: arrows at minimum, maximum, or both ends
+#[derive(Clone, Debug, PartialEq)]
+pub enum Extend {
+    None,
+    Min,
+    Max,
+    Both,
+}
+
+impl FromStr for Extend {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "none" => Ok(Extend::None),
+            "min" => Ok(Extend::Min),
+            "max" => Ok(Extend::Max),
+            "both" => Ok(Extend::Both),
+            _ => Err(format!("Invalid extend option '{}'. Expected: none, min, max, or both", s)),
+        }
+    }
 }
 
 /// Color option supporting hex (#RRGGBB), RGBA (r,g,b,a), or special keywords

@@ -428,6 +428,13 @@ pub fn draw_colorbar_pdf(
             params.units,
         );
 
+        draw_colorbar_pdf_extends(
+            cr,
+            cb_layout,
+            params.extend,
+            params.cmap,
+        );
+
 }
 
 pub struct PdfRenderTarget<'a> {
@@ -462,6 +469,76 @@ impl RenderTarget for PdfRenderTarget<'_> {
         surface.flush();
         let _ = self.cr.set_source_surface(&surface, x, y);
         self.cr.paint().unwrap();
+    }
+}
+
+/// Draw colorbar extend arrows for PDF
+pub fn draw_colorbar_pdf_extends(
+    cr: &Context,
+    layout: ColorbarLayout,
+    extend: &crate::cli::Extend,
+    cmap: &Colormap,
+) {
+    use crate::cli::Extend;
+
+    // Skip if no extends requested
+    match extend {
+        Extend::None => return,
+        _ => {}
+    }
+
+    // Get colors for extend arrows from colormap endpoints
+    let min_color_rgb = cmap.sample(0.0);
+    let max_color_rgb = cmap.sample(1.0);
+
+    // Isosceles triangles: tip distance is about half the colorbar height
+    let tip_distance = layout.h * 0.5;
+
+    // Line width for triangle outline
+    cr.set_line_width(0.5);
+
+    // Draw left arrow for min extend
+    if matches!(extend, Extend::Min | Extend::Both) {
+        // Left arrow: tip points left, base is at colorbar left edge
+        let tip_x = layout.x - tip_distance;
+        let base_x = layout.x;
+        let base_top_y = layout.y;
+        let base_bottom_y = layout.y + layout.h;
+        let tip_y = layout.y + layout.h / 2.0;
+
+        // Fill triangle with min color (no outline)
+        cr.set_source_rgb(
+            min_color_rgb.0[0] as f64 / 255.0,
+            min_color_rgb.0[1] as f64 / 255.0,
+            min_color_rgb.0[2] as f64 / 255.0,
+        );
+        cr.move_to(tip_x, tip_y);
+        cr.line_to(base_x, base_top_y);
+        cr.line_to(base_x, base_bottom_y);
+        cr.close_path();
+        cr.fill().unwrap();
+    }
+
+    // Draw right arrow for max extend
+    if matches!(extend, Extend::Max | Extend::Both) {
+        // Right arrow: tip points right, base is at colorbar right edge
+        let tip_x = layout.x + layout.w + tip_distance;
+        let base_x = layout.x + layout.w;
+        let base_top_y = layout.y;
+        let base_bottom_y = layout.y + layout.h;
+        let tip_y = layout.y + layout.h / 2.0;
+
+        // Fill triangle with max color (no outline)
+        cr.set_source_rgb(
+            max_color_rgb.0[0] as f64 / 255.0,
+            max_color_rgb.0[1] as f64 / 255.0,
+            max_color_rgb.0[2] as f64 / 255.0,
+        );
+        cr.move_to(tip_x, tip_y);
+        cr.line_to(base_x, base_top_y);
+        cr.line_to(base_x, base_bottom_y);
+        cr.close_path();
+        cr.fill().unwrap();
     }
 }
 
