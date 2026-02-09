@@ -1747,7 +1747,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let data = text_surface.data().expect("Failed to get surface data");
         
         // Position for rotated text (left side of map, reading upwards)
-        let text_x = (layout.map_x - 30.0) as i32;
+        // Center the text horizontally in the left margin (between x=0 and layout.map_x)
+        let text_x_center = (layout.map_x / 2.0) as i32;
         let text_y_center = (layout.map_y + layout.map_h / 2.0) as i32;
         
         // Composite rotated text onto main image
@@ -1758,8 +1759,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 if src_idx + 3 < data.len() {
                     let alpha = data[src_idx + 3] as f32 / 255.0;
                     if alpha > 0.1 {
-                        // Rotate 90 degrees counterclockwise
-                        let rotated_x = text_x - src_y as i32 + 25;
+                        // Rotate 90 degrees counterclockwise and center in left margin
+                        let rotated_x = text_x_center - src_y as i32 + 25;
                         let rotated_y = text_y_center - 100 + src_x as i32;
                         
                         if rotated_x >= 0 && rotated_y >= 0 && 
@@ -1796,8 +1797,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let bad_color = params.color.bad_color;
     let _bg_color = params.color.bg_color;
     let meta = params.meta;
-    let _latex_rendering = params.display.latex_rendering;
-    let _units = params.display.units.as_deref();
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
     let view = params.view;
     let lon_deg = params.lon_deg;
     let lat_deg = params.lat_deg;
@@ -1946,8 +1947,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 scale_type: scale,
                 gamma,
                 hist_scale: hist_scale.as_ref(),
-                latex_rendering: false,
-                units: Some("μK_CMB"),
+                latex_rendering,
+                units,
                 extend: &params.display.extend,
                 units_font_size: params.display.units_font_size,
             },
