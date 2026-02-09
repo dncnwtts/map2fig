@@ -69,6 +69,91 @@ pub fn compute_mollweide_scale(
 }
 
 
+/// Compute scale limits for gnomonic projections using only FOV-contained pixels.
+/// This ensures the color scale is based on visible data, not the entire map.
+pub fn compute_gnomonic_scale(
+    map: &[f64],
+    minv: Option<f64>,
+    maxv: Option<f64>,
+    gamma: f64,
+    scale: Scale,
+    projection: &dyn crate::projection::Projection,
+    width: u32,
+    meta: crate::healpix::HealpixMeta,
+    view: &crate::rotation::ViewTransform,
+) -> MollweideScale {
+    // Collect values only from pixels within the field of view
+    let mut values: Vec<f64> = Vec::new();
+    
+    for y in 0..width {
+        for x in 0..width {
+            // Use normalized coordinates [0, 1]
+            let u = x as f64 / width as f64;
+            let v = y as f64 / width as f64;
+            
+            // Check if this pixel projects to a valid sky coordinate
+            if let Some((lon, lat)) = projection.inverse(u, v) {
+                // Convert from (lon, lat) in radians to (theta, phi) for sample_healpix
+                // theta = pi/2 - latitude, phi = longitude
+                let theta = std::f64::consts::PI / 2.0 - lat;
+                
+                // sample_healpix takes (map, meta, view, theta, lon)
+                if let Some(value) = sample_healpix(map, meta, view, theta, lon) {
+                    if is_seen(value) {
+                        values.push(value);
+                    }
+                }
+            }
+        }
+    }
+
+    if values.is_empty() {
+        // Fallback to all valid data if no FOV data found
+        values = map
+            .iter()
+            .filter(|v| is_seen(**v))
+            .copied()
+            .collect();
+        
+        if values.is_empty() {
+            panic!("Map contains no valid HEALPix values");
+        }
+    }
+
+    values.sort_unstable_by(unsafe_float_cmp);
+
+    let data_min = *values.first().unwrap();
+    let data_max = *values.last().unwrap();
+
+    let (minv, maxv) = match scale {
+        // For histogram scale, use full data range if not explicitly specified
+        Scale::Histogram => match (minv, maxv) {
+            (Some(lo), Some(hi)) => (lo, hi),
+            _ => (data_min, data_max),
+        },
+
+        // For other scales, use percentiles of FOV-contained data
+        _ => match (minv, maxv) {
+            (Some(lo), Some(hi)) => (lo, hi),
+            _ => (
+                percentile(&values, 5.0),
+                percentile(&values, 95.0),
+            ),
+        },
+    };
+
+    if gamma <= 0.0 {
+        panic!("Gamma must be > 0");
+    }
+
+    if minv > maxv {
+        panic!("Invalid color scale: {minv} > {maxv}");
+    }
+
+    MollweideScale { minv, maxv }
+}
+
+
 pub fn render_mollweide_pixels(
     params: crate::params::RenderMollweideParams,
     layout: MollweideLayout,
@@ -1407,7 +1492,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     
     let mut grid = RasterGrid::new(width, width);
     
-    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
+    // For gnomonic projections, compute scale limits using only FOV-contained pixels
+    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, &view);
     
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
@@ -1675,7 +1761,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     // Render to grid first (just the map region)
     let mut grid = RasterGrid::new(width, img_height);
     
-    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
+    // For gnomonic projections, compute scale limits using only FOV-contained pixels
+    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, &view);
     
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
