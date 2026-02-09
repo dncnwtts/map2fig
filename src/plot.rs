@@ -1639,12 +1639,11 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
         // Draw units label below colorbar
         if let Some(units_str) = units {
-            let scale = layout.width / 1200.0;
-            let units_y = (cb_layout.tick_label_pad + 25.0 * scale) as i32;
+            let units_y = cb_layout.tick_label_pad as i32;
             
             if latex_rendering {
                 // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
-                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
+                let latex_font_size = (cb_layout.tick_font_size * 0.25).round().clamp(3.0, 20.0) as u32;
                 // Try to render LaTeX and composite onto image
                 if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
                     // Composite the rendered LaTeX PNG onto the main image
@@ -1748,20 +1747,21 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         
         // Position for rotated text (left side of map, reading upwards)
         // Center the text horizontally in the left margin (between x=0 and layout.map_x)
-        let text_x_center = (layout.map_x / 2.0) as i32;
-        let text_y_center = (layout.map_y + layout.map_h / 2.0) as i32;
+        let left_margin_x = (layout.map_x * 0.4) as i32;
+        let map_center_y = (layout.map_y + layout.map_h / 2.0) as i32;
         
         // Composite rotated text onto main image
-        // Rotate 90 degrees counterclockwise: (x,y) -> (y, -x)
+        // Rotate 90 degrees counterclockwise: (x,y) -> (y, 200-x)
+        // Then translate to position in left margin
         for src_y in 0..50 {
             for src_x in 0..200 {
                 let src_idx = src_y * stride + src_x * 4;
                 if src_idx + 3 < data.len() {
                     let alpha = data[src_idx + 3] as f32 / 255.0;
                     if alpha > 0.1 {
-                        // Rotate 90 degrees counterclockwise and center in left margin
-                        let rotated_x = text_x_center - src_y as i32 + 25;
-                        let rotated_y = text_y_center - 100 + src_x as i32;
+                        // Rotate 90 degrees counterclockwise: text at (x,y) -> (y, 200-x)
+                        let rotated_x = left_margin_x - src_y as i32;
+                        let rotated_y = map_center_y + src_x as i32 - 100;
                         
                         if rotated_x >= 0 && rotated_y >= 0 && 
                            rotated_x < img.width() as i32 && rotated_y < img.height() as i32 {
