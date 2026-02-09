@@ -1723,23 +1723,57 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             width, 
             width);
         
-        // Draw text label on the left side
-        // The text is positioned at the left edge, vertically centered
-        let text_color = Rgba([0, 0, 0, 255]);
-        let text_x = (layout.map_x - 40.0) as i32;
-        let text_y = (layout.map_y + layout.map_h / 2.0) as i32;
+        // Render text to temporary Cairo surface with 90-degree rotation
+        let font_size = 10.0 * (width as f64 / 1200.0);
+        let mut text_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 50)
+            .expect("Failed to create text surface");
+        {
+            let text_cr = cairo::Context::new(&text_surface).expect("Failed to create text context");
+            
+            // Set transparent background
+            text_cr.set_source_rgba(1.0, 1.0, 1.0, 0.0);
+            text_cr.paint().expect("Failed to paint background");
+            
+            // Draw text in black
+            text_cr.set_source_rgb(0.0, 0.0, 0.0);
+            text_cr.set_font_size(font_size);
+            text_cr.move_to(5.0, 35.0);
+            text_cr.show_text(&text).ok();
+        } // Drop text_cr to release the surface
         
-        // Render text with small font size
-        let font_size = (10.0 * (width as f64 / 1200.0)) as f32;
-        draw_text_mut(
-            &mut img,
-            text_color,
-            text_x,
-            text_y,
-            FontScale::uniform(font_size),
-            &font,
-            &text,
-        );
+        // Extract pixels from Cairo surface and composite with rotation
+        text_surface.flush();
+        let stride = text_surface.stride() as usize;
+        let data = text_surface.data().expect("Failed to get surface data");
+        
+        // Position for rotated text (left side of map, reading upwards)
+        let text_x = (layout.map_x - 30.0) as i32;
+        let text_y_center = (layout.map_y + layout.map_h / 2.0) as i32;
+        
+        // Composite rotated text onto main image
+        // Rotate 90 degrees counterclockwise: (x,y) -> (y, -x)
+        for src_y in 0..50 {
+            for src_x in 0..200 {
+                let src_idx = src_y * stride + src_x * 4;
+                if src_idx + 3 < data.len() {
+                    let alpha = data[src_idx + 3] as f32 / 255.0;
+                    if alpha > 0.1 {
+                        // Rotate 90 degrees counterclockwise
+                        let rotated_x = text_x - src_y as i32 + 25;
+                        let rotated_y = text_y_center - 100 + src_x as i32;
+                        
+                        if rotated_x >= 0 && rotated_y >= 0 && 
+                           rotated_x < img.width() as i32 && rotated_y < img.height() as i32 {
+                            let dst_pixel = img.get_pixel_mut(rotated_x as u32, rotated_y as u32);
+                            // Blend with alpha
+                            dst_pixel[0] = (data[src_idx + 2] as f32 * alpha + dst_pixel[0] as f32 * (1.0 - alpha)) as u8;
+                            dst_pixel[1] = (data[src_idx + 1] as f32 * alpha + dst_pixel[1] as f32 * (1.0 - alpha)) as u8;
+                            dst_pixel[2] = (data[src_idx] as f32 * alpha + dst_pixel[2] as f32 * (1.0 - alpha)) as u8;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Save PNG
@@ -1927,14 +1961,25 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             width, 
             width);
         
-        // Position text on the left side of the map, vertically centered
+        // Position text on the left side of the map, vertically centered with 90-degree rotation
         let text_x = layout.map_x - 40.0;
         let text_y = layout.map_y + layout.map_h / 2.0;
         
+        // Save current transformation matrix
+        cr.save();
+        
+        // Move to position and rotate 90 degrees (π/2 radians counterclockwise)
+        cr.translate(text_x, text_y);
+        cr.rotate(std::f64::consts::PI / 2.0);
+        
+        // Draw text in black
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_font_size(10.0);
-        cr.move_to(text_x, text_y);
+        cr.move_to(0.0, 0.0);
         cr.show_text(&text).ok();
+        
+        // Restore transformation matrix
+        cr.restore();
     }
 
     pdf_surface.finish();
