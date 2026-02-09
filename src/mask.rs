@@ -69,27 +69,84 @@ impl PixelMask {
 
     /// Load mask from FITS file
     /// FITS file should contain a binary mask where 0=masked, 1=valid
+    /// The mask should be in a binary table with NSIDE calculated from data size
     pub fn from_fits_file(
         path: &str,
         fill_color: Option<Rgba<u8>>,
         mask_coord: Option<CoordSystem>,
     ) -> Result<Self, String> {
-        // Note: Full FITS loading requires understanding the specific file format.
-        // For now, we'll provide a template for future implementation.
-        // The mask file should contain pixels where 0=masked, 1=valid (or equivalent).
+        use std::fs::File;
+        use std::io::BufReader;
+        use fitsrs::{Fits, HDU};
+        use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
         
-        let _path = path; // suppress unused warning
-        let _fill_color = fill_color;
-        let _mask_coord = mask_coord;
+        // Open FITS file
+        let f = File::open(path)
+            .map_err(|e| format!("Failed to open FITS file '{}': {}", path, e))?;
+        let reader = BufReader::new(f);
+        let mut fits = Fits::from_reader(reader);
         
-        // TODO: Implement FITS loading when we know the mask file format
-        // This would require:
-        // 1. Opening the FITS file
-        // 2. Reading NSIDE from header
-        // 3. Extracting the mask data (image or binary table column)
-        // 4. Converting to boolean Vec<bool>
+        let mut mask_data: Vec<f64> = Vec::new();
         
-        Err("FITS mask loading not yet implemented. Use from_value_range() for threshold masking instead.".to_string())
+        // Read mask from first binary table's first column (column 0)
+        while let Some(Ok(hdu)) = fits.next() {
+            if let HDU::XBinaryTable(hdu_ref) = hdu {
+                let data = fits.get_data(&hdu_ref);
+                let mut table = data.table_data();
+                let values = table.select_fields(&[ColumnId::Index(0)]);
+                
+                for cell in values {
+                    match cell {
+                        DataValue::Double { value, .. } => mask_data.push(value),
+                        DataValue::Float { value, .. } => mask_data.push(value as f64),
+                        DataValue::Integer { value, .. } => mask_data.push(value as f64),
+                        _ => {}
+                    }
+                }
+                
+                // Found data, stop looking
+                if !mask_data.is_empty() {
+                    break;
+                }
+            }
+        }
+        
+        // Validate we got data
+        if mask_data.is_empty() {
+            return Err(format!(
+                "No mask data found in FITS file '{}'. \
+                Ensure file contains a binary table with mask in first column.",
+                path
+            ));
+        }
+        
+        // Calculate nside from npix: nside = sqrt(npix / 12)
+        let npix = mask_data.len() as f64;
+        let nside_f = (npix / 12.0).sqrt();
+        let nside = nside_f as i64;
+        
+        // Validate that npix is a valid HEALPix size
+        if (nside * nside * 12) as f64 != npix {
+            return Err(format!(
+                "Invalid mask size: {} pixels. Expected 12*nside^2 for some integer nside.",
+                mask_data.len()
+            ));
+        }
+        
+        if nside < 1 || nside > 1024 {
+            return Err(format!("Calculated NSIDE {} is out of range [1, 1024]", nside));
+        }
+        
+        // Convert to boolean (0 or near-0 = masked, anything > 0.5 = valid)
+        let mask_bool: Vec<bool> = mask_data
+            .into_iter()
+            .map(|val| val > 0.5)
+            .collect();
+        
+        // Default to Galactic coordinate system (can be overridden)
+        let coord_system = mask_coord.unwrap_or(CoordSystem::G);
+        
+        Ok(Self::from_vec(mask_bool, nside, fill_color, coord_system))
     }
 
     /// Check if mask needs transformation (coordinate mismatch)
