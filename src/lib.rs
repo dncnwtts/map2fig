@@ -19,6 +19,7 @@ pub mod latex_render;
 pub mod rotation;
 pub mod graticule;
 pub mod params;
+pub mod mask;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf, plot_hammer_auto, plot_hammer_png, plot_hammer_pdf};
@@ -27,6 +28,7 @@ pub use fits::read_healpix_column;
 pub use cli::{Args, PlotConfig};
 pub use scale::validate_scale_config;
 pub use constants::*;
+pub use mask::PixelMask;
 
 use std::str::FromStr;
 use image::{Rgba, RgbaImage};
@@ -304,6 +306,7 @@ mod tests {
                 llabel: None,
                 rlabel: None,
                 label_font_size: None,
+                mask: None,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 
@@ -481,6 +484,7 @@ mod tests {
                 llabel: None,
                 rlabel: None,
                 label_font_size: None,
+                mask: None,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 

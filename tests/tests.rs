@@ -130,6 +130,7 @@ fn test_plot_smoke() {
             llabel: None,
             rlabel: None,
             label_font_size: None,
+            mask: None,
         },
         graticule: GraticuleParams { 
             show_graticule: false, 

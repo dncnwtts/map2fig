@@ -214,6 +214,26 @@ pub struct Args {
     /// Font size for labels in points (default: auto-scaled, 16pt at width 800px)
     #[arg(long)]
     pub label_font_size: Option<f32>,
+
+    /// Path to mask FITS file (binary mask: 0=masked, 1=valid)
+    #[arg(long)]
+    pub mask_file: Option<String>,
+
+    /// Mask pixels with values below this threshold
+    #[arg(long, allow_negative_numbers = true)]
+    pub mask_below: Option<f64>,
+
+    /// Mask pixels with values above this threshold
+    #[arg(long, allow_negative_numbers = true)]
+    pub mask_above: Option<f64>,
+
+    /// Color for masked regions: transparent, gray, or r,g,b,a format
+    #[arg(long, default_value = "transparent")]
+    pub maskfill_color: String,
+
+    /// Coordinate system of mask file (gal, eq, ecl) - auto-detects if not specified
+    #[arg(long)]
+    pub mask_coord: Option<String>,
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends

@@ -7,7 +7,7 @@ use crate::layout::{compute_mollweide_layout, compute_gnomonic_layout, Mollweide
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
 use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
-use crate::healpix::{is_seen, sample_healpix};
+use crate::healpix::{is_seen, sample_healpix, sample_healpix_index};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
 use crate::render::raster::RasterGrid;
@@ -98,6 +98,7 @@ pub fn render_mollweide_pixels(
             meta: params.meta,
             hist_scale: params.hist_scale,
             view: params.view,
+            mask: params.mask,
         },
         &mut grid,
     );
@@ -139,6 +140,7 @@ pub fn render_hammer_pixels(
             meta: params.meta,
             hist_scale: params.hist_scale,
             view: params.view,
+            mask: params.mask,
         },
         &mut grid,
     );
@@ -218,6 +220,7 @@ where
     let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
+    let mask = params.display.mask.as_ref();
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
@@ -308,6 +311,7 @@ where
             meta,
             hist_scale,
             view,
+            mask,
         },
         layout,
         &mut sink,
@@ -482,6 +486,7 @@ where
     let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
+    let mask = params.display.mask.as_ref();
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
@@ -552,6 +557,7 @@ where
             meta,
             hist_scale,
             view,
+            mask,
         },
         layout,
         &mut sink,
@@ -1179,8 +1185,8 @@ pub fn render_projection_to_grid(
                     None => PixelValue::Bad,
                 };
 
-                // Inline pixel_value_to_rgba for better performance
-                let rgba = match pixel_val {
+                // Check if pixel is masked
+                let mut rgba = match pixel_val {
                     PixelValue::Color(t) => {
                         let t = if gamma_inv == 1.0 { t } else { t.powf(gamma_inv) };
                         let c = params.cmap.sample(t);
@@ -1196,6 +1202,18 @@ pub fn render_projection_to_grid(
                     }
                     PixelValue::Bad => params.bad_color,
                 };
+
+                // Apply mask if present
+                if let Some(mask) = params.mask {
+                    let healpix_idx = sample_healpix_index(params.map, params.meta, params.view, theta, lon);
+                    if let Some(idx) = healpix_idx
+                        && !mask.is_valid(idx) {
+                            // Pixel is masked: use maskfill color if specified, otherwise leave as is
+                            if let Some(fill_color) = mask.fill_color {
+                                rgba = fill_color;
+                            }
+                        }
+                }
 
                 // Use unchecked access for hot path (bounds guaranteed by loop)
                 unsafe {
@@ -1374,6 +1392,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let grat_overlay = params.graticule.grat_overlay;
     let _overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
+    let mask = params.display.mask.as_ref();
 
     use crate::gnomonic::GnomonicProjection;
 
@@ -1413,6 +1432,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             meta,
             hist_scale: hist_scale.as_ref(),
             view,
+            mask,
         },
         &mut grid,
     );
@@ -1642,6 +1662,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let grat_overlay = params.graticule.grat_overlay;
     let _overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
+    let mask = params.display.mask.as_ref();
 
     use crate::gnomonic::GnomonicProjection;
 
@@ -1679,6 +1700,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             meta,
             hist_scale: hist_scale.as_ref(),
             view,
+            mask,
         },
         &mut grid,
     );
@@ -1857,6 +1879,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             rlabel: params.display.rlabel.clone(),
             llabel: params.display.llabel.clone(),
             label_font_size: params.display.label_font_size,
+            mask: None,
         },
         graticule: crate::params::GraticuleParams {
             show_graticule,
@@ -1959,6 +1982,7 @@ where
     let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
+    let mask = params.display.mask.as_ref();
 
     let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
@@ -2049,6 +2073,7 @@ where
             meta,
             hist_scale,
             view,
+            mask,
         },
         layout,
         &mut sink,

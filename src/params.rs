@@ -48,6 +48,7 @@ pub struct DisplayParams {
     pub rlabel: Option<String>,
     pub llabel: Option<String>,
     pub label_font_size: Option<f32>,
+    pub mask: Option<crate::mask::PixelMask>,
 }
 
 /// Graticule overlay parameters.
@@ -112,6 +113,7 @@ pub struct RenderMollweideParams<'a> {
     pub meta: HealpixMeta,
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub view: &'a crate::rotation::ViewTransform,
+    pub mask: Option<&'a crate::mask::PixelMask>,
 }
 
 /// Grid rendering parameters for projection sampling.
@@ -127,6 +129,7 @@ pub struct RenderGridParams<'a> {
     pub meta: HealpixMeta,
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub view: &'a crate::rotation::ViewTransform,
+    pub mask: Option<&'a crate::mask::PixelMask>,
 }
 
 /// Colorbar rendering parameters for PDF output.

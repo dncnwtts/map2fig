@@ -493,6 +493,32 @@ pub fn sample_healpix(
     map.get(ipix).copied()
 }
 
+/// Get the HEALPix pixel index for a given coordinate
+pub fn sample_healpix_index(
+    _map: &[f64],
+    meta: HealpixMeta,
+    view: &ViewTransform,
+    theta: f64,
+    lon: f64,
+) -> Option<usize> {
+    if !theta.is_finite() || !lon.is_finite() {
+        return None;
+    }
+
+    // Direction on the screen / projection
+    let v_view = sph_to_vec(theta, lon);
+
+    // Rotate BACK into map coordinates using pre-computed inverse
+    let v_map = view.apply_inverse(v_view);
+
+    let (mut theta_m, mut lon_m) = vec_to_sph(v_map);
+
+    theta_m = theta_m.clamp(0.0, PI);
+    lon_m = lon_m.rem_euclid(2.0 * PI);
+
+    let ipix = ang2pix(meta, theta_m, lon_m) as usize;
+    Some(ipix)
+}
 
 #[cfg(test)]
 mod tests {
