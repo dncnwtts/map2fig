@@ -202,6 +202,18 @@ pub struct Args {
     /// Units text font size in points (default: auto-scaled, 16pt at width 800px)
     #[arg(long)]
     pub units_font_size: Option<f32>,
+
+    /// Text label for top-left corner
+    #[arg(long)]
+    pub llabel: Option<String>,
+
+    /// Text label for top-right corner
+    #[arg(long)]
+    pub rlabel: Option<String>,
+
+    /// Font size for labels in points (default: auto-scaled, 16pt at width 800px)
+    #[arg(long)]
+    pub label_font_size: Option<f32>,
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends

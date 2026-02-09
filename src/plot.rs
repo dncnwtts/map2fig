@@ -413,6 +413,16 @@ where
         );
     }
 
+    // Draw figure labels (rlabel, llabel)
+    crate::render::pdf::draw_figure_labels_pdf(
+        &cr_pdf,
+        layout.width,
+        layout.height,
+        &params.display.rlabel,
+        &params.display.llabel,
+        latex_rendering,
+        params.display.label_font_size,
+    );
 
     
     // -----------------------------
@@ -928,9 +938,19 @@ where
         }
     }
 
+    // Draw figure labels (rlabel, llabel)
+    draw_figure_labels_png(
+        &mut img,
+        layout.width as u32,
+        layout.height as u32,
+        &params.display.rlabel,
+        &params.display.llabel,
+        latex_rendering,
+        params.display.label_font_size,
+    );
+
     img.save(filename).expect("Failed to save PNG");
 }
-
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     assert!((0.0..=100.0).contains(&p));
@@ -967,6 +987,125 @@ pub fn plot_mollweide_auto(params: MollweideParams) {
     }
 }
 
+/// Draw figure labels on PNG image
+/// Supports LaTeX rendering when latex_rendering is true
+pub fn draw_figure_labels_png(
+    img: &mut RgbaImage,
+    width: u32,
+    height: u32,
+    rlabel: &Option<String>,
+    llabel: &Option<String>,
+    latex_rendering: bool,
+    label_font_size: Option<f32>,
+) {
+    // Calculate font size for labels
+    // Default: 2pt larger than units label (which is 14pt)
+    let scale = width as f64 / 800.0;
+    let font_size = if let Some(size) = label_font_size {
+        (size * scale as f32) as f32
+    } else {
+        // Default: 2pt larger than standard units label (14pt * scale + 2pt)
+        (14.0 * scale as f32 + 2.0).max(6.0)
+    };
+    let font_size_pt = font_size as u32;
+    let font_scale = FontScale::uniform(font_size);
+    
+    let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
+    let font = Font::try_from_bytes(font_data as &[u8])
+        .expect("Failed to load font");
+    
+    let text_color = Rgba([0, 0, 0, 255]); // Black text
+    
+    // Position labels with larger padding to prevent clipping at top
+    // Position at the average of ellipse-relative and figure-relative positions
+    let padding_x = 20.0 * scale;     // Horizontal padding from edges
+    let x_left = padding_x as i32;
+    let x_right = (width as f64 - padding_x) as i32;
+    let y_label = (padding_x + (height as f64 * 0.095)) as i32;  // Average of two positions
+    
+    // Draw left label (llabel) - top left, left-aligned
+    if let Some(text) = llabel {
+        if latex_rendering {
+            // Try to render as LaTeX
+            if let Some(rendered) = crate::latex_render::render_latex_to_png(text, font_size_pt) {
+                // Composite the rendered LaTeX PNG onto the main image
+                let latex_img = image::load_from_memory(&rendered.image_data)
+                    .expect("Failed to load rendered LaTeX");
+                let latex_rgba = latex_img.to_rgba8();
+                
+                // Composite with alpha blending (left-aligned)
+                for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
+                    let img_x = x_left + lx as i32;
+                    let img_y = y_label + ly as i32;
+                    
+                    if img_x >= 0 && img_x < width as i32 && 
+                       img_y >= 0 && img_y < height as i32 {
+                        let alpha = pixel[3] as f32 / 255.0;
+                        if alpha > 0.01 {
+                            let existing = img.get_pixel(img_x as u32, img_y as u32);
+                            let blended = Rgba([
+                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                255,
+                            ]);
+                            img.put_pixel(img_x as u32, img_y as u32, blended);
+                        }
+                    }
+                }
+            } else {
+                // Fallback to plain text
+                draw_text_mut(img, text_color, x_left, y_label, font_scale, &font, text);
+            }
+        } else {
+            draw_text_mut(img, text_color, x_left, y_label, font_scale, &font, text);
+        }
+    }
+    
+    // Draw right label (rlabel) - top right, right-aligned
+    if let Some(text) = rlabel {
+        if latex_rendering {
+            // Try to render as LaTeX
+            if let Some(rendered) = crate::latex_render::render_latex_to_png(text, font_size_pt) {
+                // Composite the rendered LaTeX PNG onto the main image (right-aligned)
+                let latex_img = image::load_from_memory(&rendered.image_data)
+                    .expect("Failed to load rendered LaTeX");
+                let latex_rgba = latex_img.to_rgba8();
+                
+                // Composite with alpha blending (right-aligned)
+                let latex_width = latex_rgba.width() as i32;
+                for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
+                    let img_x = x_right - latex_width + lx as i32;
+                    let img_y = y_label + ly as i32;
+                    
+                    if img_x >= 0 && img_x < width as i32 && 
+                       img_y >= 0 && img_y < height as i32 {
+                        let alpha = pixel[3] as f32 / 255.0;
+                        if alpha > 0.01 {
+                            let existing = img.get_pixel(img_x as u32, img_y as u32);
+                            let blended = Rgba([
+                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                255,
+                            ]);
+                            img.put_pixel(img_x as u32, img_y as u32, blended);
+                        }
+                    }
+                }
+            } else {
+                // Fallback to plain text (right-aligned)
+                let text_width = (text.len() as f32 * (font_size / 2.0)) as i32;
+                let x = (x_right - text_width).max(0);
+                draw_text_mut(img, text_color, x, y_label, font_scale, &font, text);
+            }
+        } else {
+            let text_width = (text.len() as f32 * (font_size / 2.0)) as i32;
+            let x = (x_right - text_width).max(0);
+            draw_text_mut(img, text_color, x, y_label, font_scale, &font, text);
+        }
+    }
+}
 
 
 
@@ -1715,6 +1854,9 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             tick_direction: params.display.tick_direction.clone(),
             tick_font_size: params.display.tick_font_size,
             units_font_size: params.display.units_font_size,
+            rlabel: params.display.rlabel.clone(),
+            llabel: params.display.llabel.clone(),
+            label_font_size: params.display.label_font_size,
         },
         graticule: crate::params::GraticuleParams {
             show_graticule,

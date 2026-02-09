@@ -567,3 +567,145 @@ pub fn draw_colorbar_pdf_extends(
     }
 }
 
+/// Draw figure labels (rlabel, llabel) on PDF
+/// Supports LaTeX rendering when latex_rendering is true
+pub fn draw_figure_labels_pdf(
+    cr: &Context,
+    width: f64,
+    height: f64,
+    rlabel: &Option<String>,
+    llabel: &Option<String>,
+    latex_rendering: bool,
+    label_font_size: Option<f32>,
+) {
+    // Calculate font size for labels
+    // Default: 2pt larger than units label (which is 14pt)
+    // Units label: 14pt * 0.5 ≈ 7pt, so labels default to ~16pt
+    let scale = width / 800.0;
+    let font_size = if let Some(size) = label_font_size {
+        (size as f64 * scale) as f64
+    } else {
+        // Default: 2pt larger than standard units label (14pt * scale + 2pt)
+        14.0 * scale + 2.0
+    };
+    let font_size_pt = if let Some(size) = label_font_size {
+        (size as u32).max(6)
+    } else {
+        ((14.0 * scale as f32 + 2.0) as u32).max(6)
+    };
+    
+    // Set color to black
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.set_font_size(font_size);
+    
+    // Set up font for plain text
+    cr.set_font_face(&cairo::FontFace::toy_create(
+        "STIXGeneral",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+    ).unwrap_or_else(|_| {
+        cairo::FontFace::toy_create(
+            "DejaVu Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+        ).unwrap()
+    }));
+    
+    // Position labels with larger padding to prevent clipping at top
+    // Position at the average of ellipse-relative and figure-relative positions
+    let padding_x = 20.0 * scale;     // Horizontal padding from edges
+    let x_left = padding_x;
+    let x_right = width - padding_x;
+    let y_label = padding_x + (height * 0.095);  // Average of two positions
+    
+    // Draw left label (llabel)
+    if let Some(text) = llabel {
+        if latex_rendering {
+            // Try to render as LaTeX
+            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150) {
+                embed_latex_png_in_label(cr, &rendered, x_left, y_label, false);
+            } else if let Some(rendered) = latex_render::render_latex_to_png(text, font_size_pt) {
+                embed_latex_png_in_label(cr, &rendered, x_left, y_label, false);
+            } else {
+                // Fallback to plain text
+                cr.move_to(x_left, y_label);
+                cr.show_text(text).unwrap();
+            }
+        } else {
+            cr.move_to(x_left, y_label);
+            cr.show_text(text).unwrap();
+        }
+    }
+    
+    // Draw right label (rlabel)
+    if let Some(text) = rlabel {
+        if latex_rendering {
+            // Try to render as LaTeX
+            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150) {
+                embed_latex_png_in_label(cr, &rendered, x_right, y_label, true);
+            } else if let Some(rendered) = latex_render::render_latex_to_png(text, font_size_pt) {
+                embed_latex_png_in_label(cr, &rendered, x_right, y_label, true);
+            } else {
+                // Fallback to plain text, right-aligned
+                let extents = cr.text_extents(text).unwrap();
+                let x = x_right - extents.x_advance();
+                cr.move_to(x, y_label);
+                cr.show_text(text).unwrap();
+            }
+        } else {
+            let extents = cr.text_extents(text).unwrap();
+            let x = x_right - extents.x_advance();
+            cr.move_to(x, y_label);
+            cr.show_text(text).unwrap();
+        }
+    }
+}
+
+/// Embed a LaTeX PNG image in a figure label with proper positioning
+fn embed_latex_png_in_label(
+    cr: &Context,
+    rendered: &latex_render::RenderedLatex,
+    x_pos: f64,
+    y_pos: f64,
+    right_aligned: bool,
+) {
+    // Convert PNG to Cairo surface
+    if let Ok(img_buf) = image::load_from_memory_with_format(
+        &rendered.image_data,
+        image::ImageFormat::Png,
+    ) {
+        let rgba = img_buf.to_rgba8();
+        
+        // Create surface with proper dimensions
+        if let Ok(surf) = ImageSurface::create_for_data(
+            rgba.clone().into_raw(),
+            Format::ARgb32,
+            rendered.width as i32,
+            rendered.height as i32,
+            rendered.width as i32 * 4,
+        ) {
+            // Scale for display (approximate pixel size)
+            let scale_factor = 1.0;
+            let display_width = rendered.width as f64 * scale_factor;
+            let display_height = rendered.height as f64 * scale_factor;
+            
+            // Position: adjust for right-alignment if needed
+            let x = if right_aligned {
+                x_pos - display_width
+            } else {
+                x_pos
+            };
+            
+            // Translate and scale to draw the LaTeX image
+            cr.save().unwrap();
+            cr.translate(x, y_pos - display_height / 2.0);
+            cr.scale(scale_factor, scale_factor);
+            
+            cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
+            cr.paint().unwrap();
+            
+            cr.restore().unwrap();
+        }
+    }
+}
+

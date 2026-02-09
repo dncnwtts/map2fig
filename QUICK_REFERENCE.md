@@ -1,10 +1,18 @@
-# Quick Reference: Gnomonic Projection After Fixes
+# Quick Reference: Cosmoglobe Integration Status
 
-## TL;DR - What Changed
+## TL;DR - New Findings
 
-1. **Maps are now bigger by default** (300×300 instead of 60×60)
-2. **Overlay warning is clearer** (tells you to use Mollweide instead)
-3. **Documentation explains everything** (see README.md)
+1. **Cosmoglobe has 3 critical features** map2fig lacks: `--rlabel`, `--llabel`, `--xlabel`, `--ylabel`
+2. **Implementation plan complete** - Ready to add these features (~4 hours of work)
+3. **Documentation in place** - See IMPLEMENTATION_PLAN.md for detailed guide
+
+## Features Coming Soon (From Cosmoglobe Analysis)
+
+**New CLI Options (Not Yet Implemented):**
+- `--rlabel "Text"` - Upper-right label (e.g., "PLANCK 100GHz")
+- `--llabel "Text"` - Upper-left label (e.g., "Year 2 Release")
+- `--xlabel "Text"` - X-axis label (e.g., "Galactic Longitude (°)")
+- `--ylabel "Text"` - Y-axis label (e.g., "Galactic Latitude (°)")
 
 ## Common Commands
 

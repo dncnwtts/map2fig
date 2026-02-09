@@ -92,6 +92,9 @@ fn main() {
                     tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
                     tick_font_size: args.tick_font_size,
                     units_font_size: args.units_font_size,
+                    rlabel: args.rlabel.clone(),
+                    llabel: args.llabel.clone(),
+                    label_font_size: args.label_font_size,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,
@@ -159,6 +162,9 @@ fn main() {
                     tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
                     tick_font_size: args.tick_font_size,
                     units_font_size: args.units_font_size,
+                    rlabel: args.rlabel.clone(),
+                    llabel: args.llabel.clone(),
+                    label_font_size: args.label_font_size,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.local_graticule,
@@ -244,6 +250,9 @@ fn main() {
                     tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
                     tick_font_size: args.tick_font_size,
                     units_font_size: args.units_font_size,
+                    rlabel: args.rlabel.clone(),
+                    llabel: args.llabel.clone(),
+                    label_font_size: args.label_font_size,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,

@@ -127,6 +127,9 @@ fn test_plot_smoke() {
             tick_direction: map2fig::cli::TickDirection::Inward,
             tick_font_size: None,
             units_font_size: None,
+            llabel: None,
+            rlabel: None,
+            label_font_size: None,
         },
         graticule: GraticuleParams { 
             show_graticule: false, 

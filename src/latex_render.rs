@@ -102,12 +102,14 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
     
     let temp_path = temp_dir.path();
     
-    // Create minimal LaTeX document
+    // Create minimal LaTeX document with substantial vertical padding
+    // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
 \pagestyle{{empty}}
 \begin{{document}}
+\rule{{0pt}}{{0.6cm}}\\
 {}
 \end{{document}}"#,
         font_size_pt, latex_str
@@ -327,12 +329,14 @@ pub fn render_latex_to_pdf_tectonic(latex_str: &str, font_size_pt: u32) -> Optio
     let temp_path = temp_dir.path();
     let pdf_path = temp_path.join("document.pdf");
     
-    // Create minimal LaTeX document
+    // Create minimal LaTeX document with substantial vertical padding
+    // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
 \pagestyle{{empty}}
 \begin{{document}}
+\rule{{0pt}}{{0.6cm}}\\
 {}
 \end{{document}}"#,
         font_size_pt, latex_str
@@ -390,12 +394,14 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
     
     let temp_path = temp_dir.path();
     
-    // Create minimal LaTeX document
+    // Create minimal LaTeX document with substantial vertical padding
+    // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
 \pagestyle{{empty}}
 \begin{{document}}
+\rule{{0pt}}{{0.6cm}}\\
 {}
 \end{{document}}"#,
         font_size_pt, latex_str
@@ -466,12 +472,14 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
     
     let temp_path = temp_dir.path();
     
-    // Create minimal LaTeX document
+    // Create minimal LaTeX document with substantial vertical padding
+    // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
 \pagestyle{{empty}}
 \begin{{document}}
+\rule{{0pt}}{{0.6cm}}\\
 {}
 \end{{document}}"#,
         font_size_pt, latex_str

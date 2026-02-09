@@ -45,6 +45,9 @@ pub struct DisplayParams {
     pub tick_direction: crate::cli::TickDirection,
     pub tick_font_size: Option<f32>,
     pub units_font_size: Option<f32>,
+    pub rlabel: Option<String>,
+    pub llabel: Option<String>,
+    pub label_font_size: Option<f32>,
 }
 
 /// Graticule overlay parameters.
