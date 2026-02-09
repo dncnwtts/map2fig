@@ -209,7 +209,7 @@ pub fn compute_gnomonic_layout_with_fonts(
         map_w,
         map_h,
 
-        cbar_x: outer_pad,
+        cbar_x: outer_pad + left_text_pad,
         cbar_y,
         cbar_w: map_w,
         cbar_h,
@@ -217,6 +217,6 @@ pub fn compute_gnomonic_layout_with_fonts(
         cbar_pad,
         border_width_px,
     },
-    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad, width, tick_direction, custom_tick_font_size)
+    compute_cbar_layout(outer_pad + left_text_pad, cbar_y, map_w, cbar_h, label_pad, width, tick_direction, custom_tick_font_size)
     )
 }
