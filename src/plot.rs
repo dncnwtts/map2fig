@@ -1745,27 +1745,24 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let stride = text_surface.stride() as usize;
         let data = text_surface.data().expect("Failed to get surface data");
         
-        // Position for rotated text (left side of map, reading upwards)
-        // Center the text horizontally in the left margin (between x=0 and layout.map_x)
-        let left_margin_x = (layout.map_x * 0.4) as i32;
-        let map_center_y = (layout.map_y + layout.map_h / 2.0) as i32;
+        // DEBUG: Position text in center of image (not rotated) to verify rendering
+        let center_x = (layout.width / 2.0) as i32;
+        let center_y = (layout.height / 2.0) as i32;
         
-        // Composite rotated text onto main image
-        // Rotate 90 degrees counterclockwise: (x,y) -> (y, 200-x)
-        // Then translate to position in left margin
+        // Composite text onto main image (no rotation for debugging)
         for src_y in 0..50 {
             for src_x in 0..200 {
                 let src_idx = src_y * stride + src_x * 4;
                 if src_idx + 3 < data.len() {
                     let alpha = data[src_idx + 3] as f32 / 255.0;
                     if alpha > 0.1 {
-                        // Rotate 90 degrees counterclockwise: text at (x,y) -> (y, 200-x)
-                        let rotated_x = left_margin_x - src_y as i32;
-                        let rotated_y = map_center_y + src_x as i32 - 100;
+                        // Place text at center without rotation
+                        let img_x = center_x + src_x as i32 - 100;
+                        let img_y = center_y + src_y as i32 - 25;
                         
-                        if rotated_x >= 0 && rotated_y >= 0 && 
-                           rotated_x < img.width() as i32 && rotated_y < img.height() as i32 {
-                            let dst_pixel = img.get_pixel_mut(rotated_x as u32, rotated_y as u32);
+                        if img_x >= 0 && img_y >= 0 && 
+                           img_x < img.width() as i32 && img_y < img.height() as i32 {
+                            let dst_pixel = img.get_pixel_mut(img_x as u32, img_y as u32);
                             // Blend with alpha
                             dst_pixel[0] = (data[src_idx + 2] as f32 * alpha + dst_pixel[0] as f32 * (1.0 - alpha)) as u8;
                             dst_pixel[1] = (data[src_idx + 1] as f32 * alpha + dst_pixel[1] as f32 * (1.0 - alpha)) as u8;
@@ -1962,25 +1959,15 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             width, 
             width);
         
-        // Position text on the left side of the map, vertically centered with 90-degree rotation
-        let text_x = layout.map_x - 40.0;
-        let text_y = layout.map_y + layout.map_h / 2.0;
+        // DEBUG: Position text in center of image to verify rendering
+        let center_x = layout.width / 2.0;
+        let center_y = layout.height / 2.0;
         
-        // Save current transformation matrix
-        cr.save();
-        
-        // Move to position and rotate 90 degrees (π/2 radians counterclockwise)
-        cr.translate(text_x, text_y);
-        cr.rotate(std::f64::consts::PI / 2.0);
-        
-        // Draw text in black
+        // Draw text in black without rotation
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_font_size(10.0);
-        cr.move_to(0.0, 0.0);
+        cr.move_to(center_x, center_y);
         cr.show_text(&text).ok();
-        
-        // Restore transformation matrix
-        cr.restore();
     }
 
     pdf_surface.finish();
