@@ -242,7 +242,7 @@ pub fn draw_colorbar_pdf_labels(
         let units_y_pos = label_y + 15.0 * scale;
         
         // Scale LaTeX font size proportionally with tick font size (no hard minimum)
-        let latex_font_size = (layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
+        let latex_font_size = (layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
         
         if latex_rendering {
             // Try SVG vector rendering first (pdf2svg pipeline)
@@ -277,7 +277,7 @@ pub fn draw_colorbar_pdf_labels(
                 // Use serif font to match TeX fonts used in astronomy publications
                 cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
                 let fallback_font_size = units_font_size.unwrap_or_else(|| 
-                    (layout.tick_font_size * 0.75).round().max(3.0).min(25.0) as f32
+                    (layout.tick_font_size * 0.75).round().clamp(3.0, 25.0) as f32
                 );
                 cr.set_font_size(fallback_font_size as f64);
                 let ext = cr.text_extents(&units_label).unwrap();
@@ -290,7 +290,7 @@ pub fn draw_colorbar_pdf_labels(
             // Use serif font to match TeX fonts used in astronomy publications
             cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
             let fallback_font_size = units_font_size.unwrap_or_else(|| 
-                (layout.tick_font_size * 0.75).round().max(3.0).min(25.0) as f32
+                (layout.tick_font_size * 0.75).round().clamp(3.0, 25.0) as f32
             );
             cr.set_font_size(fallback_font_size as f64);
             let ext = cr.text_extents(&units_label).unwrap();

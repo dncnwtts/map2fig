@@ -120,7 +120,7 @@ fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pa
     let tick_font_size = if let Some(custom) = custom_tick_font_size {
         custom as f64
     } else {
-        (12.0 * (width / 800.0)).max(7.0).min(24.0)
+        (12.0 * (width / 800.0)).clamp(7.0, 24.0)
     };
     
     ColorbarLayout {

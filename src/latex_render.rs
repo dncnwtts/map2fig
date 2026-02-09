@@ -1,9 +1,8 @@
 /// LaTeX rendering using system pdflatex with caching
-/// 
+///
 /// Uses system pdflatex which is widely available on most Unix-like systems.
 /// Renders LaTeX strings to PDF, converts to PNG, and caches results.
 /// Falls back to Unicode approximation if LaTeX is unavailable.
-
 use std::io::Write;
 use std::path::PathBuf;
 use sha2::{Sha256, Digest};

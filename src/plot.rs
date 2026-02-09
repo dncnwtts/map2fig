@@ -866,7 +866,7 @@ where
             
             if latex_rendering {
                 // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
-                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
+                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
                 // Try to render LaTeX and composite onto image
                 if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
                     // Composite the rendered LaTeX PNG onto the main image
@@ -1536,7 +1536,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             
             if latex_rendering {
                 // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
-                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
+                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
                 // Try to render LaTeX and composite onto image
                 if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
                     // Composite the rendered LaTeX PNG onto the main image
