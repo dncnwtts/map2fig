@@ -1,14 +1,15 @@
 # HEALPix Plotter (`map2fig`)
 
-A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollweide and Gnomonic projections. Reads FITS files and generates PDF or PNG plots with customizable colormaps, scaling, and coordinate transformations.
+A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollweide, Hammer, and Gnomonic projections. Reads FITS files and generates PDF or PNG plots with customizable colormaps, scaling, and coordinate transformations.
 
 ## Features
 
-- **Multiple Projections**: Mollweide (full-sky) and Gnomonic (local) projections
+- **Multiple Projections**: Mollweide (full-sky), Hammer (full-sky), and Gnomonic (local) projections
 - **80+ Colormaps**: Matplotlib colormaps plus custom scientific colormaps
 - **Advanced Scaling**: Linear, log, symlog, asinh, histogram equalization, and Planck-specific scaling
 - **Coordinate Systems**: Galactic, Equatorial (FK5), and Ecliptic with automatic transformations
 - **Graticules**: Customizable coordinate grid overlays with color support
+- **Masking**: Mask regions by value range or binary FITS file with custom fill colors
 - **Output Formats**: PDF (via Cairo) and PNG (via image crate)
 - **High Quality**: Publication-ready figures with configurable resolution and styling
 
@@ -506,6 +507,113 @@ Generate consistent publication figures for all data products.
 
 ---
 
+### 14. Masking Regions by Value Range
+
+**Use Case**: Hide pixels below/above certain thresholds or fill masked regions with custom colors (e.g., mask Galactic plane in CMB analysis)
+
+```bash
+./map2fig -f cmb_temperature.fits \
+  --mask-below 0 \
+  --maskfill-color gray \
+  --cmap viridis \
+  -o masked_by_threshold.pdf
+```
+
+**Parameters**:
+- `--mask-below 10`: Mask all pixels with values < 10
+- `--mask-above 1000`: Mask all pixels with values > 1000
+- `--maskfill-color`: Fill color for masked pixels
+  - `transparent` (default): Masked regions transparent
+  - `gray`: Light gray (RGB 200,200,200)
+  - Hex color: `#FF6B6B` (custom red)
+  - RGB tuple: `128,128,128` (explicit gray)
+
+**Output**: Generates `masked_by_threshold.pdf`—map with pixels outside the range hidden and filled with gray background.
+
+---
+
+### 15. Masking from Binary FITS File
+
+**Use Case**: Apply external pixel masks (e.g., point source masks, galactic foreground masks, bad pixel lists)
+
+```bash
+./map2fig -f cmb_temperature.fits \
+  --mask-file galactic_mask.fits \
+  --maskfill-color "128,128,128" \
+  --cmap viridis \
+  -o cmb_with_mask.pdf
+```
+
+**Parameters**:
+- `--mask-file`: Path to FITS file containing binary mask
+  - File format: Binary table with single column containing pixel data
+  - Data values: 0 or near-0 = masked, >0.5 = valid
+  - NSIDE auto-detected from array size
+  - Supports float, double, or integer data types
+- `--mask-coord`: Coordinate system of mask
+  - `gal` or `galactic`: Galactic coordinates (default)
+  - `eq` or `equatorial`: Equatorial coordinates
+  - `ecl` or `ecliptic`: Ecliptic coordinates
+
+**Example mask file structure** (created with Python):
+```python
+import numpy as np
+from astropy.io import fits
+
+# Create a mask for Galactic plane (example)
+nside = 128
+npix = 12 * nside * nside
+mask = np.ones(npix)  # Start with all valid (1)
+# Mask pixels within ±10° of galactic equator
+for pixel in range(npix):
+    # Calculate pixel latitude
+    # Set to 0 if within ±10° of equator
+    pass
+
+# Write to FITS
+hdu = fits.BinTableHDU.from_columns([
+    fits.Column(name='mask', format='D', array=mask)
+])
+hdu.writeto('galactic_mask.fits')
+```
+
+**Easiest way to generate mask FITS files:** Use the included Python utility:
+```bash
+python3 tools/create_mask_example.py --nside 128 --mask-galactic-plane 10 -o mask.fits
+python3 tools/create_mask_example.py --nside 256 --mask-uniform 0.8 -o partial_mask.fits
+python3 tools/create_mask_example.py --nside 512 --mask-random 0.2 -o random_mask.fits
+```
+
+See all available mask generation options:
+```bash
+python3 tools/create_mask_example.py --help
+```
+
+**Output**: Generates `cmb_with_mask.pdf`—map with pixels masked by external FITS file, useful for applying pre-computed masks across multiple visualizations.
+
+---
+
+### 16. Combined Masking and Scaling
+
+**Use Case**: Apply both value-range masking and non-linear scaling for publication figures
+
+```bash
+./map2fig -f sensitivity_map.fits \
+  --log \
+  --min 1e-6 --max 1e-3 \
+  --mask-below 0 \
+  --maskfill-color transparent \
+  --cmap magma \
+  --graticule \
+  -o sensitivity_masked.pdf
+```
+
+Combines logarithmic scaling for dynamic range with masking to hide invalid pixels. The mask is applied after scaling, ensuring consistent color limits across unmasked regions.
+
+**Output**: Generates `sensitivity_masked.pdf`—map with log-scaled colors and transparent masked regions, ideal for publication figures.
+
+---
+
 ## Command-Line Reference
 
 ### Input/Output
@@ -548,6 +656,15 @@ Generate consistent publication figures for all data products.
 | `--grat-labels` | Show lat/lon values on grid lines |
 | `--local-graticule` | Local grid for gnomonic (gnomonic only) |
 | `--local-grat-dlat, --local-grat-dlon` | Local grid spacing (°) (gnomonic) |
+
+### Masking
+| Option | Description |
+|--------|-------------|
+| `--mask-below` | Mask pixels with values below threshold |
+| `--mask-above` | Mask pixels with values above threshold |
+| `--mask-file` | Path to binary FITS mask file |
+| `--maskfill-color` | Fill color for masked regions (transparent/gray/#RRGGBB/R,G,B,A) |
+| `--mask-coord` | Coordinate system of mask: gal/eq/ecl |
 
 ### Styling
 | Option | Description |
