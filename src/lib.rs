@@ -10,6 +10,7 @@ pub mod projection;
 pub mod mollweide;
 pub mod gnomonic;
 pub mod gnomonic_graticule;
+pub mod hammer;
 pub mod cli;
 pub mod pipeline;
 pub mod constants;
@@ -20,7 +21,7 @@ pub mod graticule;
 pub mod params;
 
 // Re-export useful items
-pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf};
+pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf, plot_hammer_auto, plot_hammer_png, plot_hammer_pdf};
 pub use colormap::{get_colormap, Colormap};
 pub use fits::read_healpix_column;
 pub use cli::{Args, PlotConfig};
@@ -296,7 +297,10 @@ mod tests {
                 draw_border: true, 
                 latex_rendering: false, 
                 units: None,
-                extend: crate::cli::Extend::None
+                extend: crate::cli::Extend::None,
+                tick_direction: crate::cli::TickDirection::Inward,
+                tick_font_size: None,
+                units_font_size: None,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 
@@ -467,7 +471,10 @@ mod tests {
                 draw_border: false, 
                 latex_rendering: false, 
                 units: None,
-                extend: crate::cli::Extend::None
+                extend: crate::cli::Extend::None,
+                tick_direction: crate::cli::TickDirection::Inward,
+                tick_font_size: None,
+                units_font_size: None,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 

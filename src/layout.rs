@@ -18,7 +18,7 @@
 }
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ColorbarLayout {
     pub x: f64,
     pub y: f64,
@@ -33,12 +33,23 @@ pub struct ColorbarLayout {
 
     pub tick_font_size: f64,
     pub tick_label_pad: f64,
+    pub tick_direction: crate::cli::TickDirection,
 }
 
 
 pub fn compute_mollweide_layout(
     width: f64,
     show_colorbar: bool,
+    tick_direction: crate::cli::TickDirection,
+) -> (MollweideLayout, ColorbarLayout) {
+    compute_mollweide_layout_with_fonts(width, show_colorbar, tick_direction, None)
+}
+
+pub fn compute_mollweide_layout_with_fonts(
+    width: f64,
+    show_colorbar: bool,
+    tick_direction: crate::cli::TickDirection,
+    custom_tick_font_size: Option<f32>,
 ) -> (MollweideLayout, ColorbarLayout) {
     // Scale all dimensions with width (reference: 1200px)
     let scale = width / 1200.0;
@@ -98,15 +109,19 @@ pub fn compute_mollweide_layout(
         cbar_pad,
         border_width_px,
     },
-    compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad, width)
+    compute_cbar_layout(outer_pad, cbar_y, width - 2.0 * outer_pad, cbar_h, label_pad, width, tick_direction, custom_tick_font_size)
     )
 }
 
 
-fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pad:f64, width: f64) -> ColorbarLayout {
-    // Scale tick font size using actual image width (base 12pt at 1200px reference width)
-    let scale = width / 1200.0;
-    let tick_font_size = (12.0 * scale).max(7.0).min(24.0);
+fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pad:f64, width: f64, tick_direction: crate::cli::TickDirection, custom_tick_font_size: Option<f32>) -> ColorbarLayout {
+    // Scale tick font size using actual image width
+    // Default: 12pt at width=800px, so scale is (width / 800.0)
+    let tick_font_size = if let Some(custom) = custom_tick_font_size {
+        custom as f64
+    } else {
+        (12.0 * (width / 800.0)).max(7.0).min(24.0)
+    };
     
     ColorbarLayout {
         x: cbar_x,
@@ -122,6 +137,7 @@ fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pa
 
         tick_font_size,
         tick_label_pad: cbar_h + cbar_y + label_pad,
+        tick_direction,
     }
 }
 
@@ -129,6 +145,16 @@ fn compute_cbar_layout(cbar_x: f64, cbar_y:f64, cbar_w:f64, cbar_h:f64, label_pa
 pub fn compute_gnomonic_layout(
     map_size: f64,
     show_colorbar: bool,
+    tick_direction: crate::cli::TickDirection,
+) -> (MollweideLayout, ColorbarLayout) {
+    compute_gnomonic_layout_with_fonts(map_size, show_colorbar, tick_direction, None)
+}
+
+pub fn compute_gnomonic_layout_with_fonts(
+    map_size: f64,
+    show_colorbar: bool,
+    tick_direction: crate::cli::TickDirection,
+    custom_tick_font_size: Option<f32>,
 ) -> (MollweideLayout, ColorbarLayout) {
     // Scale all dimensions with map size (reference: 1200px)
     let scale = map_size / 1200.0;
@@ -188,6 +214,6 @@ pub fn compute_gnomonic_layout(
         cbar_pad,
         border_width_px,
     },
-    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad, width)
+    compute_cbar_layout(outer_pad, cbar_y, map_w, cbar_h, label_pad, width, tick_direction, custom_tick_font_size)
     )
 }

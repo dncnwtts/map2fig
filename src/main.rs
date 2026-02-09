@@ -1,8 +1,8 @@
 use clap::Parser;
 use map2fig::cli::Args;
 use map2fig::pipeline::load_and_process_data;
-use map2fig::{plot_mollweide_auto, plot_gnomonic_auto};
-use map2fig::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams, GnomonicParams};
+use map2fig::{plot_mollweide_auto, plot_gnomonic_auto, plot_hammer_auto};
+use map2fig::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams, GnomonicParams, HammerParams};
 use std::time::Instant;
 use std::str::FromStr;
 
@@ -31,10 +31,18 @@ fn main() {
     match args.projection.to_lowercase().as_str() {
         "mollweide" => {
             let grat_coord = if args.graticule {
-                args.grat_coord.as_ref().map(|s| {
-                    map2fig::rotation::CoordSystem::from_str(s)
-                        .expect("Invalid graticule coordinate system")
-                })
+                if let Some(ref s) = args.grat_coord {
+                    // Explicit --grat-coord provided
+                    Some(map2fig::rotation::CoordSystem::from_str(s)
+                        .expect("Invalid graticule coordinate system"))
+                } else {
+                    // Use header coordinate system if available, otherwise default to Galactic
+                    match data.meta.coord {
+                        map2fig::rotation::CoordSystem::E => Some(map2fig::rotation::CoordSystem::E),
+                        map2fig::rotation::CoordSystem::G => Some(map2fig::rotation::CoordSystem::G),
+                        map2fig::rotation::CoordSystem::C => Some(map2fig::rotation::CoordSystem::C),
+                    }
+                }
             } else {
                 None
             };
@@ -81,6 +89,9 @@ fn main() {
                     latex_rendering: config.latex_rendering,
                     units: config.units,
                     extend: args.extend.parse().expect("Invalid extend option"),
+                    tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
+                    tick_font_size: args.tick_font_size,
+                    units_font_size: args.units_font_size,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,
@@ -145,6 +156,9 @@ fn main() {
                     latex_rendering: config.latex_rendering,
                     units: config.units,
                     extend: args.extend.parse().expect("Invalid extend option"),
+                    tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
+                    tick_font_size: args.tick_font_size,
+                    units_font_size: args.units_font_size,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.local_graticule,
@@ -167,9 +181,88 @@ fn main() {
 
             plot_gnomonic_auto(params);
         }
+        "hammer" => {
+            let grat_coord = if args.graticule {
+                if let Some(ref s) = args.grat_coord {
+                    // Explicit --grat-coord provided
+                    Some(map2fig::rotation::CoordSystem::from_str(s)
+                        .expect("Invalid graticule coordinate system"))
+                } else {
+                    // Use header coordinate system if available, otherwise default to Galactic
+                    match data.meta.coord {
+                        map2fig::rotation::CoordSystem::E => Some(map2fig::rotation::CoordSystem::E),
+                        map2fig::rotation::CoordSystem::G => Some(map2fig::rotation::CoordSystem::G),
+                        map2fig::rotation::CoordSystem::C => Some(map2fig::rotation::CoordSystem::C),
+                    }
+                }
+            } else {
+                None
+            };
+
+            let grat_overlay = if let Some(ref overlay_str) = args.grat_coord_overlay {
+                match map2fig::rotation::CoordSystem::from_str(overlay_str) {
+                    Ok(coord) => Some(coord),
+                    Err(e) => panic!("Invalid overlay coordinate system: {}", e),
+                }
+            } else {
+                None
+            };
+
+            let overlay_color = if args.grat_coord_overlay.is_some() {
+                use map2fig::cli::resolve_color_with_alpha;
+                resolve_color_with_alpha(&args.grat_overlay_color, 200)
+                    .expect("Invalid overlay color format")
+            } else {
+                image::Rgba([255, 255, 0, 0])
+            };
+
+            let params = HammerParams {
+                plot: PlotData {
+                    map: &data.map,
+                    width: args.width,
+                    filename: &args.out,
+                },
+                scale: ScaleParams {
+                    minv: args.min,
+                    maxv: args.max,
+                    gamma: args.gamma,
+                    scale: config.scale,
+                    neg_mode: config.neg_mode,
+                },
+                color: ColorParams {
+                    cmap: config.colormap,
+                    bad_color: config.bad_color_rgba,
+                    bg_color: config.bg_color_rgba,
+                },
+                display: DisplayParams {
+                    show_colorbar: !args.no_cbar,
+                    transparent: args.transparent,
+                    draw_border: !args.no_border,
+                    latex_rendering: config.latex_rendering,
+                    units: config.units,
+                    extend: args.extend.parse().expect("Invalid extend option"),
+                    tick_direction: args.tick_direction.parse().expect("Invalid tick direction option"),
+                    tick_font_size: args.tick_font_size,
+                    units_font_size: args.units_font_size,
+                },
+                graticule: GraticuleParams {
+                    show_graticule: args.graticule,
+                    grat_coord,
+                    grat_overlay,
+                    overlay_color,
+                    show_labels: args.grat_labels,
+                    dpar_deg: args.grat_par,
+                    dmer_deg: args.grat_mer,
+                },
+                meta: data.meta,
+                view: &view,
+            };
+
+            plot_hammer_auto(params);
+        }
         _ => {
             panic!(
-                "Unknown projection: {}. Use 'mollweide' or 'gnomonic'",
+                "Unknown projection: {}. Use 'mollweide', 'gnomonic', or 'hammer'",
                 args.projection
             );
         }

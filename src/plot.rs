@@ -110,6 +110,47 @@ pub fn render_mollweide_pixels(
     blit_grid_to_sink(&grid, sink, 0, 0);
 }
 
+pub fn render_hammer_pixels(
+    params: crate::params::RenderMollweideParams,
+    layout: MollweideLayout,
+    sink: &mut dyn PixelSink,
+    debug_overlay: Option<DebugOverlay>, 
+) {
+    use crate::hammer::HammerProjection;
+    let proj = HammerProjection::new();
+
+    let mut grid = RasterGrid::new(layout.map_w as u32, layout.map_h as u32);
+
+    if let Some(overlay) = debug_overlay
+        && overlay.show_background {
+            fill_grid_background(&mut grid);
+        }
+
+    render_projection_to_grid(
+        crate::params::RenderGridParams {
+            map: params.map,
+            proj: &proj,
+            scale: params.scale,
+            cmap: params.cmap,
+            scale_type: params.scale_type,
+            neg_mode: params.neg_mode,
+            gamma: params.gamma,
+            bad_color: params.bad_color,
+            meta: params.meta,
+            hist_scale: params.hist_scale,
+            view: params.view,
+        },
+        &mut grid,
+    );
+
+    // Draw debug overlay only if provided
+    if let Some(overlay) = debug_overlay {
+        draw_debug_overlay_raster(&mut grid, overlay);
+    }
+
+    blit_grid_to_sink(&grid, sink, 0, 0);
+}
+
 
 
 
@@ -140,6 +181,18 @@ where
 
 
 pub fn plot_mollweide_pdf(params: MollweideParams) {
+    _plot_mollweide_pdf_impl(params, render_mollweide_pixels);
+}
+
+fn _plot_mollweide_pdf_impl<F>(params: MollweideParams, pixel_renderer: F) 
+where
+    F: Fn(
+        crate::params::RenderMollweideParams,
+        MollweideLayout,
+        &mut dyn PixelSink,
+        Option<DebugOverlay>,
+    ),
+{
     let map = params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename;
@@ -166,7 +219,7 @@ pub fn plot_mollweide_pdf(params: MollweideParams) {
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
 
-    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
+    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
     let mut values: Vec<f64> = map
         .iter()
@@ -243,7 +296,7 @@ pub fn plot_mollweide_pdf(params: MollweideParams) {
         None
     };
     
-    render_mollweide_pixels(
+    pixel_renderer(
         crate::params::RenderMollweideParams {
             map,
             scale: &scale_params,
@@ -355,6 +408,7 @@ pub fn plot_mollweide_pdf(params: MollweideParams) {
                 latex_rendering,
                 units,
                 extend: &params.display.extend,
+                units_font_size: params.display.units_font_size,
             },
         );
     }
@@ -381,6 +435,18 @@ pub trait RenderBackend {
 
 
 pub fn plot_mollweide_png(params: MollweideParams) {
+    _plot_mollweide_png_impl_projected(params, render_mollweide_pixels, ProjectionType::Mollweide);
+}
+
+fn _plot_mollweide_png_impl_projected<F>(params: MollweideParams, pixel_renderer: F, projection: ProjectionType) 
+where
+    F: Fn(
+        crate::params::RenderMollweideParams,
+        MollweideLayout,
+        &mut dyn PixelSink,
+        Option<DebugOverlay>,
+    ),
+{
     let map = params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename;
@@ -407,7 +473,7 @@ pub fn plot_mollweide_png(params: MollweideParams) {
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
 
-    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar);
+    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
@@ -464,7 +530,7 @@ pub fn plot_mollweide_png(params: MollweideParams) {
         None
     };
     
-    render_mollweide_pixels(
+    pixel_renderer(
         crate::params::RenderMollweideParams {
             map,
             scale: &scale_params,
@@ -504,17 +570,26 @@ pub fn plot_mollweide_png(params: MollweideParams) {
 
             // Draw graticule using Cairo (anti-aliased) before border
             if show_graticule {
-                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
+                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_hammer_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
                 
                 let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
                 
-                let graticule = render_graticule_mollweide_vectorized(
-                    view,
-                    dpar_deg,
-                    dmer_deg,
-                    grat_coord_sys,
-                    view.input_coord,
-                );
+                let graticule = match projection {
+                    ProjectionType::Mollweide => render_graticule_mollweide_vectorized(
+                        view,
+                        dpar_deg,
+                        dmer_deg,
+                        grat_coord_sys,
+                        view.input_coord,
+                    ),
+                    ProjectionType::Hammer => render_graticule_hammer_vectorized(
+                        view,
+                        dpar_deg,
+                        dmer_deg,
+                        grat_coord_sys,
+                        view.input_coord,
+                    ),
+                };
                 
                 // Render primary graticule on Cairo surface (anti-aliased)
                 render_graticule_cairo(
@@ -528,13 +603,22 @@ pub fn plot_mollweide_png(params: MollweideParams) {
 
                 // Render secondary graticule overlay if specified
                 if let Some(overlay_sys) = grat_overlay {
-                    let overlay_graticule = render_graticule_mollweide_vectorized(
-                        view,
-                        dpar_deg,
-                        dmer_deg,
-                        overlay_sys,
-                        view.input_coord,
-                    );
+                    let overlay_graticule = match projection {
+                        ProjectionType::Mollweide => render_graticule_mollweide_vectorized(
+                            view,
+                            dpar_deg,
+                            dmer_deg,
+                            overlay_sys,
+                            view.input_coord,
+                        ),
+                        ProjectionType::Hammer => render_graticule_hammer_vectorized(
+                            view,
+                            dpar_deg,
+                            dmer_deg,
+                            overlay_sys,
+                            view.input_coord,
+                        ),
+                    };
                     
                     // Convert RGBA color to normalized RGB for Cairo
                     let r = overlay_color[0] as f64 / 255.0;
@@ -1154,7 +1238,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
     use crate::gnomonic::GnomonicProjection;
 
-    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
+    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
     let font = Font::try_from_bytes(font_data as &[u8])
@@ -1422,7 +1506,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 
     use crate::gnomonic::GnomonicProjection;
 
-    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar);
+    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
     
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -1539,7 +1623,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     // Add proper colorbar with ticks and labels if requested
     if show_colorbar {
         use crate::render::pdf::draw_colorbar_pdf;
-        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar).1;
+        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone()).1;
         
         draw_colorbar_pdf(
             &cr,
@@ -1554,6 +1638,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 latex_rendering: false,
                 units: Some("μK_CMB"),
                 extend: &params.display.extend,
+                units_font_size: params.display.units_font_size,
             },
         );
     }
@@ -1627,6 +1712,9 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             latex_rendering,
             units: units.map(|s| s.to_string()),
             extend: params.display.extend.clone(),
+            tick_direction: params.display.tick_direction.clone(),
+            tick_font_size: params.display.tick_font_size,
+            units_font_size: params.display.units_font_size,
         },
         graticule: crate::params::GraticuleParams {
             show_graticule,
@@ -1650,6 +1738,295 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
     match ext.as_str() {
         "png" => plot_gnomonic_png(bundled_params),
         "pdf" => plot_gnomonic_pdf(bundled_params),
+        _ => {
+            panic!(
+                "Unsupported output format: .{} (expected .png or .pdf)",
+                ext
+            );
+        }
+    }
+}
+
+/// Projection types for conditional rendering
+#[derive(Clone, Copy, Debug)]
+enum ProjectionType {
+    Mollweide,
+    Hammer,
+}
+
+/// Plot a Hammer projection map as PNG.
+pub fn plot_hammer_png(params: crate::params::HammerParams) {
+    let mollweide_params = crate::params::MollweideParams {
+        plot: params.plot,
+        scale: params.scale,
+        color: params.color,
+        display: params.display,
+        graticule: params.graticule,
+        meta: params.meta,
+        view: params.view,
+    };
+    _plot_mollweide_png_impl_projected(mollweide_params, render_hammer_pixels, ProjectionType::Hammer);
+}
+
+/// Plot a Hammer projection map as PDF.
+pub fn plot_hammer_pdf(params: crate::params::HammerParams) {
+    let mollweide_params = crate::params::MollweideParams {
+        plot: params.plot,
+        scale: params.scale,
+        color: params.color,
+        display: params.display,
+        graticule: params.graticule,
+        meta: params.meta,
+        view: params.view,
+    };
+    _plot_hammer_pdf_impl(mollweide_params, render_hammer_pixels);
+}
+
+/// Internal Hammer PDF plotting implementation
+fn _plot_hammer_pdf_impl<F>(params: MollweideParams, pixel_renderer: F) 
+where
+    F: Fn(
+        crate::params::RenderMollweideParams,
+        MollweideLayout,
+        &mut dyn PixelSink,
+        Option<DebugOverlay>,
+    ),
+{
+    let map = params.plot.map;
+    let width = params.plot.width;
+    let filename = params.plot.filename;
+    let minv = params.scale.minv;
+    let maxv = params.scale.maxv;
+    let cmap = params.color.cmap;
+    let show_colorbar = params.display.show_colorbar;
+    let transparent = params.display.transparent;
+    let draw_border = params.display.draw_border;
+    let gamma = params.scale.gamma;
+    let scale = params.scale.scale;
+    let neg_mode = params.scale.neg_mode;
+    let bad_color = params.color.bad_color;
+    let _bg_color = params.color.bg_color;
+    let meta = params.meta;
+    let latex_rendering = params.display.latex_rendering;
+    let units = params.display.units.as_deref();
+    let view = params.view;
+    let show_graticule = params.graticule.show_graticule;
+    let grat_coord = params.graticule.grat_coord;
+    let grat_overlay = params.graticule.grat_overlay;
+    let overlay_color = params.graticule.overlay_color;
+    let _show_labels = params.graticule.show_labels;
+    let dpar_deg = params.graticule.dpar_deg;
+    let dmer_deg = params.graticule.dmer_deg;
+
+    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
+
+    let mut values: Vec<f64> = map
+        .iter()
+        .filter(|&v| is_seen(*v))
+        .copied()
+        .collect();
+
+    
+    if values.is_empty() {
+        panic!("Map contains no valid HEALPix values");
+    }
+
+    values.sort_unstable_by(unsafe_float_cmp);
+
+
+    let surface_pdf = PdfSurface::new(
+        layout.width,
+        layout.height,
+        filename,
+    ).expect("Failed to create PDF surface");
+    
+    let cr_pdf = Context::new(&surface_pdf).unwrap();
+    
+    if transparent {
+        cr_pdf.set_operator(cairo::Operator::Source);
+        cr_pdf.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        cr_pdf.paint().unwrap();
+    }
+
+   
+    // -----------------------------
+    // 2. Create raster surface
+    // -----------------------------
+    let surface_img = ImageSurface::create(
+        Format::ARgb32,
+        (layout.map_w + 2.0*layout.map_pad) as i32,
+        (layout.map_h + 2.0*layout.map_pad) as i32,
+    ).expect("Failed to create image surface");
+    
+    let cr_img = Context::new(&surface_img).unwrap();
+    
+    // Clear raster background
+    if transparent {
+        cr_img.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+    } else {
+        cr_img.set_source_rgb(1.0, 1.0, 1.0);
+    }
+    cr_img.paint().unwrap();
+
+    let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
+
+    let hist_scale = if scale == Scale::Histogram {
+        let range = match (minv, maxv) {
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            _ => HistogramRange::Full,
+        };
+    
+        Some(
+            &build_histogram_scale(
+                map,
+                range,
+                1024, // number of bins
+            )
+        )
+    } else {
+        None
+    };
+
+    
+    let mut sink = CairoImageSink { cr: &cr_img };
+    let debug_overlay = if cfg!(feature = "debug_overlay") {
+        Some(DebugOverlay::grid_only())
+    } else {
+        None
+    };
+    
+    pixel_renderer(
+        crate::params::RenderMollweideParams {
+            map,
+            scale: &scale_params,
+            cmap,
+            gamma,
+            scale_type: scale,
+            neg_mode,
+            bad_color,
+            meta,
+            hist_scale,
+            view,
+        },
+        layout,
+        &mut sink,
+        debug_overlay,
+    );
+
+
+    // CRITICAL
+    surface_img.flush();
+
+    
+    // -----------------------------
+    // 4. Embed raster into PDF
+    // -----------------------------
+    let _ = cr_pdf.set_source_surface(
+        &surface_img,
+        layout.map_x,
+        layout.map_y,
+    );
+    cr_pdf.paint().unwrap();
+
+    // Draw graticule BEFORE border (so border appears on top)
+    if show_graticule {
+        use crate::graticule::{render_graticule_hammer_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
+        
+        let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
+        
+        let graticule = render_graticule_hammer_vectorized(
+            view,
+            dpar_deg,
+            dmer_deg,
+            grat_coord_sys,
+            view.input_coord,
+        );
+        
+        // Render primary graticule in black
+        render_graticule_cairo(
+            &graticule,
+            &cr_pdf,
+            layout.map_x,
+            layout.map_y,
+            layout.map_w,
+            layout.map_h,
+        );
+
+        // Render secondary graticule overlay if specified
+        if let Some(overlay_sys) = grat_overlay {
+            let overlay_graticule = render_graticule_hammer_vectorized(
+                view,
+                dpar_deg,
+                dmer_deg,
+                overlay_sys,
+                view.input_coord,
+            );
+            
+            // Convert RGBA color to normalized RGB for Cairo
+            let r = overlay_color[0] as f64 / 255.0;
+            let g = overlay_color[1] as f64 / 255.0;
+            let b = overlay_color[2] as f64 / 255.0;
+            
+            render_graticule_cairo_with_color(
+                &overlay_graticule,
+                &cr_pdf,
+                layout.map_x,
+                layout.map_y,
+                layout.map_w,
+                layout.map_h,
+                r,
+                g,
+                b,
+            );
+        }
+    }
+
+    // Draw vector border ON TOP
+    if draw_border {
+        draw_projection_border_pdf(
+            &cr_pdf,
+            layout.map_x,
+            layout.map_y,
+            layout.map_w,
+            layout.map_h,
+            layout.border_width_px,
+        );
+    }
+
+    if show_colorbar {
+        draw_colorbar_pdf(
+            &cr_pdf,
+            cb_layout,
+            crate::params::ColorbarParams {
+                cmap,
+                minv: scale_params.minv,
+                maxv: scale_params.maxv,
+                scale_type: scale,
+                gamma,
+                hist_scale,
+                latex_rendering,
+                units,
+                extend: &params.display.extend,
+                units_font_size: params.display.units_font_size,
+            },
+        );
+    }
+
+    surface_pdf.finish();
+}
+
+/// Automatically choose PNG or PDF based on file extension for Hammer projection.
+pub fn plot_hammer_auto(params: crate::params::HammerParams) {
+    let filename = params.plot.filename;
+    let ext = std::path::Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        "png" => plot_hammer_png(params),
+        "pdf" => plot_hammer_pdf(params),
         _ => {
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",

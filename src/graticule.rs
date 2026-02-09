@@ -372,22 +372,19 @@ pub fn render_graticule_mollweide(
     }
 }
 
-/// Generate vectorized graticule lines (polylines in normalized coordinates)
+/// Generic graticule rendering for any projection
 /// 
 /// This function returns polylines suitable for vector output formats (PDF, SVG, etc.)
-/// instead of rasterizing directly to a pixel grid.
-pub fn render_graticule_mollweide_vectorized(
+/// Works with any projection implementing the Projection trait.
+pub fn render_graticule_vectorized_generic<P: crate::projection::Projection>(
+    proj: &P,
     view: &crate::rotation::ViewTransform,
     dpar_deg: f64,  // parallel (latitude) spacing
     dmer_deg: f64,  // meridian (longitude) spacing
     grat_coord: CoordSystem,
     input_coord: CoordSystem,
 ) -> GraticuleLineSegments {
-    use crate::mollweide::MollweideProjection;
-    use crate::projection::Projection;
-
     let transform = GraticuleTransform::new(grat_coord, input_coord, None);
-    let proj = MollweideProjection;
     
     let mut result = GraticuleLineSegments::new();
 
@@ -546,6 +543,52 @@ pub fn render_graticule_mollweide_vectorized(
     }
     
     result
+}
+
+/// Generate vectorized graticule lines for Mollweide projection
+/// 
+/// This is a convenience wrapper around render_graticule_vectorized_generic.
+pub fn render_graticule_mollweide_vectorized(
+    view: &crate::rotation::ViewTransform,
+    dpar_deg: f64,  // parallel (latitude) spacing
+    dmer_deg: f64,  // meridian (longitude) spacing
+    grat_coord: CoordSystem,
+    input_coord: CoordSystem,
+) -> GraticuleLineSegments {
+    use crate::mollweide::MollweideProjection;
+
+    let proj = MollweideProjection;
+    render_graticule_vectorized_generic(
+        &proj,
+        view,
+        dpar_deg,
+        dmer_deg,
+        grat_coord,
+        input_coord,
+    )
+}
+
+/// Generate vectorized graticule lines for Hammer-Aitoff projection
+/// 
+/// This is a convenience wrapper around render_graticule_vectorized_generic.
+pub fn render_graticule_hammer_vectorized(
+    view: &crate::rotation::ViewTransform,
+    dpar_deg: f64,  // parallel (latitude) spacing
+    dmer_deg: f64,  // meridian (longitude) spacing
+    grat_coord: CoordSystem,
+    input_coord: CoordSystem,
+) -> GraticuleLineSegments {
+    use crate::hammer::HammerProjection;
+
+    let proj = HammerProjection::new();
+    render_graticule_vectorized_generic(
+        &proj,
+        view,
+        dpar_deg,
+        dmer_deg,
+        grat_coord,
+        input_coord,
+    )
 }
 
 /// Render vectorized graticule lines to a Cairo context (for PDF output)

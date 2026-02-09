@@ -171,7 +171,7 @@ pub fn draw_colorbar_pdf_gradient(
 
 pub fn draw_colorbar_pdf_ticks(
     cr: &Context,
-    layout: ColorbarLayout,
+    layout: &ColorbarLayout,
     ticks: &ColorbarTicks,
 ) {
     let y0 = layout.y + layout.h;
@@ -181,18 +181,24 @@ pub fn draw_colorbar_pdf_ticks(
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_line_width(1.0);
 
+    // Determine tick direction (inward = -1, outward = +1)
+    let direction = match layout.tick_direction {
+        crate::cli::TickDirection::Inward => -1.0,
+        crate::cli::TickDirection::Outward => 1.0,
+    };
+
     // Minor ticks
     for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
-        cr.line_to(x, y0 - minor_len);
+        cr.line_to(x, y0 + direction * minor_len);
     }
 
     // Major ticks
     for (&t, &_val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
-        cr.line_to(x, y0 - major_len);
+        cr.line_to(x, y0 + direction * major_len);
     }
 
     cr.stroke().unwrap();
@@ -200,16 +206,23 @@ pub fn draw_colorbar_pdf_ticks(
 
 pub fn draw_colorbar_pdf_labels(
     cr: &Context,
-    layout: ColorbarLayout,
+    layout: &ColorbarLayout,
     ticks: &ColorbarTicks,
     scale: Scale,
     latex_rendering: bool,
     units: Option<&str>,
+    units_font_size: Option<f32>,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
+    
+    // Use serif font for all text to match TeX/astronomy publication standards
+    cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     cr.set_font_size(layout.tick_font_size);
 
-    // Draw tick labels (without units)
+    // Position labels below ticks: tick_bottom + 2*major_tick_height provides safe spacing
+    let label_y = layout.y + layout.h + 2.0 * layout.major_tick_height;
+
+    // Draw tick labels at the computed position
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
         let x = t * layout.w + layout.x;
@@ -218,15 +231,15 @@ pub fn draw_colorbar_pdf_labels(
         let ext = cr.text_extents(&label).unwrap();
         let tx = x - ext.width() / 2.0;
 
-        cr.move_to(tx, layout.tick_label_pad);
+        cr.move_to(tx, label_y);
         cr.show_text(&label).unwrap();
     }
 
     // Draw units label below colorbar if specified
     if let Some(units_str) = units {
-        // Position units label lower
+        // Position units label below tick labels with smaller offset
         let scale = layout.w / 1200.0;
-        let units_y_pos = layout.tick_label_pad + 30.0 * scale;
+        let units_y_pos = label_y + 15.0 * scale;
         
         // Scale LaTeX font size proportionally with tick font size (no hard minimum)
         let latex_font_size = (layout.tick_font_size * 0.5).round().max(3.0).min(20.0) as u32;
@@ -260,15 +273,26 @@ pub fn draw_colorbar_pdf_labels(
                     units_y_pos,
                 );
             } else if let Some(units_label) = format_units_label(true, Some(units_str)) {
-                // Final fallback to Unicode
-                cr.set_font_size(6.0);
+                // Final fallback to Unicode - use custom font size if provided
+                // Use serif font to match TeX fonts used in astronomy publications
+                cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+                let fallback_font_size = units_font_size.unwrap_or_else(|| 
+                    (layout.tick_font_size * 0.75).round().max(3.0).min(25.0) as f32
+                );
+                cr.set_font_size(fallback_font_size as f64);
                 let ext = cr.text_extents(&units_label).unwrap();
                 let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
                 cr.move_to(center_x, units_y_pos);
                 cr.show_text(&units_label).unwrap();
             }
         } else if let Some(units_label) = format_units_label(false, Some(units_str)) {
-            cr.set_font_size(6.0);
+            // Non-LaTeX plain text - use custom font size if provided
+            // Use serif font to match TeX fonts used in astronomy publications
+            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            let fallback_font_size = units_font_size.unwrap_or_else(|| 
+                (layout.tick_font_size * 0.75).round().max(3.0).min(25.0) as f32
+            );
+            cr.set_font_size(fallback_font_size as f64);
             let ext = cr.text_extents(&units_label).unwrap();
             let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
             cr.move_to(center_x, units_y_pos);
@@ -415,22 +439,23 @@ pub fn draw_colorbar_pdf(
 
         draw_colorbar_pdf_ticks(
             cr,
-            cb_layout,
+            &cb_layout,
             &ticks,
         );
     
         draw_colorbar_pdf_labels(
             cr,
-            cb_layout,
+            &cb_layout,
             &ticks,
             params.scale_type,
             params.latex_rendering,
             params.units,
+            params.units_font_size,
         );
 
         draw_colorbar_pdf_extends(
             cr,
-            cb_layout,
+            &cb_layout,
             params.extend,
             params.cmap,
         );
@@ -475,7 +500,7 @@ impl RenderTarget for PdfRenderTarget<'_> {
 /// Draw colorbar extend arrows for PDF
 pub fn draw_colorbar_pdf_extends(
     cr: &Context,
-    layout: ColorbarLayout,
+    layout: &ColorbarLayout,
     extend: &crate::cli::Extend,
     cmap: &Colormap,
 ) {

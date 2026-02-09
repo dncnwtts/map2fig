@@ -124,6 +124,9 @@ fn test_plot_smoke() {
             latex_rendering: false, 
             units: Some("str".to_string()),
             extend: map2fig::cli::Extend::None,
+            tick_direction: map2fig::cli::TickDirection::Inward,
+            tick_font_size: None,
+            units_font_size: None,
         },
         graticule: GraticuleParams { 
             show_graticule: false, 

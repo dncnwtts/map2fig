@@ -42,6 +42,9 @@ pub struct DisplayParams {
     pub latex_rendering: bool,
     pub units: Option<String>,
     pub extend: crate::cli::Extend,
+    pub tick_direction: crate::cli::TickDirection,
+    pub tick_font_size: Option<f32>,
+    pub units_font_size: Option<f32>,
 }
 
 /// Graticule overlay parameters.
@@ -57,6 +60,17 @@ pub struct GraticuleParams {
 
 /// Mollweide projection parameters bundling all related data.
 pub struct MollweideParams<'a> {
+    pub plot: PlotData<'a>,
+    pub scale: ScaleParams,
+    pub color: ColorParams<'a>,
+    pub display: DisplayParams,
+    pub graticule: GraticuleParams,
+    pub meta: HealpixMeta,
+    pub view: &'a crate::rotation::ViewTransform,
+}
+
+/// Hammer projection parameters bundling all related data.
+pub struct HammerParams<'a> {
     pub plot: PlotData<'a>,
     pub scale: ScaleParams,
     pub color: ColorParams<'a>,
@@ -123,6 +137,7 @@ pub struct ColorbarParams<'a> {
     pub latex_rendering: bool,
     pub units: Option<&'a str>,
     pub extend: &'a crate::cli::Extend,
+    pub units_font_size: Option<f32>,
 }
 
 /// Graticule rendering parameters.

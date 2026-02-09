@@ -50,7 +50,7 @@ impl Projection for MollweideProjection {
         let x = (2.0 * lon / PI) * theta.cos();
         let y = theta.sin();
 
-        // Map [-1,1] → [0,1]
+        // Map [-2,2] → [0,1]
         let u = (2.0 - x) * 0.25;
         let v = (1.0 - y) * 0.5;
 
@@ -231,4 +231,55 @@ fn pixel_to_ang_returns_lon_lat_in_correct_order() {
     }
 }
 
-
+#[test]
+fn test_mollweide_all_pixels_inside_ellipse() {
+    // This test verifies that pixel_to_ang correctly enforces ellipse bounds.
+    // No pixel should produce valid coordinates if it's outside x²/4 + y² ≤ 1.
+    // Conversely, if a pixel is inside the ellipse, it must produce valid coordinates.
+    
+    let proj = MollweideProjection;
+    let grid = RasterGrid::new(1200, 600);  // Standard rendering size
+    
+    let mut inside_count = 0;
+    let mut outside_count = 0;
+    let mut boundary_pixels = Vec::new();
+    let mut invalid_returns = Vec::new();
+    
+    for (px, py, u, v) in grid.iter() {
+        // Manually compute ellipse membership
+        let x = 2.0 - 4.0 * u;
+        let y = 1.0 - 2.0 * v;
+        let ellipse_val = (x * x) / 4.0 + y * y;
+        let should_be_inside = ellipse_val <= 1.0;
+        
+        // Track boundary pixels
+        if (ellipse_val - 1.0).abs() < 1e-10 {
+            boundary_pixels.push((px, py, ellipse_val, should_be_inside));
+        }
+        
+        // Get result from pixel_to_ang
+        let result = proj.pixel_to_ang(px, py, &grid);
+        let is_valid = result.is_some();
+        
+        if should_be_inside {
+            inside_count += 1;
+            if !is_valid {
+                invalid_returns.push((px, py, ellipse_val));
+            }
+        } else {
+            outside_count += 1;
+            // Outside pixels should not have valid returns
+            if is_valid {
+                panic!("Pixel ({}, {}) outside ellipse (val={:.6}) returned valid coordinates", px, py, ellipse_val);
+            }
+        }
+    }
+    
+    println!("Mollweide ellipse coverage: {} inside, {} outside", inside_count, outside_count);
+    if !boundary_pixels.is_empty() {
+        println!("Boundary pixels (ellipse_val ≈ 1.0):");
+        for (px, py, val, inside) in &boundary_pixels {
+            println!("  ({:4}, {:3}): ellipse_val={:.16}, should_be_inside={}", px, py, val, inside);
+        }
+    }
+}

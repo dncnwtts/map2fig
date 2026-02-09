@@ -405,9 +405,6 @@ pub fn fill_triangle_with_clamp(
     let v12_dist = dist2((v2.0 - v1.0, v2.1 - v1.1));
     let v20_dist = dist2((v0.0 - v2.0, v0.1 - v2.1));
     
-    eprintln!("[fill_triangle] vertices: v0={:?}, v1={:?}, v2={:?}", v0, v1, v2);
-    eprintln!("[fill_triangle] distances: v01={}, v12={}, v20={}", v01_dist, v12_dist, v20_dist);
-    
     // Determine which vertex is the "tip" (equidistant from other two)
     // If v01_dist == v20_dist, then v0 is equidistant from v1 and v2, so v0 is the tip
     let tip_option = if v01_dist == v20_dist && v01_dist != v12_dist {

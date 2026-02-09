@@ -116,7 +116,7 @@ pub struct Args {
     #[arg(long, default_value_t = 0.0)]
     pub roll: f64,
 
-    /// Projection type: mollweide or gnomonic
+    /// Projection type: mollweide, gnomonic, or hammer
     #[arg(long, default_value = "mollweide")]
     pub projection: String,
 
@@ -190,6 +190,18 @@ pub struct Args {
     /// Extend colorbar with arrows at the ends: none, min, max, or both
     #[arg(long, default_value = "none")]
     pub extend: String,
+
+    /// Colorbar tick direction: inward/in (default) or outward/out
+    #[arg(long, default_value = "inward")]
+    pub tick_direction: String,
+
+    /// Tick label font size in points (default: auto-scaled, 12pt at width 800px)
+    #[arg(long)]
+    pub tick_font_size: Option<f32>,
+
+    /// Units text font size in points (default: auto-scaled, 16pt at width 800px)
+    #[arg(long)]
+    pub units_font_size: Option<f32>,
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends
@@ -211,6 +223,25 @@ impl FromStr for Extend {
             "max" => Ok(Extend::Max),
             "both" => Ok(Extend::Both),
             _ => Err(format!("Invalid extend option '{}'. Expected: none, min, max, or both", s)),
+        }
+    }
+}
+
+/// Colorbar tick direction: inward (in) or outward (out)
+#[derive(Clone, Debug, PartialEq)]
+pub enum TickDirection {
+    Inward,  // Ticks point toward the colorbar (default)
+    Outward, // Ticks point away from the colorbar
+}
+
+impl FromStr for TickDirection {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "inward" | "in" => Ok(TickDirection::Inward),
+            "outward" | "out" => Ok(TickDirection::Outward),
+            _ => Err(format!("Invalid tick direction '{}'. Expected: inward (in) or outward (out)", s)),
         }
     }
 }
@@ -345,13 +376,13 @@ impl Args {
             );
         }
         
-        // Check mollweide-specific args
+        // Check mollweide-specific args (also applies to hammer)
         let mollweide_args_provided = self.graticule;
         
-        if mollweide_args_provided && projection != "mollweide" {
+        if mollweide_args_provided && projection != "mollweide" && projection != "hammer" {
             return Err(
-                "Mollweide projection arguments (--graticule, --grat-coord, --grat-par, \
-                 --grat-mer) can only be used with --projection mollweide".to_string()
+                "Mollweide/Hammer projection arguments (--graticule, --grat-coord, --grat-par, \
+                 --grat-mer) can only be used with --projection mollweide or hammer".to_string()
             );
         }
         
