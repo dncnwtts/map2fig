@@ -20,13 +20,9 @@
 |---------|---------|---------|------------|--------|
 | **Mollweide** | ✓ | ✓ | ✓ | ✓ |
 | **Gnomonic** | ✓ | ✓ | ✓ | ✓ |
-| **Hammer** | ✗ | ✗ | ✓ | ✓ |
-| **Orthographic** | ✗ | ✗ | ✗ | ✓ |
 
-**Gap Analysis**: 
-- map2fig is missing **Hammer** projection (all-sky with equal area/distance properties)
-- map2fig is missing **Orthographic** projection (3D globe view)
-- These are less commonly used but useful for specific applications
+**Gap Analysis**:
+- map2fig focus is on efficient all-sky and local projections with publication-quality output
 
 ---
 
@@ -50,7 +46,6 @@
 | Feature | map2fig | map2png | Cosmoglobe | healpy |
 |---------|---------|---------|------------|--------|
 | **Smoothing** | ✓ | ✓ | ✓ | ✓ |
-| **Masking** | ✓ | ✓ | ✓ | ✓ |
 | **Rotation/Roll** | ✓ | ✓ | ✓ | ✓ |
 | **Dipole Removal** | ✗ | ✗ | ✓ | ✓ |
 | **Monopole Removal** | ✗ | ✗ | ✓ | ✓ |
@@ -108,7 +103,7 @@
 
 ### LOW PRIORITY
 6. **Extended coordinate system support** - Ecliptic, custom frames
-7. **More projections** - Aitoff, Stereographic, etc.
+7. **More projections** - Stereographic, orthographic, etc.
 
 ---
 

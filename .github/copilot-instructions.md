@@ -1,7 +1,7 @@
 # HEALPix Plotter - AI Coding Agent Instructions
 
 ## Project Overview
-This is a Rust CLI application for visualizing HEALPix sky maps in Mollweide projection. It reads astronomical data from FITS files and generates publication-quality plots with customizable colormaps, scaling, and output formats (PDF/PNG).
+This is a Rust CLI application for visualizing HEALPix sky maps in Mollweide and Gnomonic projections. It reads astronomical data from FITS files and generates publication-quality plots with customizable colormaps, scaling, and output formats (PDF/PNG).
 
 ## Architecture & Key Components
 

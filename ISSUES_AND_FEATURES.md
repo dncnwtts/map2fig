@@ -130,7 +130,7 @@
   - [x] Colorbar extend arrows (--extend none/min/max/both) - ADDED 2026-02-08
 - **Pending Features:**
   - [ ] Gnomonic projection improvements
-  - [ ] Hammer projection (stub exists in src/hammer.rs)
+  - [ ] Additional validation and error handling
   - [ ] Orthographic projection
   - [ ] Custom padding/margin control
   - [ ] Transparent background option
@@ -182,9 +182,7 @@
 #### 7. Advanced Projections
 - **Status:** NOT STARTED
 - **Projections to Implement:**
-  - [ ] Hammer-Aitoff (stub exists)
   - [ ] Orthographic
-  - [ ] Lambert Conformal
   - [ ] Stereographic
   - [ ] Azimuthal Equidistant
 - **Files:** src/projection.rs, src/mollweide.rs

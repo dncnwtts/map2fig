@@ -1,10 +1,10 @@
 # HEALPix Plotter (`map2fig`)
 
-A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollweide, Hammer-Aitoff, and Gnomonic projections. Reads FITS files and generates PDF or PNG plots with customizable colormaps, scaling, and coordinate transformations.
+A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollweide and Gnomonic projections. Reads FITS files and generates PDF or PNG plots with customizable colormaps, scaling, and coordinate transformations.
 
 ## Features
 
-- **Multiple Projections**: Mollweide (full-sky), Hammer-Aitoff (equal-area full-sky), and Gnomonic (local) projections
+- **Multiple Projections**: Mollweide (full-sky) and Gnomonic (local) projections
 - **80+ Colormaps**: Matplotlib colormaps plus custom scientific colormaps
 - **Advanced Scaling**: Linear, log, symlog, asinh, histogram equalization, and Planck-specific scaling
 - **Coordinate Systems**: Galactic, Equatorial (FK5), and Ecliptic with automatic transformations
@@ -106,42 +106,6 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 **Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels.
 
 ![Example 2: Log-scale with Plasma colormap](examples/outputs/example2_log_scale.pdf)
-
----
-
-### 2b. Hammer-Aitoff Equal-Area Projection
-
-**Use Case**: Alternative full-sky projection with better area preservation near poles than Mollweide
-
-```bash
-./map2fig -f npipe_nodip.fits \
-  --projection hammer \
-  --graticule \
-  -o survey_hammer.pdf
-```
-
-**Projection Characteristics**:
-- **Hammer-Aitoff**: Equal-area projection that preserves solid angle across the entire sky
-- Better pole representation than Mollweide (less distortion at high latitudes)
-- Useful for comparing with Mollweide or for personal preference
-- Supports all the same features: colormaps, scaling, graticules, coordinate overlays
-
-**Parameters**:
-- `--projection hammer`: Switch to Hammer-Aitoff projection
-- All other options (graticule, coordinate systems, scaling) work identically to Mollweide
-
-**Output**: Generates `survey_hammer.pdf`—full-sky map in Hammer-Aitoff projection with graticule. The map appears slightly less elongated than Mollweide, with more uniform distortion near the poles.
-
-**Comparing Projections**:
-```bash
-# Mollweide (default)
-./map2fig -f data.fits -o mollweide.pdf
-
-# Hammer-Aitoff
-./map2fig -f data.fits --projection hammer -o hammer.pdf
-```
-
-Both projections are equal-area and support the same features. Choose based on publication style and pole distortion preference.
 
 ---
 
