@@ -99,6 +99,7 @@ pub struct GnomonicParams<'a> {
     pub resolution_arcmin: f64,
     pub roll_deg: f64,
     pub grat_line_width: u32,
+    pub show_gnomonic_text: bool,
 }
 
 /// Pixel rendering parameters for mollweide projection.

@@ -152,6 +152,10 @@ pub struct Args {
     #[arg(long, default_value_t = 1)]
     pub grat_line_width: u32,
 
+    /// Disable resolution and pixel size label on gnomonic projection
+    #[arg(long)]
+    pub no_text: bool,
+
     /// Allows for more verbose output
     #[arg(long)]
     pub verbose: bool,

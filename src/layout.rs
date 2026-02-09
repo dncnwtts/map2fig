@@ -146,20 +146,23 @@ pub fn compute_gnomonic_layout(
     map_size: f64,
     show_colorbar: bool,
     tick_direction: crate::cli::TickDirection,
+    show_text: bool,
 ) -> (MollweideLayout, ColorbarLayout) {
-    compute_gnomonic_layout_with_fonts(map_size, show_colorbar, tick_direction, None)
+    compute_gnomonic_layout_with_fonts(map_size, show_colorbar, tick_direction, show_text, None)
 }
 
 pub fn compute_gnomonic_layout_with_fonts(
     map_size: f64,
     show_colorbar: bool,
     tick_direction: crate::cli::TickDirection,
+    show_text: bool,
     custom_tick_font_size: Option<f32>,
 ) -> (MollweideLayout, ColorbarLayout) {
     // Scale all dimensions with map size (reference: 1200px)
     let scale = map_size / 1200.0;
     
     let outer_pad = 24.0 * scale;      // margin around everything
+    let left_text_pad = if show_text { 50.0 * scale } else { 0.0 };  // space for rotated text label on left
     let cbar_pad  = 8.0 * scale;       // minimal gap between map and colorbar
     let label_pad = 14.0 * scale;      // space for text descenders
     let units_pad = if show_colorbar { -4.0 * scale } else { 0.0 };  // negative to remove bottom whitespace
@@ -190,11 +193,11 @@ pub fn compute_gnomonic_layout_with_fonts(
         units_pad +
         outer_pad;
 
-    let map_x = outer_pad;
+    let map_x = outer_pad + left_text_pad;
     let map_y = outer_pad;
 
     let cbar_y = map_y + map_h + cbar_pad;
-    let width = map_w + 2.0 * outer_pad;
+    let width = map_w + 2.0 * outer_pad + left_text_pad;
 
     (MollweideLayout {
         width,

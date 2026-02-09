@@ -1478,10 +1478,11 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let _overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
     let mask = params.display.mask.as_ref();
+    let show_text = params.show_gnomonic_text;
 
     use crate::gnomonic::GnomonicProjection;
 
-    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
+    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text);
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
     let font = Font::try_from_bytes(font_data as &[u8])
@@ -1715,6 +1716,32 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         }
     }
 
+    // Add gnomonic text label if requested
+    if show_text {
+        let text = format!("{:.2} '/pix,   {}x{} pix", 
+            resolution_arcmin, 
+            width, 
+            width);
+        
+        // Draw text label on the left side
+        // The text is positioned at the left edge, vertically centered
+        let text_color = Rgba([0, 0, 0, 255]);
+        let text_x = (layout.map_x - 40.0) as i32;
+        let text_y = (layout.map_y + layout.map_h / 2.0) as i32;
+        
+        // Render text with small font size
+        let font_size = (10.0 * (width as f64 / 1200.0)) as f32;
+        draw_text_mut(
+            &mut img,
+            text_color,
+            text_x,
+            text_y,
+            FontScale::uniform(font_size),
+            &font,
+            &text,
+        );
+    }
+
     // Save PNG
     img.save(filename).expect("Failed to save PNG");
 }
@@ -1752,7 +1779,9 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 
     use crate::gnomonic::GnomonicProjection;
 
-    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
+    let show_text = params.show_gnomonic_text;
+
+    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text);
     
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -1871,7 +1900,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     // Add proper colorbar with ticks and labels if requested
     if show_colorbar {
         use crate::render::pdf::draw_colorbar_pdf;
-        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone()).1;
+        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text).1;
         
         draw_colorbar_pdf(
             &cr,
@@ -1889,6 +1918,23 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 units_font_size: params.display.units_font_size,
             },
         );
+    }
+
+    // Add gnomonic text label if requested
+    if show_text {
+        let text = format!("{:.2} '/pix,   {}x{} pix", 
+            resolution_arcmin, 
+            width, 
+            width);
+        
+        // Position text on the left side of the map, vertically centered
+        let text_x = layout.map_x - 40.0;
+        let text_y = layout.map_y + layout.map_h / 2.0;
+        
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+        cr.set_font_size(10.0);
+        cr.move_to(text_x, text_y);
+        cr.show_text(&text).ok();
     }
 
     pdf_surface.finish();
@@ -1923,6 +1969,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
     let grat_overlay = params.graticule.grat_overlay;
     let overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
+    let show_text = params.show_gnomonic_text;
 
     // Compute image width from field of view and resolution
     // This ensures the FOV parameter is actually respected
@@ -1985,6 +2032,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
         resolution_arcmin,
         roll_deg,
         grat_line_width: 1,
+        show_gnomonic_text: show_text,
     };
 
     match ext.as_str() {

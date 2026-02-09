@@ -243,6 +243,7 @@ fn run() -> Result<(), String> {
                 resolution_arcmin: res,
                 roll_deg: args.roll,
                 grat_line_width: args.grat_line_width,
+                show_gnomonic_text: !args.no_text,
             };
 
             plot_gnomonic_auto(params);
