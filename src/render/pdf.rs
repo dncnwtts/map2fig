@@ -507,10 +507,7 @@ pub fn draw_colorbar_pdf_extends(
     use crate::cli::Extend;
 
     // Skip if no extends requested
-    match extend {
-        Extend::None => return,
-        _ => {}
-    }
+    if extend == &Extend::None { return }
 
     // Get colors for extend arrows from colormap endpoints
     let min_color_rgb = cmap.sample(0.0);
@@ -583,7 +580,7 @@ pub fn draw_figure_labels_pdf(
     // Units label: 14pt * 0.5 ≈ 7pt, so labels default to ~16pt
     let scale = width / 800.0;
     let font_size = if let Some(size) = label_font_size {
-        (size as f64 * scale) as f64
+        size as f64 * scale 
     } else {
         // Default: 2pt larger than standard units label (14pt * scale + 2pt)
         14.0 * scale + 2.0

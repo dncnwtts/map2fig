@@ -159,7 +159,7 @@ impl Projection for HammerProjection {
         let v = (sqrt2 - y) / (2.0 * sqrt2);
         
         // Check bounds
-        if u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 {
+        if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
             Some((u, v))
         } else {
             None

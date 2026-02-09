@@ -484,11 +484,10 @@ pub fn fill_triangle_with_clamp(
                     }
                     
                     // Clamp Y to the allowed range if specified
-                    if let Some((clamp_min, clamp_max)) = clamp_y {
-                        if y < clamp_min || y > clamp_max {
+                    if let Some((clamp_min, clamp_max)) = clamp_y
+                        && (y < clamp_min || y > clamp_max) {
                             continue;
                         }
-                    }
                     
                     // Find where the slanted edge (from tip to either top or bottom base) intersects this Y
                     // We need to figure out which segment of the edge is relevant
@@ -513,7 +512,7 @@ pub fn fill_triangle_with_clamp(
                         
                         // Clamp before computing the fill range
                         let x_min_clamped = x_min_i.max(0);
-                        let x_max_clamped = x_max_i.min((width as i32) - 1);
+                        let x_max_clamped = x_max_i.min(width - 1);
                         
                         // Ensure valid range
                         if x_max_clamped >= x_min_clamped {
@@ -1334,7 +1333,7 @@ pub fn render_colorbar_standalone(
     
     // Calculate colorbar width: make sure it's odd so it centers perfectly
     let mut cbar_width_f64 = width as f64 - 2.0 * padding as f64;
-    if cbar_width_f64 as u32 % 2 == 0 {
+    if (cbar_width_f64 as u32).is_multiple_of(2) {
         cbar_width_f64 -= 1.0;  // Make odd width for perfect centering
     }
     let cbar_width = cbar_width_f64 as u32;

@@ -234,13 +234,11 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
             .output()
             .ok()?;
         
-        if output.status.success() {
-            if let Ok(svg_data) = std::fs::read_to_string(&svg_path) {
-                if let Some((width, height)) = extract_svg_dimensions(&svg_data) {
+        if output.status.success()
+            && let Ok(svg_data) = std::fs::read_to_string(&svg_path)
+                && let Some((width, height)) = extract_svg_dimensions(&svg_data) {
                     return Some(RenderedLatexSvg { svg_data, width, height });
                 }
-            }
-        }
     }
     
     // Fallback to ImageMagick convert
@@ -252,13 +250,11 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
             .output()
             .ok()?;
         
-        if output.status.success() {
-            if let Ok(svg_data) = std::fs::read_to_string(&svg_path) {
-                if let Some((width, height)) = extract_svg_dimensions(&svg_data) {
+        if output.status.success()
+            && let Ok(svg_data) = std::fs::read_to_string(&svg_path)
+                && let Some((width, height)) = extract_svg_dimensions(&svg_data) {
                     return Some(RenderedLatexSvg { svg_data, width, height });
                 }
-            }
-        }
     }
     
     None

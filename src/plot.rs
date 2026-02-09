@@ -859,8 +859,8 @@ where
     }
 
     // Draw units label below colorbar
-    if show_colorbar {
-        if let Some(units_str) = units {
+    if show_colorbar
+        && let Some(units_str) = units {
             let scale = layout.width / 1200.0;
             let units_y = (cb_layout.tick_label_pad + 30.0 * scale) as i32;
             
@@ -936,7 +936,6 @@ where
                 }
             }
         }
-    }
 
     // Draw figure labels (rlabel, llabel)
     draw_figure_labels_png(
@@ -1002,7 +1001,7 @@ pub fn draw_figure_labels_png(
     // Default: 2pt larger than units label (which is 14pt)
     let scale = width as f64 / 800.0;
     let font_size = if let Some(size) = label_font_size {
-        (size * scale as f32) as f32
+        size * scale as f32 
     } else {
         // Default: 2pt larger than standard units label (14pt * scale + 2pt)
         (14.0 * scale as f32 + 2.0).max(6.0)
