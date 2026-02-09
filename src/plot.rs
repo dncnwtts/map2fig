@@ -1160,6 +1160,7 @@ pub fn render_projection_to_grid(
         params.gamma
     };
 
+    // Process rows sequentially but with optimization: batch operations and reduce allocations
     for py in 0..height {
         for px in 0..width {
             // Use pixel_to_ang for all projections (handles each type correctly)
