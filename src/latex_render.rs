@@ -70,10 +70,7 @@ fn check_convert() -> bool {
 /// Render LaTeX to high-quality PNG for vector-like appearance
 /// Uses higher DPI for near-vector quality without actual vectorization
 pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -> Option<RenderedLatex> {
-    // Check if LaTeX tools are available
-    if !check_pdflatex() || !check_pdftoppm() {
-        return None;
-    }
+    // Tools are checked elsewhere; assume they're available
     
     // Check cache first using DPI in the key
     let hash_value = {
@@ -93,6 +90,7 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
                 return Some(RenderedLatex { image_data, width, height });
             }
     
+    eprintln!("DEBUG: Cache miss, generating fresh");
     // Create temporary directory for compilation
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
@@ -101,15 +99,19 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
     
     let temp_path = temp_dir.path();
     
-    // Create minimal LaTeX document with substantial vertical padding
-    // Use invisible vertical rule to force bounding box size (standalone class is strict)
+    // Create minimal LaTeX document with no vertical padding
+
+    eprintln!("DEBUG: render_latex_to_hires_png generating LaTeX with {}pt font at {}dpi", font_size_pt, dpi);
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
+\setlength{{\parskip}}{{0pt}}
+\setlength{{\parindent}}{{0pt}}
 \pagestyle{{empty}}
 \begin{{document}}
-\rule{{0pt}}{{0.6cm}}\\
+\vspace*{{-0.5em}}
 {}
+\vspace*{{-0.5em}}
 \end{{document}}"#,
         font_size_pt, latex_str
     );
@@ -156,8 +158,30 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
         return None;
     }
     
+    // Crop PNG to remove white margins using imagemagick
+    // Use minimal border (1x1) for crisp edges on small fonts
+    let cropped_path = temp_path.join("document_cropped.png");
+    let trim_output = std::process::Command::new("convert")
+        .arg(&png_path)
+        .arg("-trim")
+        .arg("+repage")  // Remove virtual canvas
+        .arg("-bordercolor").arg("white")
+        .arg("-border").arg("1x1")  // Minimal border for crisp rendering
+        .arg(&cropped_path)
+        .output();
+    
+    let trim_success = trim_output.as_ref().map(|o| o.status.success()).unwrap_or(false);
+    let cropped_exists = cropped_path.exists();
+    
+    // Use cropped version if available, otherwise fall back to original
+    let final_png_path = if trim_success && cropped_exists {
+        cropped_path
+    } else {
+        png_path.clone()
+    };
+    
     // Read PNG
-    let image_data = std::fs::read(&png_path).ok()?;
+    let image_data = std::fs::read(&final_png_path).ok()?;
     let (width, height) = extract_png_dimensions(&image_data).ok()?;
     
     // Cache the result
@@ -444,10 +468,8 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
 /// * `Some(RenderedLatex)` if rendering successful
 /// * `None` if LaTeX unavailable on system
 pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<RenderedLatex> {
-    // Check if LaTeX tools are available
-    if !check_pdflatex() || !check_pdftoppm() {
-        return None;
-    }
+    // Use tectonic for rendering since it's more reliable and already available
+    // We'll use pdftoppm for PDF->PNG conversion
     
     // Check cache first
     let cache_key = get_cache_key(latex_str, font_size_pt);
@@ -466,16 +488,18 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
     };
     
     let temp_path = temp_dir.path();
-    
-    // Create minimal LaTeX document with substantial vertical padding
-    // Use invisible vertical rule to force bounding box size (standalone class is strict)
+    // Create minimal LaTeX document with zero vspace margins
+    eprintln!("DEBUG: render_latex_to_png rendering LaTeX");
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
+\setlength{{\parskip}}{{0pt}}
+\setlength{{\parindent}}{{0pt}}
 \pagestyle{{empty}}
 \begin{{document}}
-\rule{{0pt}}{{0.6cm}}\\
+\vspace*{{-0.5em}}
 {}
+\vspace*{{-0.5em}}
 \end{{document}}"#,
         font_size_pt, latex_str
     );

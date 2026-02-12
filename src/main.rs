@@ -154,7 +154,8 @@ fn run() -> Result<(), String> {
                     llabel: args.llabel.clone(),
                     label_font_size: args.label_font_size,
                     mask: mask.clone(),
-                },
+                    title: args.title.clone(),
+                    show_title: !args.no_title,                    scale_text: !args.no_scale_text && !args.no_text,                },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,
                     grat_coord,
@@ -225,6 +226,9 @@ fn run() -> Result<(), String> {
                     llabel: args.llabel.clone(),
                     label_font_size: args.label_font_size,
                     mask: mask.clone(),
+                    title: args.title.clone(),
+                    show_title: !args.no_title && !args.no_text,
+                    scale_text: !args.no_scale_text && !args.no_text,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.local_graticule,
@@ -315,6 +319,9 @@ fn run() -> Result<(), String> {
                     llabel: args.llabel.clone(),
                     label_font_size: args.label_font_size,
                     mask: mask.clone(),
+                    title: args.title.clone(),
+                    show_title: !args.no_title && !args.no_text,
+                    scale_text: !args.no_scale_text && !args.no_text,
                 },
                 graticule: GraticuleParams {
                     show_graticule: args.graticule,

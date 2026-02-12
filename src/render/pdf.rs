@@ -179,7 +179,6 @@ pub fn draw_colorbar_pdf_ticks(
     let minor_len = layout.minor_tick_height;
 
     cr.set_source_rgb(0.0, 0.0, 0.0);
-    cr.set_line_width(1.0);
 
     // Determine tick direction (inward = -1, outward = +1)
     let direction = match layout.tick_direction {
@@ -188,6 +187,7 @@ pub fn draw_colorbar_pdf_ticks(
     };
 
     // Minor ticks
+    cr.set_line_width(layout.minor_tick_width);
     for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
@@ -195,6 +195,7 @@ pub fn draw_colorbar_pdf_ticks(
     }
 
     // Major ticks
+    cr.set_line_width(layout.major_tick_width);
     for (&t, &_val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
         let x = t * (layout.w - 1.0) + layout.x;
         cr.move_to(x, y0);
@@ -212,87 +213,114 @@ pub fn draw_colorbar_pdf_labels(
     latex_rendering: bool,
     units: Option<&str>,
     units_font_size: Option<f32>,
+    map_width: Option<f64>,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
     
     // Use serif font for all text to match TeX/astronomy publication standards
     cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    cr.set_font_size(layout.tick_font_size);
+    
+    // Tick font size scales with FOV like resolution label
+    // Resolution label at FOV 300 is 11pt, tick labels at 3/4 of 1.5x = 12.375pt
+    let adjusted_tick_font_size = if let Some(w) = map_width {
+        // Scale by (w/300): FOV 300 = 12.375pt, FOV 600 = 24.75pt, etc.
+        (16.5 * 0.75) * (w / 300.0)
+    } else {
+        layout.tick_font_size
+    };
+    cr.set_font_size(adjusted_tick_font_size);
 
-    // Position labels below ticks: tick_bottom + 2*major_tick_height provides safe spacing
-    let label_y = layout.y + layout.h + 2.0 * layout.major_tick_height;
+    // Position labels below ticks, accounting for tick direction
+    // For outward ticks, labels need extra space to avoid overlapping with ticks
+    let base_label_y = layout.y + layout.h;
+    let tick_label_offset = match layout.tick_direction {
+        crate::cli::TickDirection::Outward => layout.major_tick_height + 0.5 * layout.major_tick_height,
+        crate::cli::TickDirection::Inward => 1.0 * layout.major_tick_height,
+    };
+    let label_y = base_label_y + tick_label_offset;
 
     // Draw tick labels at the computed position
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
-        let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
+        let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, true);
         let x = t * layout.w + layout.x;
 
-        // Center text
-        let ext = cr.text_extents(&label).unwrap();
-        let tx = x - ext.width() / 2.0;
-
-        cr.move_to(tx, label_y);
-        cr.show_text(&label).unwrap();
+        if latex_rendering {
+            // Try to render LaTeX label as PNG
+            // Wrap in math mode for proper LaTeX rendering
+            let math_label = format!("${}", label);
+            let math_label = format!("{}$", math_label);
+            let font_size_pt = (adjusted_tick_font_size * 1.25) as u32;
+            if let Some(rendered) = latex_render::render_latex_to_png(&math_label, font_size_pt) {
+                // Embed the rendered LaTeX as an image
+                embed_latex_tick_label(cr, &rendered, x, label_y);
+            } else {
+                // Fallback to plain text
+                let ext = cr.text_extents(&label).unwrap();
+                let tx = x - ext.width() / 2.0;
+                cr.move_to(tx, label_y);
+                cr.show_text(&label).unwrap();
+            }
+        } else {
+            // Non-LaTeX rendering: use plain text
+            let ext = cr.text_extents(&label).unwrap();
+            let tx = x - ext.width() / 2.0;
+            cr.move_to(tx, label_y);
+            cr.show_text(&label).unwrap();
+        }
     }
 
     // Draw units label below colorbar if specified
     if let Some(units_str) = units {
-        // Position units label below tick labels with smaller offset
         let scale = layout.w / 1200.0;
-        let units_y_pos = label_y + 15.0 * scale;
         
-        // Scale LaTeX font size proportionally with tick font size (no hard minimum)
-        let latex_font_size = (layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
+        // Account for tick direction: when ticks are outward, push units text down by the tick height
+        let tick_offset = match layout.tick_direction {
+            crate::cli::TickDirection::Outward => layout.major_tick_height,
+            crate::cli::TickDirection::Inward => 0.0,
+        };
         
-        if latex_rendering {
-            // Try SVG vector rendering first (pdf2svg pipeline)
-            if let Some(rendered_svg) = latex_render::render_latex_to_svg(units_str, latex_font_size) {
-                embed_latex_svg_in_colorbar(
-                    cr,
-                    &rendered_svg,
-                    layout.x,
-                    layout.w,
-                    units_y_pos,
-                );
-            } else if let Some(rendered) = latex_render::render_latex_to_hires_png(units_str, latex_font_size, 200) {
-                // Fallback: high-DPI PNG (200 DPI) for near-vector quality
-                embed_latex_png_in_colorbar(
-                    cr,
-                    &rendered,
-                    layout.x,
-                    layout.w,
-                    units_y_pos,
-                );
-            } else if let Some(rendered) = latex_render::render_latex_to_png(units_str, latex_font_size) {
-                // Fallback to standard PNG if high-DPI fails
-                embed_latex_png_in_colorbar(
-                    cr,
-                    &rendered,
-                    layout.x,
-                    layout.w,
-                    units_y_pos,
-                );
-            } else if let Some(units_label) = format_units_label(true, Some(units_str)) {
-                // Final fallback to Unicode - use custom font size if provided
-                // Use serif font to match TeX fonts used in astronomy publications
-                cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                let fallback_font_size = units_font_size.unwrap_or_else(|| 
-                    (layout.tick_font_size * 0.75).round().clamp(3.0, 25.0) as f32
-                );
-                cr.set_font_size(fallback_font_size as f64);
-                let ext = cr.text_extents(&units_label).unwrap();
-                let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
-                cr.move_to(center_x, units_y_pos);
-                cr.show_text(&units_label).unwrap();
-            }
-        } else if let Some(units_label) = format_units_label(false, Some(units_str)) {
-            // Non-LaTeX plain text - use custom font size if provided
-            // Use serif font to match TeX fonts used in astronomy publications
-            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            let fallback_font_size = units_font_size.unwrap_or_else(|| 
-                (layout.tick_font_size * 0.75).round().clamp(3.0, 25.0) as f32
+        // Add significant vertical spacing to keep units well clear of tick labels
+        // Use map_width-based scale for consistent spacing across FOV sizes
+        let spacing_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
+        let vertical_gap = 12.0 * spacing_scale;  // Extra spacing grows with FOV
+        let units_y_pos = label_y + tick_offset + vertical_gap;  // Position well below tick labels
+        
+        // Use a reasonable LaTeX font size for units text
+        // Scale both font size and DPI with map width for proper scaling
+        let dpi_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
+        // units_font_size already includes the (width/300) scaling, multiply by 1.25 for desired size
+        let latex_font_size = ((units_font_size.unwrap_or(28.0) * 1.25) as u32).max(12);
+        let latex_dpi = ((300.0 * dpi_scale) as u32).max(100);  // Scale DPI with map width
+        
+        
+        // Try LaTeX rendering at scaled DPI for crisp embedding
+        if let Some(rendered) = latex_render::render_latex_to_hires_png(units_str, latex_font_size, latex_dpi) {
+            // High resolution PNG - will be embedded at appropriate size for the map dimensions
+            embed_latex_png_in_colorbar(
+                cr,
+                &rendered,
+                layout.x,
+                layout.w,
+                units_y_pos,
             );
-            cr.set_font_size(fallback_font_size as f64);
+        } else if let Some(units_label) = format_units_label(true, Some(units_str)) {
+            // Fallback to direct Cairo text rendering if LaTeX fails
+            // Use serif font to match TeX fonts used in astronomy publications
+            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            // Use provided font size or default 14pt
+            let font_size = units_font_size.unwrap_or(14.0) as f64;
+            cr.set_font_size(font_size);
+            let ext = cr.text_extents(&units_label).unwrap();
+            let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
+            cr.move_to(center_x, units_y_pos);
+            cr.show_text(&units_label).unwrap();
+        } else if let Some(units_label) = format_units_label(false, Some(units_str)) {
+            // Final fallback to non-LaTeX plain text
+            // Use serif font to match TeX fonts used in astronomy publications
+            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            // Use provided font size or default 14pt
+            let font_size = units_font_size.unwrap_or(14.0) as f64;
+            cr.set_font_size(font_size);
             let ext = cr.text_extents(&units_label).unwrap();
             let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
             cr.move_to(center_x, units_y_pos);
@@ -358,13 +386,93 @@ fn embed_latex_svg_in_colorbar(
     );
     cr.show_text("[SVG]").unwrap();
 }
-
 /// Embed a LaTeX PNG image in the colorbar with proper positioning and padding
+/// The image is embedded at full resolution but displayed at scaled size (0.5x)
+/// This preserves quality when zoomed in the PDF viewer
 fn embed_latex_png_in_colorbar(
     cr: &Context,
     rendered: &latex_render::RenderedLatex,
     colorbar_x: f64,
     colorbar_width: f64,
+    y_pos: f64,
+) {
+    // Convert PNG to Cairo surface
+    if let Ok(img_buf) = image::load_from_memory_with_format(
+        &rendered.image_data,
+        image::ImageFormat::Png,
+    ) {
+        let rgba = img_buf.to_rgba8();
+        
+        // Create Cairo surface from the image
+        if let Ok(mut surf) = ImageSurface::create(Format::ARgb32, rgba.width() as i32, rgba.height() as i32) {
+            let surf_stride = surf.stride() as usize;
+            {
+                let mut surf_data = surf.data().expect("Failed to get surface data");
+                
+                // Copy image data with proper RGBA -> ARGB conversion
+                let raw_data = rgba.as_raw();
+                for (i, chunk) in raw_data.chunks_exact(4).enumerate() {
+                    let y = i / rgba.width() as usize;
+                    let x = i % rgba.width() as usize;
+                    let dst_idx = y * surf_stride + x * 4;
+                    
+                    if dst_idx + 3 < surf_data.len() {
+                        // Copy as RGBA (Red, Green, Blue, Alpha)
+                        surf_data[dst_idx] = chunk[0];     // R
+                        surf_data[dst_idx + 1] = chunk[1]; // G
+                        surf_data[dst_idx + 2] = chunk[2]; // B
+                        surf_data[dst_idx + 3] = chunk[3]; // A
+                    }
+                }
+            }
+            surf.flush();
+            
+            // Find bounding box of non-transparent pixels for cropping info
+            // but render the full image with transparency to preserve quality
+            let mut min_y = rgba.height();
+            let mut max_y = 0u32;
+            
+            for (_x, y, pixel) in rgba.enumerate_pixels() {
+                if pixel[3] > 10 {  // Not fully transparent
+                    min_y = min_y.min(y);
+                    max_y = max_y.max(y);
+                }
+            }
+            
+            // Scale factor: 0.25 = quarter size for compact display (keep full 300 DPI quality)
+            let scale_factor = 0.25;
+            let scaled_width = (rgba.width() as f64) * scale_factor;
+            let scaled_height = (rgba.height() as f64) * scale_factor;
+            
+            // Calculate centered position
+            let center_x = colorbar_x + colorbar_width / 2.0 - scaled_width / 2.0;
+            
+            // Position text: place it below y_pos to avoid covering the colorbar
+            // Use only the actual content height range to position properly
+            let content_height = if min_y < max_y {
+                ((max_y - min_y + 1) as f64) * scale_factor
+            } else {
+                scaled_height
+            };
+            
+            let adjusted_y = y_pos - content_height * 0.75;  // Move up slightly, leaving a small gap
+            
+            // Apply scale transform before drawing
+            cr.save().unwrap();
+            cr.translate(center_x, adjusted_y);
+            cr.scale(scale_factor, scale_factor);
+            cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
+            cr.paint().unwrap();
+            cr.restore().unwrap();
+        }
+    }
+}
+
+/// Embed a LaTeX PNG image for a tick label, centered horizontally
+fn embed_latex_tick_label(
+    cr: &Context,
+    rendered: &latex_render::RenderedLatex,
+    x_pos: f64,
     y_pos: f64,
 ) {
     // Convert PNG to Cairo surface
@@ -380,22 +488,29 @@ fn embed_latex_png_in_colorbar(
             Format::ARgb32,
             rendered.width as i32,
             rendered.height as i32,
-            (rendered.width * 4) as i32,
+            rendered.width as i32 * 4,
         ) {
-            // Center horizontally
-            let center_x = colorbar_x + colorbar_width / 2.0 - (rendered.width as f64) / 2.0;
+            // Scale for display (approximate pixel size)
+            let scale_factor = 1.0;
+            let display_width = rendered.width as f64 * scale_factor;
+            let display_height = rendered.height as f64 * scale_factor;
             
-            // Position so baseline of text is at y_pos
-            // Most of the image height is below the baseline, so place it above y_pos
-            let img_height = rendered.height as f64;
-            let adjusted_y = y_pos - img_height * 0.75;  // 75% above, 25% below
+            // Position: center horizontally and vertically
+            let x = x_pos - display_width / 2.0;
+            let y = y_pos - display_height / 2.0;
             
-            cr.set_source_surface(&surf, center_x, adjusted_y).unwrap();
+            // Translate and scale to draw the LaTeX image
+            cr.save().unwrap();
+            cr.translate(x, y);
+            cr.scale(scale_factor, scale_factor);
+            
+            cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
             cr.paint().unwrap();
+            
+            cr.restore().unwrap();
         }
     }
 }
-
 
 pub fn draw_colorbar_pdf(
     cr: &Context,
@@ -451,6 +566,7 @@ pub fn draw_colorbar_pdf(
             params.latex_rendering,
             params.units,
             params.units_font_size,
+            params.map_width,  // Pass map_width for DPI scaling
         );
 
         draw_colorbar_pdf_extends(

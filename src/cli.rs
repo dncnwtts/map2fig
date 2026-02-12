@@ -156,6 +156,18 @@ pub struct Args {
     #[arg(long)]
     pub no_text: bool,
 
+    /// Disable title on gnomonic projection
+    #[arg(long)]
+    pub no_title: bool,
+
+    /// Disable text scaling with FOV (use constant text sizes)
+    #[arg(long)]
+    pub no_scale_text: bool,
+
+    /// Custom title for gnomonic projection (default: (lon, lat) at center)
+    #[arg(long)]
+    pub title: Option<String>,
+
     /// Allows for more verbose output
     #[arg(long)]
     pub verbose: bool,

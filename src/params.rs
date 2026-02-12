@@ -49,6 +49,9 @@ pub struct DisplayParams {
     pub llabel: Option<String>,
     pub label_font_size: Option<f32>,
     pub mask: Option<crate::mask::PixelMask>,
+    pub title: Option<String>,
+    pub show_title: bool,
+    pub scale_text: bool,
 }
 
 /// Graticule overlay parameters.
@@ -145,6 +148,7 @@ pub struct ColorbarParams<'a> {
     pub units: Option<&'a str>,
     pub extend: &'a crate::cli::Extend,
     pub units_font_size: Option<f32>,
+    pub map_width: Option<f64>,  // For scaling units label with map size (gnomonic projections)
 }
 
 /// Graticule rendering parameters.

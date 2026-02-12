@@ -61,12 +61,11 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, _latex_rend
                 let exp = value.abs().log10().floor() as i32;
                 let base = 10_f64.powi(exp);
                 let coeff = (value / base).round();
-                let latex_str = if (coeff - 1.0).abs() < 1e-12 {
+                if (coeff - 1.0).abs() < 1e-12 {
                     format!("10^{{{}}}", exp)
                 } else {
                     format!("{} \\times 10^{{{}}}", coeff as i64, exp)
-                };
-                latex_to_unicode(&latex_str)
+                }
             }
             _ => {
                 if value.abs() < 1000.0 {
@@ -93,7 +92,7 @@ pub fn format_tick_label(value: f64, scale: Scale, pos: Option<f64>, _latex_rend
 
 /// Format a tick label for display on colorbar with optional LaTeX rendering
 /// Note: Units are displayed separately, not appended to labels
-pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, _units: Option<&str>) -> String {
+pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, latex_rendering: bool, _units: Option<&str>, is_pdf: bool) -> String {
     let mut label = if value.abs() < 1e-12 {
         "0".to_string()
     } else {
@@ -114,9 +113,9 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
                 let base = 10_f64.powi(exp);
                 let coeff = (value / base).round();
                 if (coeff - 1.0).abs() < 1e-12 {
-                    latex_to_unicode(&format!("10^{{{}}}", exp))
+                    format!("10^{{{}}}", exp)
                 } else {
-                    latex_to_unicode(&format!("{} \\times 10^{{{}}}", coeff as i64, exp))
+                    format!("{} \\times 10^{{{}}}", coeff as i64, exp)
                 }
             }
             _ => {
@@ -142,7 +141,9 @@ pub fn format_tick_label_with_units(value: f64, scale: Scale, pos: Option<f64>, 
     };
 
     // Apply LaTeX processing if enabled
-    if latex_rendering {
+    // For PNG: convert to Unicode superscripts (supported by imageproc)
+    // For PDF: keep LaTeX notation (Cairo doesn't support Unicode superscripts well)
+    if latex_rendering && !is_pdf {
         label = latex_to_unicode(&label);
     }
 

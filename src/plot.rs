@@ -498,6 +498,7 @@ where
                 units,
                 extend: &params.display.extend,
                 units_font_size: params.display.units_font_size,
+                map_width: None,  // Not used for mollweide
             },
         );
     }
@@ -862,10 +863,16 @@ where
             }
         
             // Draw label
-            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
-            let text_width_est = (label.len() as f32 * 
-                cb_layout.tick_font_size as f32 * 0.6) as i32;
-            let text_x = px as i32 - text_width_est / 2;
+            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
+            let font_scale = FontScale::uniform(cb_layout.tick_font_size as f32);
+            
+            // Measure actual text width using font metrics
+            let mut text_width = 0.0;
+            for ch in label.chars() {
+                let glyph = font.glyph(ch);
+                text_width += glyph.scaled(font_scale).h_metrics().advance_width;
+            }
+            let text_x = px as i32 - (text_width / 2.0) as i32;
         
             draw_text_mut(
                 &mut img,
@@ -874,7 +881,7 @@ where
                 // The two label calculations make a significant difference here.
                 // Different units maybe?
                 cb_layout.tick_label_pad as i32,
-                FontScale::uniform(cb_layout.tick_font_size as f32),
+                font_scale,
                 &font,
                 &label,
             );
@@ -956,8 +963,8 @@ where
             let units_y = (cb_layout.tick_label_pad + 30.0 * scale) as i32;
             
             if latex_rendering {
-                // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
-                let latex_font_size = (cb_layout.tick_font_size * 0.5).round().clamp(3.0, 20.0) as u32;
+                // Scale LaTeX font size with width (reduced for appropriate sizing)
+                let latex_font_size = (cb_layout.tick_font_size * 0.467).round().clamp(3.0, 24.0) as u32;
                 // Try to render LaTeX and composite onto image
                 if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
                     // Composite the rendered LaTeX PNG onto the main image
@@ -1482,7 +1489,16 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
     use crate::gnomonic::GnomonicProjection;
 
-    let (layout, cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text);
+    // Gnomonic tick labels: same size as resolution label (11pt), scales by width/300
+    let gnomonic_tick_font_size = 11.0 * (width as f32 / 300.0);
+    let (layout, cb_layout) = crate::layout::compute_gnomonic_layout_with_fonts(
+        width as f64, 
+        show_colorbar, 
+        params.display.tick_direction.clone(), 
+        show_text, 
+        params.display.show_title,
+        Some(gnomonic_tick_font_size)
+    );
 
     let font_data = include_bytes!("../assets/fonts/DejaVuSans.ttf");
     let font = Font::try_from_bytes(font_data as &[u8])
@@ -1551,6 +1567,49 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
+    // Add title if enabled
+    if params.display.show_title {
+        let title_text;
+        let title_owned;
+        if let Some(custom_title) = params.display.title.as_ref() {
+            title_text = custom_title.as_str();
+        } else {
+            // Format default title: (lon, lat) rounded to hundredths place
+            let lon_rounded = (lon_deg * 100.0).round() / 100.0;
+            let lat_rounded = (lat_deg * 100.0).round() / 100.0;
+            title_owned = format!("({:.2}, {:.2})", lon_rounded, lat_rounded);
+            title_text = &title_owned;
+        }
+        
+        let title_font_size = if params.display.scale_text {
+            13.0 * (width as f32 / 300.0)
+        } else {
+            13.0  // constant size when text scaling is disabled
+        };
+        let scale_factor = width as f64 / 1200.0;
+        let title_pad = if params.display.show_title { 32.0 * scale_factor } else { 0.0 };
+        let outer_pad = 24.0 * scale_factor;
+        
+        // Title positioned at top of image
+        // Position at very top with minimal gap
+        let title_y = 0 as i32;
+        // Center horizontally between left and right padding
+        // Use 0.35 multiplier for accurate character width
+        let title_text_width_est = (title_text.len() as f32 * title_font_size * 0.35) as i32;
+        let image_center = layout.width / 2.0;
+        let title_x = ((image_center as i32) - (title_text_width_est / 2));
+        
+        draw_text_mut(
+            &mut img,
+            Rgba([0, 0, 0, 255]),
+            title_x,
+            title_y,
+            FontScale::uniform(title_font_size),
+            &font,
+            title_text,
+        );
+    }
+
     // Blit grid to image at map position
     for y in 0..width {
         for x in 0..width {
@@ -1593,7 +1652,16 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let major_tick_height = cb_layout.major_tick_height as u32;
         let major_tick_width = cb_layout.major_tick_width as u32;
         let tick_bottom = cb_layout.tick_bottom as u32;
-        let tick_top = tick_bottom.saturating_sub(major_tick_height);
+        
+        // For outward ticks, ticks extend downward; for inward, upward
+        let (tick_top, tick_bottom_actual) = match &params.display.tick_direction {
+            crate::cli::TickDirection::Inward => {
+                (tick_bottom.saturating_sub(major_tick_height), tick_bottom)
+            },
+            crate::cli::TickDirection::Outward => {
+                (tick_bottom, tick_bottom + major_tick_height)
+            },
+        };
 
         // Draw major ticks and labels
         for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
@@ -1601,7 +1669,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             for dx in 0..major_tick_width as i32 {
                 let x = (px as i32 + dx) as u32;
                 if x < layout.width as u32 {
-                    for py in tick_top..=tick_bottom {
+                    for py in tick_top..=tick_bottom_actual {
                         if py < img.height() {
                             img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
                         }
@@ -1609,21 +1677,61 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 }
             }
             
-            // Draw label
-            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units);
-            let text_width_est = (label.len() as f32 * 
-                cb_layout.tick_font_size as f32 * 0.6) as i32;
-            let text_x = px as i32 - text_width_est / 2;
+            // Draw label - position depends on tick direction
+            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
+            let font_scale = FontScale::uniform(cb_layout.tick_font_size as f32);
+            
+            // Measure actual text width using font metrics
+            let mut text_width = 0.0;
+            for ch in label.chars() {
+                let glyph = font.glyph(ch);
+                text_width += glyph.scaled(font_scale).h_metrics().advance_width;
+            }
+            let text_x = px as i32 - (text_width / 2.0) as i32;
+            
+            // For outward ticks, shift labels down past the ticks
+            let label_y_offset = match &params.display.tick_direction {
+                crate::cli::TickDirection::Outward => (major_tick_height * 2) as i32,
+                crate::cli::TickDirection::Inward => 0,
+            };
         
             draw_text_mut(
                 &mut img,
                 Rgba([0, 0, 0, 255]),
                 text_x,
-                cb_layout.tick_label_pad as i32,
-                FontScale::uniform(cb_layout.tick_font_size as f32),
+                cb_layout.tick_label_pad as i32 + label_y_offset,
+                font_scale,
                 &font,
                 &label,
             );
+        }
+
+        // Draw minor ticks
+        let minor_tick_height = cb_layout.minor_tick_height as u32;
+        let minor_tick_width = cb_layout.minor_tick_width as u32;
+        
+        // For outward ticks, ticks extend downward; for inward, upward
+        let (minor_tick_top, minor_tick_bottom) = match &params.display.tick_direction {
+            crate::cli::TickDirection::Inward => {
+                (tick_bottom.saturating_sub(minor_tick_height), tick_bottom)
+            },
+            crate::cli::TickDirection::Outward => {
+                (tick_bottom, tick_bottom + minor_tick_height)
+            },
+        };
+        
+        for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
+            let px = (layout.cbar_x + (t * layout.cbar_w).round()) as u32;
+            for dx in 0..minor_tick_width as i32 {
+                let x = (px as i32 + dx) as u32;
+                if x < layout.width as u32 {
+                    for py in minor_tick_top..=minor_tick_bottom {
+                        if py < img.height() {
+                            img.put_pixel(x, py, Rgba([0, 0, 0, 255]));
+                        }
+                    }
+                }
+            }
         }
 
         // Draw colorbar extend arrows if needed
@@ -1639,13 +1747,27 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
         // Draw units label below colorbar
         if let Some(units_str) = units {
-            let units_y = cb_layout.tick_label_pad as i32;
+            // Position units below tick labels with extra spacing
+            // Add vertical gap that scales with FOV (scaled from width/300 reference)
+            let spacing_scale = width as f64 / 300.0;
+            // For outward ticks, add extra offset to account for ticks extending downward
+            let outward_offset = match &params.display.tick_direction {
+                crate::cli::TickDirection::Outward => (cb_layout.major_tick_height * 2.0) as i32,
+                crate::cli::TickDirection::Inward => 0,
+            };
+            let units_y = (cb_layout.tick_label_pad as f64 + 12.0 * spacing_scale) as i32 + outward_offset;
             
             if latex_rendering {
-                // Scale LaTeX font size with width (proportional to tick font, no hard minimum)
-                let latex_font_size = (cb_layout.tick_font_size * 0.25).round().clamp(3.0, 20.0) as u32;
-                // Try to render LaTeX and composite onto image
-                if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
+                // Scale units font to gnomonic baseline: 18.67 * (width / 300.0)
+                // Use param if provided, otherwise default scaling
+                let units_font_pt = params.display.units_font_size.unwrap_or_else(|| {
+                    28.0 / 1.5 * (width as f32 / 300.0)
+                });
+                let latex_font_size = units_font_pt.round().clamp(3.0, 24.0) as u32;
+                // Use constant DPI for LaTeX rendering - font size already scales with FOV
+                let latex_dpi = 300u32;
+                // Try to render LaTeX at fixed DPI and composite onto image
+                if let Some(rendered) = crate::latex_render::render_latex_to_hires_png(units_str, latex_font_size, latex_dpi) {
                     // Composite the rendered LaTeX PNG onto the main image
                     let latex_img = image::load_from_memory(&rendered.image_data)
                         .expect("Failed to load rendered LaTeX");
@@ -1680,8 +1802,10 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         .strip_prefix('$').unwrap_or(units_str)
                         .strip_suffix('$').unwrap_or(units_str);
                     
-                    let text_width_est = (units_label.len() as f32 * 
-                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
+                        28.0 / 1.5 * (width as f32 / 300.0)
+                    });
+                    let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
                     let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
                     
                     draw_text_mut(
@@ -1689,7 +1813,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         Rgba([0, 0, 0, 255]),
                         center_x,
                         units_y,
-                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        FontScale::uniform(units_font_size),
                         &font,
                         units_label,
                     );
@@ -1697,8 +1821,10 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             } else {
                 // Non-LaTeX: render as plain text
                 if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
-                    let text_width_est = (units_label.len() as f32 * 
-                        cb_layout.tick_font_size as f32 * 0.6) as i32;
+                    let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
+                        28.0 / 1.5 * (width as f32 / 300.0)
+                    });
+                    let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
                     let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
                     
                     draw_text_mut(
@@ -1706,7 +1832,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         Rgba([0, 0, 0, 255]),
                         center_x,
                         units_y,
-                        FontScale::uniform(cb_layout.tick_font_size as f32),
+                        FontScale::uniform(units_font_size),
                         &font,
                         &units_label,
                     );
@@ -1722,9 +1848,19 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             width, 
             width);
         
-        // Render text to temporary Cairo surface with 90-degree rotation
-        let font_size = 10.0 * (width as f64 / 1200.0);
-        let mut text_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 50)
+        // Scale font size and surface size with map width (base 12 at 300px)
+        // Increase font size so text fills the surface height (50px baseline at 300px map)
+        // Need text to span ~40px of the 50px height, so use ~32pt font (2.67x base)
+        let font_size = 11.0 * (layout.map_w / 300.0);
+        // Scale text surface proportionally: at 300px map, use 200×50; at 1200px, use 400×100
+        let surface_width = (200.0 * (layout.map_w / 300.0)).round() as i32;
+        let surface_height = (50.0 * (layout.map_w / 300.0)).round() as i32;
+        
+        eprintln!("TEXT_RENDER: font_size={:.1}, surface={}x{}, map_w={:.1}", font_size, surface_width, surface_height, layout.map_w);
+        
+        // Create surface with extra width to account for text margins
+        let surface_width_padded = ((200.0 + 10.0) * (layout.map_w / 300.0)).round() as i32;
+        let mut text_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, surface_width_padded, surface_height)
             .expect("Failed to create text surface");
         {
             let text_cr = cairo::Context::new(&text_surface).expect("Failed to create text context");
@@ -1736,7 +1872,12 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             // Draw text in black
             text_cr.set_source_rgb(0.0, 0.0, 0.0);
             text_cr.set_font_size(font_size);
-            text_cr.move_to(5.0, 35.0);
+            // Position text to fill the surface: start at top-left, fill the height
+            // After 90° CCW rotation, y becomes x, so text should span full height
+            // Shift text down (increase y) by ~1/10 of surface height to move right in rotated PNG
+            let text_x = 2.0 * (layout.map_w / 300.0);  // Offset from left edge
+            let text_y = font_size * 0.9 + (50.0/10.0) * (layout.map_w / 300.0);  // Baseline + 1/10 surface height
+            text_cr.move_to(text_x, text_y);
             text_cr.show_text(&text).ok();
         } // Drop text_cr to release the surface
         
@@ -1745,28 +1886,42 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let stride = text_surface.stride() as usize;
         let data = text_surface.data().expect("Failed to get surface data");
         
-        // Position text in left margin, very close to the map
-        // Text surface is 200 wide x 50 tall; after 90° CW rotation: 50 wide x 200 tall
-        // Align beginning of text with bottom of map
-        let start_x = (layout.map_x - 5.0) as i32;  // In left margin, very close to map
+        // Position text in left margin at bottom of map, rotated 90° CCW
+        // Text should span from x=0 to x=rotated_extent
+        // Whitespace from x=rotated_extent to x=1.25*rotated_extent
+        // Map starts at x=1.25*rotated_extent (handled by layout)
+        // With rotation formula rotated_x = src_y, src_y ranges from 0 to surface_height
+        let rotated_extent = surface_height as f64;
+        let start_x = 0;  // Not really used with rotated_x = src_y formula
         let start_y = (layout.map_y + layout.map_h) as i32;  // Text beginning at map bottom
         
-        // Composite text onto main image with 90-degree clockwise rotation
-        // Rotate clockwise: (x,y) -> (y, -x), then position at bottom-left
-        for src_y in 0..50 {
-            for src_x in 0..200 {
-                let src_idx = src_y * stride + src_x * 4;
+        // Track rendering bounds
+        let mut src_y_min = usize::MAX;
+        let mut src_y_max = usize::MIN;
+        let mut label_min_x = i32::MAX;
+        let mut label_max_x = i32::MIN;
+        
+        // Composite text onto main image with 90-degree counterclockwise rotation
+        // Rotate CCW: (x,y) -> (y, -x), positioned in left margin at map bottom
+        for src_y in 0..surface_height {
+            for src_x in 0..surface_width_padded {
+                let src_idx = (src_y as usize) * stride + (src_x as usize) * 4;
                 if src_idx + 3 < data.len() {
                     let alpha = data[src_idx + 3] as f32 / 255.0;
                     if alpha > 0.1 {
-                        // Rotate 90 degrees clockwise: (x,y) -> (y, -x)
-                        // Text is 200 wide, 50 tall
-                        // After rotation: 50 wide, 200 tall
-                        let rotated_x = start_x + src_y as i32;
+                        src_y_min = src_y_min.min(src_y as usize);
+                        src_y_max = src_y_max.max(src_y as usize);
+                        
+                        // Rotate 90 degrees counterclockwise: map source (x,y) to rotated (y, -x)
+                        // Then translate to position
+                        let rotated_x = src_y as i32;
                         let rotated_y = start_y - src_x as i32;
                         
                         if rotated_x >= 0 && rotated_y >= 0 && 
                            rotated_x < img.width() as i32 && rotated_y < img.height() as i32 {
+                            label_min_x = label_min_x.min(rotated_x);
+                            label_max_x = label_max_x.max(rotated_x);
+                            
                             let dst_pixel = img.get_pixel_mut(rotated_x as u32, rotated_y as u32);
                             // Blend with alpha
                             dst_pixel[0] = (data[src_idx + 2] as f32 * alpha + dst_pixel[0] as f32 * (1.0 - alpha)) as u8;
@@ -1777,6 +1932,9 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 }
             }
         }
+        
+        eprintln!("PNG_SPACE: image_w={}, label_x_range=[{}, {}], src_y_range=[{}, {}], map_x={:.1}, map_w={:.1}, surface_h={}, rotated_text_width={}", 
+            img.width(), label_min_x, label_max_x, src_y_min, src_y_max, layout.map_x, layout.map_w, surface_height, label_max_x - label_min_x);
     }
 
     // Save PNG
@@ -1818,7 +1976,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 
     let show_text = params.show_gnomonic_text;
 
-    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text);
+    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text, params.display.show_title);
     
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -1930,14 +2088,69 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
         .expect("Failed to create PDF surface");
     let cr = Context::new(&pdf_surface).expect("Failed to create Cairo context");
 
-    // Paint the image surface onto the PDF at 1:1 scale
+    // Paint the image surface onto the PDF at map position
     cr.set_source_surface(&img_surface, 0.0, 0.0).expect("Failed to set source");
     cr.paint().expect("Failed to paint");
+
+    // Add title if enabled
+    if params.display.show_title {
+        let title_text;
+        let title_owned;
+        if let Some(custom_title) = params.display.title.as_ref() {
+            title_text = custom_title.as_str();
+        } else {
+            // Format default title: (lon, lat) rounded to hundredths place
+            let lon_rounded = (lon_deg * 100.0).round() / 100.0;
+            let lat_rounded = (lat_deg * 100.0).round() / 100.0;
+            title_owned = format!("({:.2}, {:.2})", lon_rounded, lat_rounded);
+            title_text = &title_owned;
+        }
+        
+        let title_font_size = if params.display.scale_text {
+            13.0 * (width as f64 / 300.0)
+        } else {
+            13.0  // constant size when text scaling is disabled
+        };
+        let scale_factor = width as f64 / 1200.0;
+        let title_pad = if params.display.show_title { 32.0 * scale_factor } else { 0.0 };
+        let outer_pad = 24.0 * scale_factor;
+        
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+        cr.set_font_size(title_font_size);
+        cr.select_font_face("sans-serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        
+        // Title positioned at top of reserved title_pad area
+        let extents = cr.text_extents(title_text).expect("Failed to get text extents");
+        let text_width = extents.width();
+        let text_height = extents.height();
+        // Center horizontally
+        let title_x = (layout.width - text_width) / 2.0;
+        // Position baseline at very top
+        let title_y = text_height;
+        
+        cr.move_to(title_x, title_y);
+        cr.show_text(title_text).expect("Failed to show title");
+    }
 
     // Add proper colorbar with ticks and labels if requested
     if show_colorbar {
         use crate::render::pdf::draw_colorbar_pdf;
-        let cb_layout = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text).1;
+        // Gnomonic tick labels: 1.5x resolution label (11pt), scales by width/300
+        let gnomonic_tick_font_size = 16.5 * (width as f32 / 300.0);
+        let cb_layout = crate::layout::compute_gnomonic_layout_with_fonts(
+            width as f64, 
+            show_colorbar, 
+            params.display.tick_direction.clone(), 
+            show_text,
+            params.display.show_title,
+            Some(gnomonic_tick_font_size)
+        ).1;
+        
+        // Apply scaling to units font size based on map width
+        // At FOV 300, use ~18.67pt; scales by width/300 (1.5x smaller than before)
+        let effective_units_font_size = params.display.units_font_size.or_else(|| {
+            Some(28.0 / 1.5 * (width as f32 / 300.0))
+        });
         
         draw_colorbar_pdf(
             &cr,
@@ -1952,7 +2165,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 latex_rendering,
                 units,
                 extend: &params.display.extend,
-                units_font_size: params.display.units_font_size,
+                units_font_size: effective_units_font_size,
+                map_width: Some(width as f64),  // Pass map width for DPI scaling
             },
         );
     }
@@ -1964,9 +2178,13 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             width, 
             width);
         
-        // Position text in left margin, very close to the map
-        // Align beginning of text with bottom of map
-        let start_x = layout.map_x - 5.0;  // In left margin, very close to map
+        // Position text in left margin with same scaling as PNG version
+        // Font size scales with map width (reference: 300px)
+        let font_size = 11.0 * (width as f64 / 300.0);
+        
+        // Horizontal offset: move right by 1/10 of surface height (scaled)
+        let h_offset = (50.0 / 10.0) * (width as f64 / 300.0);
+        let start_x = layout.map_x - h_offset;  // In left margin
         let start_y = layout.map_y + layout.map_h;  // Text beginning at map bottom
         
         // Draw text with 90-degree clockwise rotation
@@ -1974,7 +2192,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
         cr.translate(start_x, start_y);
         cr.rotate(-std::f64::consts::PI / 2.0); // 90 degrees clockwise
         cr.set_source_rgb(0.0, 0.0, 0.0);
-        cr.set_font_size(10.0);
+        cr.set_font_size(font_size);
         cr.move_to(0.0, 0.0);
         cr.show_text(&text).ok();
         let _ = cr.restore();
@@ -2057,6 +2275,9 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             llabel: params.display.llabel.clone(),
             label_font_size: params.display.label_font_size,
             mask: None,
+            title: params.display.title.clone(),
+            show_title: params.display.show_title,
+            scale_text: params.display.scale_text,
         },
         graticule: crate::params::GraticuleParams {
             show_graticule,
@@ -2353,6 +2574,7 @@ where
                 units,
                 extend: &params.display.extend,
                 units_font_size: params.display.units_font_size,
+                map_width: None,  // Not used for hammer
             },
         );
     }
@@ -2380,3 +2602,8 @@ pub fn plot_hammer_auto(params: crate::params::HammerParams) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+}
+

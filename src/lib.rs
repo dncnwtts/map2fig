@@ -307,6 +307,9 @@ mod tests {
                 rlabel: None,
                 label_font_size: None,
                 mask: None,
+                title: None,
+                show_title: true,
+                scale_text: true,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 
@@ -485,6 +488,9 @@ mod tests {
                 rlabel: None,
                 label_font_size: None,
                 mask: None,
+                title: None,
+                show_title: true,
+                scale_text: true,
             },
             graticule: GraticuleParams { 
                 show_graticule: false, 
