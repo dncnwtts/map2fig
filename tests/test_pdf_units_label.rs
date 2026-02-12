@@ -21,6 +21,7 @@ mod pdf_units_label_tests {
             true,
             TickDirection::Outward,
             true,
+            true,  // show_title
             None,
         );
         
@@ -55,6 +56,7 @@ mod pdf_units_label_tests {
             true,
             TickDirection::Outward,
             true,
+            true,  // show_title
             None,
         );
         
@@ -116,7 +118,7 @@ mod pdf_units_label_tests {
         // - Positioned tightly below tick labels
         
         // Without cropping, it might be 60-100px+ height due to LaTeX padding
-        let _max_acceptable_uncropped_height = 30.0;  // Anything larger = bug
+        // Anything larger than 30px would be a bug
         
         // This test validates the assumption that LaTeX padding is minimal
         // If this fails with actual rendering, it means LaTeX padding is too large
@@ -133,6 +135,7 @@ mod pdf_units_label_tests {
             true,
             TickDirection::Outward,
             true,
+            true,  // show_title
             None,
         );
         
@@ -176,6 +179,7 @@ mod pdf_units_label_tests {
             true,
             TickDirection::Outward,
             true,
+            true,  // show_title
             None,
         );
         
@@ -214,7 +218,7 @@ mod pdf_units_label_tests {
         // Without crop, could be 60+ px (major bug)
         
         let width = 300.0;
-        let scale = width / 1200.0;
+        // scale = width / 1200.0
         
         // Expected font size for gnomonic at 300px width
         let expected_font_size: f32 = (7.0_f32 * 0.25).clamp(3.0, 20.0);  // ~3px

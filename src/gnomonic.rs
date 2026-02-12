@@ -134,14 +134,6 @@ impl Projection for GnomonicProjection {
             return Some((self.lon_center, self.lat_center));
         }
     
-        let rho = rho2.sqrt();
-        let c = rho.atan();
-    
-        let sin_c = c.sin();
-        let cos_c = c.cos();
-    
-        let _lat = (y * sin_c / rho).asin();
-        let _lon = (x * sin_c).atan2(rho * cos_c);
         let point = [1.0, -x, -y];
         let r = (point[0] * point[0] + point[1] * point[1] + point[2] * point[2]).sqrt();
         if r == 0.0 {

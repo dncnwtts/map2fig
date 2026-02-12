@@ -271,7 +271,7 @@ pub fn draw_colorbar_pdf_labels(
 
     // Draw units label below colorbar if specified
     if let Some(units_str) = units {
-        let scale = layout.w / 1200.0;
+        let _scale = layout.w / 1200.0;
         
         // Account for tick direction: when ticks are outward, push units text down by the tick height
         let tick_offset = match layout.tick_direction {
@@ -329,63 +329,6 @@ pub fn draw_colorbar_pdf_labels(
     }
 }
 
-/// Embed a LaTeX SVG (vector) in the colorbar with proper positioning
-/// 
-/// SVG content is rendered to a high-quality raster for embedding in the PDF.
-/// The vector-to-raster conversion is done at high DPI to preserve quality.
-fn embed_latex_svg_in_colorbar(
-    cr: &Context,
-    rendered: &latex_render::RenderedLatexSvg,
-    colorbar_x: f64,
-    colorbar_width: f64,
-    y_pos: f64,
-) {
-    // Parse SVG viewBox to get intrinsic dimensions in points
-    let svg_width_pt = rendered.width;
-    let svg_height_pt = rendered.height;
-    
-    // Scale SVG to appropriate size for colorbar label
-    // Target height is ~20 pixels at screen resolution
-    let target_height_px = 20.0;
-    let scale_factor = target_height_px / svg_height_pt;
-    let scaled_width = svg_width_pt * scale_factor;
-    let scaled_height = target_height_px;
-    
-    // Center horizontally in colorbar
-    let center_x = colorbar_x + colorbar_width / 2.0 - scaled_width / 2.0;
-    
-    // Position with vertical centering to prevent clipping
-    let adjusted_y = y_pos - scaled_height / 2.0;
-    
-    // For now, render a placeholder since we can't directly embed SVG in Cairo
-    // The SVG data is available in rendered.svg_data if needed for future processing
-    // 
-    // A full implementation would:
-    // 1. Write SVG to temp file
-    // 2. Use `convert` (ImageMagick) or similar to render SVG to PNG
-    // 3. Embed the resulting PNG (similar to embed_latex_png_in_colorbar)
-    
-    // Fallback: Show that SVG was available
-    cr.rectangle(center_x, adjusted_y, scaled_width, scaled_height);
-    cr.set_source_rgb(0.95, 0.95, 0.95); // Light gray background
-    cr.fill().unwrap();
-    
-    // Draw border to show content area
-    cr.set_source_rgb(0.7, 0.7, 0.7);
-    cr.set_line_width(0.5);
-    cr.rectangle(center_x, adjusted_y, scaled_width, scaled_height);
-    cr.stroke().unwrap();
-    
-    // Show status text
-    cr.set_source_rgb(0.4, 0.4, 0.4);
-    cr.set_font_size(8.0);
-    let ext = cr.text_extents("[SVG]").unwrap();
-    cr.move_to(
-        center_x + scaled_width / 2.0 - ext.width() / 2.0,
-        adjusted_y + scaled_height / 2.0 + 2.0,
-    );
-    cr.show_text("[SVG]").unwrap();
-}
 /// Embed a LaTeX PNG image in the colorbar with proper positioning and padding
 /// The image is embedded at full resolution but displayed at scaled size (0.5x)
 /// This preserves quality when zoomed in the PDF viewer

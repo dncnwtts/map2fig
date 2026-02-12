@@ -736,7 +736,7 @@ pub fn downgrade_healpix_map_ang(
     }
 
     let ratio = (source_nside / target_nside) as usize;
-    let _factor = ratio * ratio; // Each target pixel covers factor source pixels
+    // Each target pixel covers ratio*ratio source pixels
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![0.0; target_npix];
 

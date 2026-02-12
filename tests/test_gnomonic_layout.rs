@@ -16,6 +16,7 @@ fn test_gnomonic_layout_colorbar_alignment_with_text() {
         show_colorbar,
         tick_direction,
         show_text,
+        true,  // show_title
     );
     
     // With show_text = true, left_text_pad = 50.0 * scale, where scale = 1200/1200 = 1.0
@@ -58,6 +59,7 @@ fn test_gnomonic_layout_colorbar_alignment_without_text() {
         show_colorbar,
         tick_direction,
         show_text,
+        true,  // show_title
     );
     
     let outer_pad = 24.0;
@@ -92,6 +94,7 @@ fn test_gnomonic_layout_map_and_colorbar_always_aligned() {
                 *show_colorbar,
                 TickDirection::Inward,
                 *show_text,
+                true,  // show_title
             );
             
             assert_eq!(
@@ -111,7 +114,7 @@ fn test_gnomonic_layout_text_pad_scales_with_map_size() {
     // At size 2400px: left_text_pad = 100.0 (scale = 2.0)
     
     let outer_pad = 24.0;
-    let base_text_pad = 50.0;
+    // base_text_pad = 50.0 at reference scale
     
     let test_cases = vec![
         (600.0, 25.0),    // scale = 0.5
@@ -125,6 +128,7 @@ fn test_gnomonic_layout_text_pad_scales_with_map_size() {
             true,
             TickDirection::Inward,
             true, // show_text = true
+            true,  // show_title
         );
         
         let expected_x = outer_pad * (map_size / 1200.0) + expected_text_pad;

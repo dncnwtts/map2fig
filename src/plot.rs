@@ -293,7 +293,6 @@ where
     let scale = params.scale.scale;
     let neg_mode = params.scale.neg_mode;
     let bad_color = params.color.bad_color;
-    let _bg_color = params.color.bg_color;
     let meta = params.meta;
     let latex_rendering = params.display.latex_rendering;
     let units = params.display.units.as_deref();
@@ -302,7 +301,6 @@ where
     let grat_coord = params.graticule.grat_coord;
     let grat_overlay = params.graticule.grat_overlay;
     let overlay_color = params.graticule.overlay_color;
-    let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
     let mask = params.display.mask.as_ref();
@@ -569,7 +567,6 @@ where
     let grat_coord = params.graticule.grat_coord;
     let grat_overlay = params.graticule.grat_overlay;
     let overlay_color = params.graticule.overlay_color;
-    let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
     let mask = params.display.mask.as_ref();
@@ -1476,16 +1473,15 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let view = params.view;
     let lon_deg = params.lon_deg;
     let lat_deg = params.lat_deg;
-    let _fov_arcmin = params.fov_arcmin;
     let resolution_arcmin = params.resolution_arcmin;
     let show_graticule = params.graticule.show_graticule;
     let grat_dlon = params.graticule.dpar_deg;
     let grat_dlat = params.graticule.dmer_deg;
     let grat_overlay = params.graticule.grat_overlay;
-    let _overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
     let mask = params.display.mask.as_ref();
     let show_text = params.show_gnomonic_text;
+    let overlay_color = params.graticule.overlay_color;
 
     use crate::gnomonic::GnomonicProjection;
 
@@ -1557,7 +1553,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 grat_dlat,
                 overlay_sys,
                 view.input_coord,
-                _overlay_color,
+                overlay_color,
             );
         }
     }
@@ -1587,8 +1583,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             13.0  // constant size when text scaling is disabled
         };
         let scale_factor = width as f64 / 1200.0;
-        let title_pad = if params.display.show_title { 32.0 * scale_factor } else { 0.0 };
-        let outer_pad = 24.0 * scale_factor;
+        let _outer_pad = 24.0 * scale_factor;
         
         // Title positioned at top of image
         // Position at very top with minimal gap
@@ -1597,7 +1592,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         // Use 0.35 multiplier for accurate character width
         let title_text_width_est = (title_text.len() as f32 * title_font_size * 0.35) as i32;
         let image_center = layout.width / 2.0;
-        let title_x = ((image_center as i32) - (title_text_width_est / 2));
+        let title_x = (image_center as i32) - (title_text_width_est / 2) ;
         
         draw_text_mut(
             &mut img,
@@ -1891,8 +1886,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         // Whitespace from x=rotated_extent to x=1.25*rotated_extent
         // Map starts at x=1.25*rotated_extent (handled by layout)
         // With rotation formula rotated_x = src_y, src_y ranges from 0 to surface_height
-        let rotated_extent = surface_height as f64;
-        let start_x = 0;  // Not really used with rotated_x = src_y formula
+        let _rotated_extent = surface_height as f64;
+        let _start_x = 0;  // Not really used with rotated_x = src_y formula
         let start_y = (layout.map_y + layout.map_h) as i32;  // Text beginning at map bottom
         
         // Track rendering bounds
@@ -1955,21 +1950,19 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let scale = params.scale.scale;
     let neg_mode = params.scale.neg_mode;
     let bad_color = params.color.bad_color;
-    let _bg_color = params.color.bg_color;
     let meta = params.meta;
     let latex_rendering = params.display.latex_rendering;
     let units = params.display.units.as_deref();
     let view = params.view;
     let lon_deg = params.lon_deg;
     let lat_deg = params.lat_deg;
-    let _fov_arcmin = params.fov_arcmin;
     let resolution_arcmin = params.resolution_arcmin;
     let show_graticule = params.graticule.show_graticule;
     let grat_dlon = params.graticule.dpar_deg;
     let grat_dlat = params.graticule.dmer_deg;
     let grat_overlay = params.graticule.grat_overlay;
-    let _overlay_color = params.graticule.overlay_color;
     let roll_deg = params.roll_deg;
+    let overlay_color = params.graticule.overlay_color;
     let mask = params.display.mask.as_ref();
 
     use crate::gnomonic::GnomonicProjection;
@@ -2033,7 +2026,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 grat_dlat,
                 overlay_sys,
                 CoordSystem::G,  // Map input is Galactic by default
-                _overlay_color,
+                overlay_color,
             );
         }
     }
@@ -2112,8 +2105,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             13.0  // constant size when text scaling is disabled
         };
         let scale_factor = width as f64 / 1200.0;
-        let title_pad = if params.display.show_title { 32.0 * scale_factor } else { 0.0 };
-        let outer_pad = 24.0 * scale_factor;
+        let _outer_pad = 24.0 * scale_factor;
         
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_font_size(title_font_size);
@@ -2369,7 +2361,6 @@ where
     let scale = params.scale.scale;
     let neg_mode = params.scale.neg_mode;
     let bad_color = params.color.bad_color;
-    let _bg_color = params.color.bg_color;
     let meta = params.meta;
     let latex_rendering = params.display.latex_rendering;
     let units = params.display.units.as_deref();
@@ -2378,7 +2369,6 @@ where
     let grat_coord = params.graticule.grat_coord;
     let grat_overlay = params.graticule.grat_overlay;
     let overlay_color = params.graticule.overlay_color;
-    let _show_labels = params.graticule.show_labels;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
     let mask = params.display.mask.as_ref();

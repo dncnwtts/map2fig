@@ -210,8 +210,7 @@ pub fn render_graticule_mollweide(
     let transform = GraticuleTransform::new(grat_coord, input_coord, None);
     let proj = MollweideProjection;
 
-    let _dpar = dpar_deg.to_radians();
-    let _dmer = dmer_deg.to_radians();
+    // dpar_deg and dmer_deg used as calculated absolute values below
 
     // Get properly-spaced meridian and parallel degrees (always includes key lines)
     let meridian_degrees = generate_graticule_degrees(dmer_deg, false);
@@ -1061,15 +1060,6 @@ mod tests {
             let v = transform.apply(lon_grat, lat_grat);
             let (lon_input, lat_input) = vec_to_lonlat(v);
             
-            // Normalize to [-π, π]
-            let _lon_norm = if lon_input > PI {
-                lon_input - 2.0 * PI
-            } else if lon_input < -PI {
-                lon_input + 2.0 * PI
-            } else {
-                lon_input
-            };
-            
             match proj.forward(lon_input, lat_input) {
                 Some((u, v)) => {
                     println!("{:8}° | {:14.6} | {:15.2}° | ({:.4}, {:.4}) | ✓",
@@ -1139,7 +1129,6 @@ mod tests {
         println!("\nFull Rendering Example (G→G, 30° spacing):\n");
         
         let spacing = 30.0;
-        let _transform = GraticuleTransform::new(CoordSystem::G, CoordSystem::G, None);
         let meridian_degs = generate_graticule_degrees(spacing, false);
         let parallel_degs = generate_graticule_degrees(spacing, true);
         

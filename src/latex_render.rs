@@ -41,13 +41,6 @@ fn check_pdflatex() -> bool {
 }
 
 /// Check if pdftoppm (from poppler) is available
-fn check_pdftoppm() -> bool {
-    std::process::Command::new("which")
-        .arg("pdftoppm")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
 
 /// Check if pdf2svg is available on system (for vector PDF embedding)
 fn check_pdf2svg() -> bool {

@@ -45,6 +45,7 @@ fn test_gnomonic_resolution_text_y_position_at_map_bottom() {
         true, 
         TickDirection::Outward, 
         true, 
+        true,  // show_title
         None
     );
     
@@ -85,6 +86,7 @@ fn test_gnomonic_resolution_text_x_position_in_left_margin() {
         true, 
         TickDirection::Outward, 
         true, 
+        true,  // show_title
         None
     );
     
@@ -146,6 +148,7 @@ fn test_gnomonic_layout_dimensions_at_various_widths() {
             true, 
             TickDirection::Outward, 
             true, 
+            true,  // show_title
             None
         );
         
@@ -179,6 +182,7 @@ fn test_resolution_text_rotation_bounds() {
         true, 
         TickDirection::Outward, 
         true, 
+        true,  // show_title
         None
     );
     
@@ -218,6 +222,7 @@ fn test_colorbar_alignment_with_map() {
         true, 
         TickDirection::Outward, 
         true, 
+        true,  // show_title
         None
     );
     
@@ -250,6 +255,7 @@ fn test_text_shown_flag_affects_layout() {
         true, 
         TickDirection::Outward, 
         true, 
+        true,  // show_title
         None
     );
     let (layout_no_text, _) = compute_gnomonic_layout_with_fonts(
@@ -257,6 +263,7 @@ fn test_text_shown_flag_affects_layout() {
         true, 
         TickDirection::Outward, 
         false, 
+        true,  // show_title
         None
     );
     
