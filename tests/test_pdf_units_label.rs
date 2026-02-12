@@ -217,9 +217,6 @@ mod pdf_units_label_tests {
         // With font size 8px and tight crop, height should be ~10-12px
         // Without crop, could be 60+ px (major bug)
         
-        let width = 300.0;
-        // scale = width / 1200.0
-        
         // Expected font size for gnomonic at 300px width
         let expected_font_size: f32 = (7.0_f32 * 0.25).clamp(3.0, 20.0);  // ~3px
         

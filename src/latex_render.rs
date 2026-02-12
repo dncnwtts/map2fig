@@ -41,7 +41,6 @@ fn check_pdflatex() -> bool {
 }
 
 /// Check if pdftoppm (from poppler) is available
-
 /// Check if pdf2svg is available on system (for vector PDF embedding)
 fn check_pdf2svg() -> bool {
     std::process::Command::new("which")
@@ -291,7 +290,7 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
 /// * `None` if pdf2svg or LaTeX unavailable
 pub fn render_latex_to_svg_png(latex_str: &str, font_size_pt: u32) -> Option<RenderedLatex> {
     // Try to render to SVG first
-    let _rendered_svg = render_latex_to_svg(latex_str, font_size_pt)?;
+    let _ = render_latex_to_svg(latex_str, font_size_pt)?;
     
     // Convert SVG to PNG using ImageMagick or similar (requires external tool)
     // For now, we skip this and rely on the existing PDF→PNG pipeline

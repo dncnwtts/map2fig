@@ -74,7 +74,7 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 
                 // Expand sparse map to full dense array
                 let npix = (12 * nside * nside) as usize;
-                let mut full_map = vec![std::f64::NEG_INFINITY; npix];  // Use NEG_INF for missing pixels
+                let mut full_map = vec![f64::NEG_INFINITY; npix];  // Use NEG_INF for missing pixels
                 for (idx, &pix) in explicit_indices.iter().enumerate() {
                     if idx < data_vec.len() && pix >= 0 && (pix as usize) < npix {
                         full_map[pix as usize] = data_vec[idx];

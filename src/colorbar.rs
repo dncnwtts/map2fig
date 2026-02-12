@@ -273,13 +273,6 @@ pub fn draw_colorbar_extends(
         return;
     }
 
-    // Calculate the Y bounds for clamping triangles to the colorbar region
-    let cbar_y_truncated = (cbar_y as u32) as f64;
-    let cbar_h_truncated = (cbar_h as u32) as i32;
-    let clamp_y_min = cbar_y_truncated as i32;
-    let clamp_y_max = clamp_y_min + cbar_h_truncated - 1;
-    let tip_distance = (cbar_h * 0.5).round() as i32;
-    
     // Get colors from colormap ends
     let min_color_rgb = cmap.sample(0.0);
     let max_color_rgb = cmap.sample(1.0);
@@ -294,23 +287,12 @@ pub fn draw_colorbar_extends(
     let cbar_left_x = cbar_x_px;
     let cbar_right_x = cbar_x_px + cbar_w_px - 1;
     
+    // Calculate arrow tip distance (proportional to colorbar height)
+    let tip_distance = (cbar_h * 0.5).round() as i32;
+    
     // Calculate center more carefully to handle even/odd widths symmetrically
     // For symmetric extends, center should be at the midpoint between left and right edges
-    let _cbar_center_x_f64 = (cbar_left_x as f64 + cbar_right_x as f64) / 2.0;
-    
-    // For integer pixel positioning: 
-    // If we're using banker's rounding (round-half-to-even), the center rounds to:
-    let _cbar_center_x = if _cbar_center_x_f64.fract().abs() < 1e-10 {
-        _cbar_center_x_f64 as i32  // Already integer
-    } else {
-        // Round half to even
-        let floor_x = _cbar_center_x_f64.floor() as i32;
-        if (floor_x & 1) == 0 {
-            floor_x  // Even, so .5 rounds down
-        } else {
-            floor_x + 1  // Odd, so .5 rounds up
-        }
-    };
+    // (Note: colorbar center calculation kept for future symmetry improvements)
     
     // The colorbar gradient is drawn starting at (cbar_y as u32), which truncates.
     // The gradient height is (cbar_h as u32), so it spans from y_top to y_top + height - 1.
@@ -323,7 +305,7 @@ pub fn draw_colorbar_extends(
     
     // The clamping bounds: triangles should not exceed the colorbar region
     let clamp_y_min = gradient_top;
-    let _clamp_y_max = gradient_bottom;
+    let clamp_y_max = gradient_bottom;
     
     // Tip should be at the floating-point center of the gradient for symmetry
     let gradient_center_f64 = (gradient_top as f64 + gradient_bottom as f64) / 2.0;
@@ -436,23 +418,7 @@ pub fn fill_triangle_with_clamp(
                 // For a vertical-base triangle: tip at tip_vertex, base vertices at base_v1 and base_v2
                 // This forms a wedge. The base is a vertical line from base_v1 to base_v2.
                 // Fill the wedge by finding the X extent at each Y.
-                
-                let _round_half_to_even = |x: f64| {
-                    let floor_x = x.floor();
-                    let frac = x - floor_x;
-                    if frac < 0.5 {
-                        floor_x as i32
-                    } else if frac > 0.5 {
-                        (floor_x + 1.0) as i32
-                    } else {
-                        let as_int = floor_x as i32;
-                        if as_int % 2 == 0 {
-                            as_int
-                        } else {
-                            as_int + 1
-                        }
-                    }
-                };
+                // (Note: round_half_to_even rounding logic kept for future use)
                 
                 // Helper to find where an edge intersects a Y-scanline
                 let edge_x_at_y = |p1: (i32, i32), p2: (i32, i32), y: i32| -> Option<f64> {
@@ -477,7 +443,7 @@ pub fn fill_triangle_with_clamp(
                 };
                 
                 // Track previous edge positions to ensure monotonic stepping
-                let _prev_x_edge: Option<i32> = None;
+                // (Note: prev_x_edge tracking kept for future monotonic stepping)
                 
                 for y in y_min..=y_max {
                     if y < 0 || y >= height {
@@ -818,7 +784,6 @@ mod tests {
         
         // Simulate edge calculations for left triangle at y=777
         let base_top_y = 776;
-        let _base_bottom_y = 810;
         let tip_y = 793;
         let y = 777;
         

@@ -1,6 +1,5 @@
 /// Pixel masking system for HEALPix maps
 /// Handles: file-based masks, value-range masks, and coordinate system transformations
-
 use crate::rotation::CoordSystem;
 use image::Rgba;
 
@@ -133,7 +132,7 @@ impl PixelMask {
             ));
         }
         
-        if nside < 1 || nside > 1024 {
+        if !(1..=1024).contains(&nside) {
             return Err(format!("Calculated NSIDE {} is out of range [1, 1024]", nside));
         }
         

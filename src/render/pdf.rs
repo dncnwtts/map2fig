@@ -271,8 +271,6 @@ pub fn draw_colorbar_pdf_labels(
 
     // Draw units label below colorbar if specified
     if let Some(units_str) = units {
-        let _scale = layout.w / 1200.0;
-        
         // Account for tick direction: when ticks are outward, push units text down by the tick height
         let tick_offset = match layout.tick_direction {
             crate::cli::TickDirection::Outward => layout.major_tick_height,

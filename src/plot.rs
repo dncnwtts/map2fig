@@ -98,11 +98,10 @@ pub fn compute_gnomonic_scale(
                 let theta = std::f64::consts::PI / 2.0 - lat;
                 
                 // sample_healpix takes (map, meta, view, theta, lon)
-                if let Some(value) = sample_healpix(map, meta, view, theta, lon) {
-                    if is_seen(value) {
+                if let Some(value) = sample_healpix(map, meta, view, theta, lon)
+                    && is_seen(value) {
                         values.push(value);
                     }
-                }
             }
         }
     }
@@ -1506,7 +1505,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, width);
     
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, &view);
+    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, view);
     
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
@@ -1582,12 +1581,10 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         } else {
             13.0  // constant size when text scaling is disabled
         };
-        let scale_factor = width as f64 / 1200.0;
-        let _outer_pad = 24.0 * scale_factor;
         
         // Title positioned at top of image
         // Position at very top with minimal gap
-        let title_y = 0 as i32;
+        let title_y = 0_i32;
         // Center horizontally between left and right padding
         // Use 0.35 multiplier for accurate character width
         let title_text_width_est = (title_text.len() as f32 * title_font_size * 0.35) as i32;
@@ -1750,7 +1747,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 crate::cli::TickDirection::Outward => (cb_layout.major_tick_height * 2.0) as i32,
                 crate::cli::TickDirection::Inward => 0,
             };
-            let units_y = (cb_layout.tick_label_pad as f64 + 12.0 * spacing_scale) as i32 + outward_offset;
+            let units_y = (cb_layout.tick_label_pad + 12.0 * spacing_scale) as i32 + outward_offset;
             
             if latex_rendering {
                 // Scale units font to gnomonic baseline: 18.67 * (width / 300.0)
@@ -1886,8 +1883,6 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         // Whitespace from x=rotated_extent to x=1.25*rotated_extent
         // Map starts at x=1.25*rotated_extent (handled by layout)
         // With rotation formula rotated_x = src_y, src_y ranges from 0 to surface_height
-        let _rotated_extent = surface_height as f64;
-        let _start_x = 0;  // Not really used with rotated_x = src_y formula
         let start_y = (layout.map_y + layout.map_h) as i32;  // Text beginning at map bottom
         
         // Track rendering bounds
@@ -1909,8 +1904,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         
                         // Rotate 90 degrees counterclockwise: map source (x,y) to rotated (y, -x)
                         // Then translate to position
-                        let rotated_x = src_y as i32;
-                        let rotated_y = start_y - src_x as i32;
+                        let rotated_x = src_y;
+                        let rotated_y = start_y - src_x;
                         
                         if rotated_x >= 0 && rotated_y >= 0 && 
                            rotated_x < img.width() as i32 && rotated_y < img.height() as i32 {
@@ -1945,7 +1940,6 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let maxv = params.scale.maxv;
     let cmap = params.color.cmap;
     let show_colorbar = params.display.show_colorbar;
-    let _transparent = params.display.transparent;
     let gamma = params.scale.gamma;
     let scale = params.scale.scale;
     let neg_mode = params.scale.neg_mode;
@@ -1979,7 +1973,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, img_height);
     
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, &view);
+    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, view);
     
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
@@ -2037,7 +2031,6 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     
     // Fill with white background
     {
-        let _stride = img_surface.stride() as usize;
         let mut data = img_surface.data().expect("Failed to get surface data");
         
         for idx in (0..data.len()).step_by(4) {
@@ -2104,8 +2097,6 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
         } else {
             13.0  // constant size when text scaling is disabled
         };
-        let scale_factor = width as f64 / 1200.0;
-        let _outer_pad = 24.0 * scale_factor;
         
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_font_size(title_font_size);
@@ -2196,7 +2187,6 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 /// Plot gnomonic projection with automatic format detection
 pub fn plot_gnomonic_auto(params: GnomonicParams) {
     let map = params.plot.map;
-    let _width = params.plot.width;
     let filename = params.plot.filename;
     let minv = params.scale.minv;
     let maxv = params.scale.maxv;

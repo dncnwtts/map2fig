@@ -734,13 +734,8 @@ mod tests {
         // NCP maps to approximately (l≈122.93°, b≈27.13°) in Galactic
         let ncp_eq = [0.0, 0.0, 1.0];
         let ncp_gal = matvec(&EQ_TO_GAL, ncp_eq);
-        let (lon, lat) = vec_to_lonlat(ncp_gal);
         
-        // Converting back to degrees (for potential debugging)
-        let _lon_deg = lon * RAD2DEG;
-        let _lat_deg = lat * RAD2DEG;
-        
-        // Expected: approximately (122.93°, 27.13°) or the equivalent antipodal point
+        // Expected: approximately (122.93°, 27.13°) in Galactic coords
         // (since NCP should transform to some point, let's just verify it's normalized)
         let r = (ncp_gal[0]*ncp_gal[0] + ncp_gal[1]*ncp_gal[1] + ncp_gal[2]*ncp_gal[2]).sqrt();
         assert!(approx_eq(r, 1.0, 1e-6), "NCP->Gal result not normalized: {}", r);
