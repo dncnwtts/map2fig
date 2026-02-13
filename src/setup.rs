@@ -111,6 +111,7 @@ pub fn load_data(args: &Args, _verbose: bool) -> Result<crate::pipeline::Process
         args.scale,
         effective_width,
         args.verbose,
+        args.no_downgrade,
     )
     .map_err(|e| format!("Failed to load and process data: {}", e))?;
 

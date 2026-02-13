@@ -19,6 +19,7 @@ pub fn load_and_process_data(
     scale_factor: f64,
     width: u32,
     verbose: bool,
+    no_downgrade: bool,
 ) -> Result<ProcessedData, String> {
     let Some(new_fits_path) = fits_path else {
         let map = generate_index_map(1);
@@ -47,8 +48,8 @@ pub fn load_and_process_data(
         }
     }
 
-    // Apply downgrade for high-resolution maps
-    let (final_map, final_meta) = if meta.nside > crate::HIGH_RES_NSIDE_THRESHOLD {
+    // Apply downgrade for high-resolution maps (unless --no-downgrade is set)
+    let (final_map, final_meta) = if !no_downgrade && meta.nside > crate::HIGH_RES_NSIDE_THRESHOLD {
         let target_nside = target_nside_for_resolution(width as usize, (width / 2) as usize);
 
         if meta.nside > target_nside {

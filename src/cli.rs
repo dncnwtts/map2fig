@@ -176,6 +176,10 @@ pub struct Args {
     #[arg(long)]
     pub parallel: bool,
 
+    /// Disable automatic downgrading of high-resolution maps for performance
+    #[arg(long)]
+    pub no_downgrade: bool,
+
     /// Enable graticule overlay (primary coordinate system for mollweide map)
     #[arg(long)]
     pub graticule: bool,
