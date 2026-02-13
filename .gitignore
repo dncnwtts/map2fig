@@ -9,13 +9,14 @@
 *.pdf
 *.txt
 !LICENSE.txt
+!examples/outputs/*.png
+!examples/outputs/*.pdf
 perf.data*
 
 # Test artifacts and debug directories
 /test_debug/
 /test_edge/
 /examples/output/
-/examples/outputs/
 
 # Python artifacts
 __pycache__/
