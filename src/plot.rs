@@ -1,12 +1,11 @@
 use image::{RgbaImage, Rgba};
-use crate::colormap::{Colormap};
-use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient, apply_gamma};
+use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
 use crate::render::pdf::{draw_projection_border_pdf,draw_colorbar_pdf};
-use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale,HistogramScale, HistogramRange, unsafe_float_cmp};
+use crate::scale::{Scale, scale_value,generate_colorbar_ticks,build_histogram_scale, HistogramRange, unsafe_float_cmp};
 use crate::layout::{compute_mollweide_layout, compute_gnomonic_layout, MollweideLayout};
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-use crate::{PixelValue,NegMode,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
+use crate::{PixelValue,PixelSink,CairoRasterSink,CairoImageSink,PngSink};
 use crate::healpix::{is_seen, sample_healpix, sample_healpix_index};
 use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
@@ -1202,44 +1201,6 @@ fn draw_figure_labels_png(
 
 
 
-/// Convert a scalar map value to a PixelValue (handles underflow/overflow)
-#[inline]
-fn map_to_pixel_value(
-    val: f64,
-    minv: f64,
-    maxv: f64,
-    scale: Scale,
-    neg_mode: NegMode,
-    hist_scale: Option<&HistogramScale>,
-) -> PixelValue {
-    scale_value(val, minv, maxv, scale, neg_mode, hist_scale)
-}
-/// Convert a PixelValue into an RGBA color
-#[inline]
-fn pixel_value_to_rgba(
-    pv: PixelValue,
-    cmap: &Colormap,
-    gamma: f64,
-    bad_color: Rgba<u8>,
-) -> Rgba<u8> {
-    match pv {
-        PixelValue::Color(t) => {
-            let t = apply_gamma(t, gamma);
-            let c = cmap.sample(t);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-        PixelValue::Underflow => {
-            let c = cmap.sample(0.0);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-        PixelValue::Overflow => {
-            let c = cmap.sample(1.0);
-            Rgba([c[0], c[1], c[2], 255])
-        }
-        PixelValue::Bad => bad_color,
-    }
-}
-
 fn render_projection_to_grid(
     params: crate::params::RenderGridParams,
     grid: &mut RasterGrid,
@@ -1367,40 +1328,6 @@ impl DebugOverlay {
     }
 }
 
-
-fn draw_debug_overlay(
-    sink: &mut dyn RenderBackend,
-    grid: &RasterGrid,
-    x0: u32,
-    y0: u32,
-    overlay: DebugOverlay,
-) {
-    if !overlay.enabled {
-        return;
-    }
-
-    let x0 = x0 as f64;
-    let y0 = y0 as f64;
-    let w = grid.width as f64;
-    let h = grid.height as f64;
-
-    sink.set_color(255, 0, 0, 160);
-
-    if overlay.show_grid_box {
-        sink.stroke_line(x0, y0, x0 + w, y0, 1.0);
-        sink.stroke_line(x0 + w, y0, x0 + w, y0 + h, 1.0);
-        sink.stroke_line(x0 + w, y0 + h, x0, y0 + h, 1.0);
-        sink.stroke_line(x0, y0 + h, x0, y0, 1.0);
-    }
-
-    if overlay.show_center {
-        let cx = x0 + 0.5 * w;
-        let cy = y0 + 0.5 * h;
-
-        sink.stroke_line(cx - 10.0, cy, cx + 10.0, cy, 1.0);
-        sink.stroke_line(cx, cy - 10.0, cx, cy + 10.0, 1.0);
-    }
-}
 
 fn draw_debug_overlay_raster(
     grid: &mut RasterGrid,

@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface, Format};
 use crate::render::RenderBackend;
 use crate::{Colormap, Scale, CairoImageSink};
-use crate::colorbar::{apply_gamma,format_tick_label_with_units,format_units_label,ColorbarTicks};
+use crate::colorbar::{format_tick_label_with_units,format_units_label,ColorbarTicks};
 use std::f64::consts::PI;
 use crate::colorbar::{render_colorbar_gradient};
 use crate::plot::rasterize_to_surface;
@@ -130,44 +130,6 @@ pub fn draw_projection_border_pdf(
 }
 
 
-
-
-fn draw_colorbar_pdf_gradient(
-    cr: &Context,
-    cbar_x: f64,
-    cbar_y: f64,
-    cbar_width: f64,
-    cbar_height: f64,
-    cmap: &Colormap,
-    gamma: f64,
-) {
-    let w = cbar_width as i32;
-    let h = cbar_height.ceil() as i32;
-
-    // Raster surface
-    let surface = ImageSurface::create(Format::ARgb32, w, h)
-        .expect("Failed to create colorbar surface");
-    let cr_img = Context::new(&surface).unwrap();
-
-    // Draw gradient
-    for px in 0..w {
-        let t_linear = px as f64 / (w - 1) as f64;
-        let t = apply_gamma(t_linear, gamma);
-        let c = cmap.sample(t);
-
-        cr_img.set_source_rgb(
-            c[0] as f64 / 255.0,
-            c[1] as f64 / 255.0,
-            c[2] as f64 / 255.0,
-        );
-        cr_img.rectangle(px as f64, 0.0, 1.0, h as f64);
-        cr_img.fill().unwrap();
-    }
-
-    // Embed into PDF
-    let _ = cr.set_source_surface(&surface, cbar_x, cbar_y);
-    cr.paint().unwrap();
-}
 
 fn draw_colorbar_pdf_ticks(
     cr: &Context,

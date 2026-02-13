@@ -447,6 +447,7 @@ fn special_div(a: i64, b: i64) -> i64 {
 
 
 /// Convert a nested pixel index to a ring pixel index
+#[allow(dead_code)]
 fn nest2ring(nside: i64, ipnest: i64) -> i64 {
     if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");
@@ -457,6 +458,7 @@ fn nest2ring(nside: i64, ipnest: i64) -> i64 {
 }
 
 /// Convert a ring pixel index to a nested pixel index
+#[allow(dead_code)]
 fn ring2nest(nside: i64, ipring: i64) -> i64 {
     if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");

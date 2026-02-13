@@ -38,6 +38,7 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
         }
 }
 
+#[allow(dead_code)]
 fn scale_t_to_value(
     t: f64,
     min: f64,
@@ -60,6 +61,7 @@ fn scale_t_to_value(
     }
 }
 
+#[allow(dead_code)]
 fn value_to_t(
     value: f64,
     min: f64,
