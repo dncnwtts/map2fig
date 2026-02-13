@@ -1,8 +1,8 @@
+use crate::rotation::{CoordSystem, DEG2RAD, ViewTransform, view_rotation};
+use crate::{Colormap, NegMode, Scale, get_colormap, validate_scale_config};
 use clap::Parser;
-use crate::{Scale, NegMode, get_colormap, Colormap, validate_scale_config};
-use std::str::FromStr;
 use image::Rgba;
-use crate::rotation::{ViewTransform,CoordSystem,view_rotation,DEG2RAD};
+use std::str::FromStr;
 
 /// Simple HEALPix Mollweide plotter
 #[derive(Parser, Debug)]
@@ -13,11 +13,11 @@ pub struct Args {
     pub fits: Option<String>,
 
     /// Column index
-    #[arg(short='i', long, default_value_t = 0)]
+    #[arg(short = 'i', long, default_value_t = 0)]
     pub col: usize,
 
     /// Colormap name
-    #[arg(short='c', long, default_value = "viridis")]
+    #[arg(short = 'c', long, default_value = "viridis")]
     pub cmap: String,
 
     /// Output width in pixels

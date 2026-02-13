@@ -18,7 +18,9 @@ fn main() {
     if !check_command_exists("pdflatex") {
         println!("cargo:warning=WARNING: pdflatex not found in PATH");
         println!("cargo:warning=Install it to enable LaTeX rendering:");
-        println!("cargo:warning=  Ubuntu/Debian: sudo apt-get install texlive-latex-base texlive-latex-extra");
+        println!(
+            "cargo:warning=  Ubuntu/Debian: sudo apt-get install texlive-latex-base texlive-latex-extra"
+        );
         println!("cargo:warning=  macOS: brew install basictex");
         println!("cargo:warning=  Fedora: sudo dnf install texlive-latex");
     }
