@@ -1,0 +1,38 @@
+[package]
+name = "map2fig-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+map2fig = { path = ".." }
+arbitrary = { version = "1", features = ["derive"] }
+cdshealpix = "0.7"
+fitsrs = "0.4.1"
+
+[[bin]]
+name = "fuzz_scale_value"
+path = "fuzz_targets/fuzz_scale_value.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_projection"
+path = "fuzz_targets/fuzz_projection.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_fits_parsing"
+path = "fuzz_targets/fuzz_fits_parsing.rs"
+test = false
+doc = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

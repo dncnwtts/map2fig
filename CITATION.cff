@@ -1,0 +1,172 @@
+cff-version: 1.2.0
+title: 'map2fig: Fast Rust Tool for HEALPix Sky Map Visualization'
+message: 'If you use this software, please cite it using these metadata.'
+type: software
+authors:
+  - family-names: Watts
+    given-names: Duncan
+    affiliation: University of Oslo
+
+repository-code: 'https://github.com/dncnwtts/map2fig'
+repository-type: git
+license: MIT
+version: 0.1.0
+date-released: 2025-02-13
+
+# Scientific references for methodologies and inspiration
+references:
+
+  # HEALPix mathematical framework
+  - type: article
+    authors:
+      - family-names: Górski
+        given-names: K. M.
+      - family-names: Hivon
+        given-names: E.
+      - family-names: Banday
+        given-names: A. J.
+      - family-names: Wandelt
+        given-names: B. D.
+      - family-names: Hansen
+        given-names: F. K.
+      - family-names: Reinecke
+        given-names: M.
+      - family-names: Bartelmann
+        given-names: M.
+    title: 'HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data Distributed on the Sphere'
+    journal: 'The Astrophysical Journal'
+    volume: '622'
+    issue: '2'
+    pages: '759'
+    start: '759'
+    end: '771'
+    year: 2005
+    doi: 10.1086/427976
+    url: 'https://doi.org/10.1086/427976'
+    note: 'Primary reference for HEALPix spherical pixelization scheme used throughout map2fig'
+
+  # HEALPy Python library (primary comparison/inspiration source)
+  - type: software
+    authors:
+      - family-names: Zonca
+        given-names: Andrea
+      - family-names: Singer
+        given-names: Leo P.
+      - family-names: Lenz
+        given-names: Dongchao
+      - family-names: Reinecke
+        given-names: Mikael
+      - family-names: Rosset
+        given-names: Carlo
+      - family-names: Hivon
+        given-names: Eric
+      - family-names: Gorski
+        given-names: Krzysztof M.
+    title: 'healpy: equal area pixelization and spherical harmonics transforms for data on the sphere in Python'
+    version: 1.15.0
+    repository-code: 'https://github.com/healpy/healpy'
+    url: 'https://healpy.readthedocs.io'
+    license: GPL-2.0
+    note: 'Graticule rendering and coordinate transformation methodologies; gnomonic projection text label layout inspired by hp.gnomview()'
+
+  # Cosmoglobe package (feature reference and benchmark comparison)
+  - type: software
+    authors:
+      - family-names: Scolnic
+        given-names: Dan
+    title: 'Cosmoglobe: CMB data analysis package'
+    repository-code: 'https://github.com/Cosmoglobe/Cosmoglobe'
+    url: 'https://cosmoglobe.readthedocs.io'
+    note: 'Feature catalog and functionality benchmarking; color-scaling options'
+
+  # Matplotlib colormaps (80+ integrated colormaps)
+  - type: software
+    authors:
+      - family-names: Hunter
+        given-names: John D.
+      - family-names: Droettboom
+        given-names: Michael
+    title: 'Matplotlib: Python plotting library'
+    version: 3.x
+    repository-code: 'https://github.com/matplotlib/matplotlib'
+    url: 'https://matplotlib.org'
+    license: PSF
+    note: 'Viridis, Plasma, Inferno, Magma, and additional colormaps integrated via precomputed RGB LUTs'
+
+  # Cmasher science-focused colormaps
+  - type: software
+    authors:
+      - family-names: van der Velden
+        given-names: Ellert
+      - family-names: Breddels
+        given-names: Maarten A.
+    title: 'CMasher: Scientific colormaps for making accessible plots'
+    version: 1.x
+    repository-code: 'https://github.com/1313e/CMasher'
+    url: 'https://cmasher.readthedocs.io'
+    license: BSD-3-Clause
+    note: 'Scientific colormap library; perceptually uniform and accessible colormaps integrated'
+
+  # Map2png (benchmarking and comparison)
+  - type: software
+    title: 'map2png: HEALPix map rendering tool'
+    repository-code: 'https://github.com/Cosmoglobe/Cosmotools'
+    url: 'https://github.com/Cosmoglobe/Cosmotools/tree/master'
+    note: 'C++ HEALPix rendering tool in Cosmotools repository; performance benchmarking and output comparison reference'
+
+  # Planck colormaps (custom Planck mission visualization colormaps)
+  - type: article
+    authors:
+      - family-names: Planck Collaboration
+    title: 'Planck 2018 results. I. Overview and the legacy release'
+    journal: 'Astronomy & Astrophysics'
+    volume: '641'
+    pages: 'A1'
+    year: 2020
+    doi: 10.1051/0004-6361/201833880
+    url: 'https://doi.org/10.1051/0004-6361/201833880'
+    note: 'Planck mission colormaps (planck, planck_log, wmap) included for CMB visualization'
+
+# Core dependencies
+dependencies:
+  - type: library
+    description: 'HEALPix coordinate mathematics and transformations'
+    name: cdshealpix
+    version: '>=0.7'
+    url: 'https://crates.io/crates/cdshealpix'
+    
+  - type: library
+    description: 'FITS file format parsing and I/O'
+    name: fitsrs
+    version: '>=0.4.1'
+    url: 'https://crates.io/crates/fitsrs'
+    
+  - type: library
+    description: 'Cairo graphics library for PDF and image rendering'
+    name: cairo-rs
+    version: '>=0.19'
+    url: 'https://crates.io/crates/cairo-rs'
+    
+  - type: library
+    description: 'PNG and image format support'
+    name: image
+    version: '>=0.24.9'
+    url: 'https://crates.io/crates/image'
+    
+  - type: library
+    description: 'Command-line argument parsing'
+    name: clap
+    version: '>=4'
+    url: 'https://crates.io/crates/clap'
+
+# Optional LaTeX rendering
+optional-dependencies:
+  - type: software
+    name: 'tectonic'
+    description: 'LaTeX engine for publication-quality mathematical rendering'
+    url: 'https://tectonic-typesetting.org'
+    
+  - type: software
+    name: 'pdflatex'
+    description: 'Extended TeX typesetting system (fallback LaTeX engine)'
+    url: 'https://www.ctan.org/pkg/latex'

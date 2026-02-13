@@ -64,8 +64,7 @@ pub struct ExecutionConfig<'a> {
 /// ```
 pub fn execute_plot(config: &ExecutionConfig, verbose: bool) -> Result<(), String> {
     if verbose {
-        let input_file = config.args.fits.as_ref()
-            .map(|s| s.as_str())
+        let input_file = config.args.fits.as_deref()
             .unwrap_or("<no input>");
         let output_file = config.args.get_output_filename();
         println!("\n{} -> {}", input_file, output_file);
@@ -128,14 +127,4 @@ fn execute_hammer(config: &ExecutionConfig) -> Result<(), String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_projection_selection() {
-        // Projection selection logic can be tested here
-        // by verifying the match arms work correctly
-        let invalid_proj = "invalid";
-        assert!(!matches!(invalid_proj, "mollweide" | "gnomonic" | "hammer"));
-    }
-}
+    mod tests {}

@@ -84,7 +84,7 @@ pub mod setup;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf, plot_hammer_auto, plot_hammer_png, plot_hammer_pdf};
-pub use colormap::{get_colormap, Colormap};
+pub use colormap::{get_colormap, available_colormaps, Colormap};
 pub use fits::read_healpix_column;
 pub use cli::{Args, PlotConfig};
 pub use scale::validate_scale_config;

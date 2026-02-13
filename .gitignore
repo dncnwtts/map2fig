@@ -1,6 +1,12 @@
 /target
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
 *.fits
 *.png
 *.pdf
 *.lock
 perf.data*
+__pycache__/
+*.py[cod]
+*$py.class

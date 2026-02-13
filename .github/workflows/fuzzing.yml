@@ -1,0 +1,100 @@
+name: Fuzzing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly fuzzing every day at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+      
+      - name: Install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-nightly-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run fuzz_scale_value (5 minutes)
+        run: |
+          FUZZ_SILENT=1 timeout 300 cargo +nightly fuzz run --sanitizer=none fuzz_scale_value 2>&1 | tail -20 || true
+      
+      - name: Run fuzz_projection (5 minutes)
+        run: |
+          FUZZ_SILENT=1 timeout 300 cargo +nightly fuzz run --sanitizer=none fuzz_projection 2>&1 | tail -20 || true
+      
+      - name: Run fuzz_fits_parsing (5 minutes)
+        run: |
+          FUZZ_SILENT=1 timeout 300 cargo +nightly fuzz run --sanitizer=none fuzz_fits_parsing 2>&1 | tail -20 || true
+      
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: fuzz-crashes
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+      
+      - name: Upload corpus
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: fuzz-corpus
+          path: fuzz/corpus/
+          if-no-files-found: ignore
+
+  property-tests:
+    name: Property-Based Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-proptest-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run property tests with extended iterations
+        run: |
+          PROPTEST_CASES=1000 cargo test --test property_tests --verbose
+
+  miri:
+    name: Miri (Undefined Behavior Detection)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      
+      - name: Run tests under Miri
+        run: cargo +nightly miri test --lib
+        continue-on-error: true

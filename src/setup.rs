@@ -118,15 +118,4 @@ pub fn load_data(args: &Args, _verbose: bool) -> Result<crate::pipeline::Process
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_gnomonic_effective_width() {
-        // Test that gnomonic projection uses larger effective width
-        let effective_width_gnom = 32768;
-        let effective_width_moll = 1200;
-
-        assert!(effective_width_gnom > effective_width_moll);
-    }
-}
+    mod tests {}

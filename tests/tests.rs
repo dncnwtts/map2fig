@@ -104,7 +104,7 @@ fn test_plot_smoke() {
     let view = ViewTransform::new(input,output,rot);
 
     let params = MollweideParams {
-        plot: PlotData { map: &map, width: 32, filename: "smoke.png" },
+        plot: PlotData { map: &map, width: 32, filename: "smoke.png".to_string() },
         scale: ScaleParams { 
             minv: None, 
             maxv: None, 

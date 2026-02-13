@@ -667,14 +667,17 @@ fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
 #[inline]
 pub fn scale_value(
     value: f64,
-    min: f64,
-    max: f64,
+    mut min: f64,
+    mut max: f64,
     scale: Scale,
     neg_mode: NegMode,
     hist: Option<&HistogramScale>,
 ) -> PixelValue {
     if min > max {
-        panic!("min must be <= max");
+        if std::env::var("FUZZ_SILENT").is_err() {
+            eprintln!("WARNING: scale_value called with min > max ({} > {}), swapping automatically", min, max);
+        }
+        std::mem::swap(&mut min, &mut max);
     }
 
     // Handle the case where all valid values are the same

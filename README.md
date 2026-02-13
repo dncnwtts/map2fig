@@ -861,17 +861,32 @@ Contributions welcome! Common areas:
 
 [Your license here]
 
-## Citation
+## Citation & Acknowledgments
 
-If you use this tool in your research, please cite:
+**map2fig** builds on the excellent work of the HEALPix, HEALPy, and Cosmoglobe communities, as well as the broader astronomical software ecosystem.
 
-```
-@software{map2fig2025,
+For detailed citations, references, and attribution, see:
+- [**ACKNOWLEDGMENTS.md**](ACKNOWLEDGMENTS.md) – Comprehensive credits and scientific references
+- [**CITATION.cff**](CITATION.cff) – Machine-readable citation metadata
+
+### Quick Citation
+
+If you use **map2fig** in your research, please cite:
+
+```bibtex
+@software{map2fig2026,
   title={map2fig: Fast HEALPix Visualization in Rust},
-  author={Watkins, D.},
-  year={2025}
+  author={Watts, Duncan},
+  year={2026},
+  url={https://github.com/dncnwtts/map2fig}
 }
 ```
+
+**Key references to also cite:**
+- Górski et al. (2005) – HEALPix framework
+- Zonca et al. (2019) – HEALPy library
+- Planck Collaboration (2020) – Data and colormaps
+- Hunter & Droettboom – Matplotlib colormaps
 
 ## See Also
 
