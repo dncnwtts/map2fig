@@ -1,3 +1,30 @@
+//! Data scaling and value normalization for visualization.
+//!
+//! This module provides methods for mapping raw data values to normalized [0.0, 1.0] range
+//! for colormap sampling. It supports multiple scaling strategies:
+//!
+//! - **Linear**: Direct linear mapping `(val - min) / (max - min)`
+//! - **Logarithmic**: `log(val / min) / log(max / min)` for positive data with wide dynamic range
+//! - **SymLog**: Symmetric logarithm for data containing both positive and negative values
+//! - **Asinh**: Inverse hyperbolic sine for data with wide dynamic range
+//! - **Histogram Equalization**: Perceptual stretching using histogram distribution
+//!
+//! # Handling Invalid Data
+//!
+//! The [NegMode] enum controls treatment of masked/invalid pixels:
+//! - [NegMode::Zero]: Render as minimum value
+//! - [NegMode::Unseen]: Render as bad color (typically white)
+//!
+//! # Examples
+//!
+//! ```ignore
+//! use map2fig::scale::{scale_value, Scale};
+//! use map2fig::NegMode;
+//!
+//! let scaled = scale_value(5.0, 0.0, 10.0, Scale::Linear, NegMode::Zero, None);
+//! // Result: PixelValue::Color(0.5)
+//! ```
+
 use crate::PixelValue;
 use crate::NegMode;
 use crate::healpix::is_seen;
@@ -18,6 +45,21 @@ pub fn unsafe_float_cmp(a: &f64, b: &f64) -> Ordering {
     }
 }
 
+/// Validate scaling configuration parameters.
+///
+/// Ensures that scale parameters are compatible (e.g., log scale requires positive min value).
+///
+/// # Arguments
+///
+/// * `scale` - Data scaling method
+/// * `min` - Optional minimum value for scaling range
+/// * `max` - Optional maximum value for scaling range
+///
+/// # Panics
+///
+/// Panics with a helpful error message if configuration is invalid:
+/// - Log scale without explicit --min specified
+/// - Log scale with min ≤ 0 (logarithm undefined for non-positive values)
 pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) {
     if scale == &Scale::Log {
         let min = min.expect("log scale requires --min to be specified");

@@ -1,3 +1,61 @@
+//! # HEALPix Plotter
+//!
+//! A Rust library for rendering HEALPix celestial maps in multiple projections (Mollweide, Hammer, Gnomonic).
+//!
+//! ## Overview
+//!
+//! This library reads astronomical data from FITS files containing HEALPix sky maps and generates
+//! publication-quality visualizations in PDF and PNG formats. Key features include:
+//!
+//! - **Multiple projections**: Mollweide, Hammer, and Gnomonic
+//! - **80+ colormaps**: matplotlib and custom colormaps
+//! - **Data scaling**: linear, logarithmic, symlog, asinh, and histogram equalization
+//! - **HEALPix support**: RING and NEST ordering, sparse and dense maps
+//! - **Output formats**: High-quality PDF via Cairo and PNG via image crate
+//! - **Customization**: full control over colors, scale, gamma, graticules, and more
+//!
+//! ## Quick Start
+//!
+//! ```ignore
+//! use map2fig::plot::plot_mollweide_auto;
+//! use map2fig::params::MollweideParams;
+//!
+//! let params = MollweideParams {
+//!     fits_file: "map.fits".to_string(),
+//!     output_file: "map.pdf".to_string(),
+//!     ..Default::default()
+//! };
+//! plot_mollweide_auto(params);
+//! ```
+//!
+//! ## Main Plotting Functions
+//!
+//! - [plot_mollweide_png] - Render Mollweide projection to PNG
+//! - [plot_mollweide_pdf] - Render Mollweide projection to PDF
+//! - [plot_mollweide_auto] - Render Mollweide with automatic format selection
+//! - [plot_gnomonic_png] - Render Gnomonic projection to PNG
+//! - [plot_gnomonic_pdf] - Render Gnomonic projection to PDF
+//! - [plot_gnomonic_auto] - Render Gnomonic with automatic format selection
+//! - [plot_hammer_png] - Render Hammer projection to PNG
+//! - [plot_hammer_pdf] - Render Hammer projection to PDF
+//! - [plot_hammer_auto] - Render Hammer with automatic format selection
+//!
+//! ## Core Types
+//!
+//! - [scale::Scale] - Data scaling method (linear, log, symlog, asinh, histogram)
+//! - [NegMode] - Handling strategy for negative/masked values
+//! - [Colormap] - Color palette for mapping data values to colors
+//! - [colormap::get_colormap] - Get a colormap by name
+//! - [healpix::HealpixMeta] - HEALPix metadata from FITS file
+//! - [PixelMask] - Boolean mask for pixel filtering
+//!
+//! ## Data Processing
+//!
+//! - [healpix::read_healpix_meta] - Read HEALPix metadata from FITS
+//! - [fits::read_healpix_column] - Read HEALPix data from FITS file
+//! - [healpix::downgrade_healpix_map] - Resample HEALPix map to different resolution
+//! - [scale::validate_scale_config] - Validate scaling parameters
+
 pub mod plot;
 pub mod healpix;
 pub mod colormap;
@@ -33,28 +91,70 @@ pub use mask::PixelMask;
 use std::str::FromStr;
 use image::{Rgba, RgbaImage};
 
+/// Strategy for handling negative, masked, or invalid pixel values in HEALPix maps.
+///
+/// This enum determines how pixels with NaN, UNSEEN constants, or masked values are rendered.
+///
+/// # Variants
+///
+/// * `Zero` - Render invalid pixels with the colormap's minimum value color
+/// * `Unseen` - Render invalid pixels with the "bad" color (usually white or transparent)
 #[derive(Clone, Copy)]
 pub enum NegMode {
+    /// Render as low value (colormap minimum)
     Zero,
+    /// Render with bad color (unseen pixels)
     Unseen,
 }
 
+/// Pixel value classification during data-to-color mapping.
+///
+/// Each pixel in the rendered image is classified into one of four categories
+/// based on its scaled value relative to the min/max bounds.
+///
+/// # Variants
+///
+/// * `Color(f64)` - Valid data value, normalized to [0.0, 1.0] range for colormap sampling
+/// * `Underflow` - Valid finite value below the minimum, rendered with colormap minimum color
+/// * `Overflow` - Valid finite value above the maximum, rendered with colormap maximum color
+/// * `Bad` - NaN, UNSEEN constant, masked, or invalid pixel, rendered with bad color
+#[derive(Debug, Clone, Copy)]
 pub enum PixelValue {
-    Color(f64),      // normalized [0,1]
-    Underflow,       // < minv but finite
-    Overflow,        // > maxv but finite
-    Bad,             // NaN, UNSEEN, masked
+    /// Valid normalized value [0.0, 1.0]
+    Color(f64),
+    /// Value below minimum
+    Underflow,
+    /// Value above maximum
+    Overflow,
+    /// Invalid/masked/NaN value
+    Bad,
 }
 
 
 
 
 use cairo::Context;
+
+/// Sink for rendering pixels to a Cairo drawing context.
+///
+/// This renders pixels directly to a Cairo context, which can be used for PDF output
+/// or other Cairo-supported formats. Pixels are drawn as 1x1 rectangles.
 pub struct CairoRasterSink<'a> {
     cr: &'a Context,
 }
 
+/// Trait for pixel rendering backends.
+///
+/// Implementations of this trait define how individual pixels are rendered to a target.
+/// Different implementations support different output formats (PNG, PDF, etc.).
 pub trait PixelSink {
+    /// Draw a single pixel at the given coordinates with the specified RGBA color.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X coordinate (0 = left)
+    /// * `y` - Y coordinate (0 = top)
+    /// * `rgba` - RGBA color value [0, 255]
     fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>);
 }
 
@@ -72,9 +172,16 @@ impl<'a> PixelSink for CairoRasterSink<'a> {
     }
 }
 
+/// Sink for rendering pixels directly to an in-memory PNG image buffer.
+///
+/// This sink writes pixels to an `RgbaImage` buffer with an optional offset.
+/// Useful for creating PNG files or compositing multiple layers.
 pub struct PngSink<'a> {
+    /// Mutable reference to the image buffer
     pub img: &'a mut RgbaImage,
+    /// X offset in the image where rendering starts
     pub x0: u32,
+    /// Y offset in the image where rendering starts
     pub y0: u32,
 }
 
@@ -109,12 +216,33 @@ impl<'a> PixelSink for CairoImageSink<'a> {
 
 
 
-/// RGBA argument parser
+/// RGBA color specified as comma-separated integers 0–255.
+///
+/// # Format
+///
+/// `r,g,b,a` where each value is in range [0, 255]
+///
+/// # Example
+///
+/// ```ignore
+/// use std::str::FromStr;
+/// use map2fig::RgbaArg;
+///
+/// let color = RgbaArg::from_str("255,128,0,255").unwrap();
+/// assert_eq!(color.r, 255);
+/// assert_eq!(color.g, 128);
+/// assert_eq!(color.b, 0);
+/// assert_eq!(color.a, 255);
+/// ```
 #[derive(Clone, Debug)]
 pub struct RgbaArg {
+    /// Red channel [0, 255]
     pub r: u8,
+    /// Green channel [0, 255]
     pub g: u8,
+    /// Blue channel [0, 255]
     pub b: u8,
+    /// Alpha channel [0, 255]
     pub a: u8,
 }
 
@@ -133,7 +261,29 @@ impl FromStr for RgbaArg {
     }
 }
 
-// Optional test helper
+/// Generate a simple index map for testing.
+///
+/// Creates a map with pixel values equal to their indices: 0, 1, 2, ..., (12*nside²-1).
+/// Useful for diagnostic tests and understanding HEALPix pixel layout.
+///
+/// # Arguments
+///
+/// * `nside` - HEALPix resolution parameter (must be power of 2: 1, 2, 4, 8, 16, ...)
+///
+/// # Returns
+///
+/// Vector with 12*nside² elements where element i contains value i as f64.
+///
+/// # Example
+///
+/// ```
+/// use map2fig::generate_index_map;
+///
+/// let map = generate_index_map(2);
+/// assert_eq!(map.len(), 48);  // 12 * 2² = 48
+/// assert_eq!(map[0], 0.0);
+/// assert_eq!(map[47], 47.0);
+/// ```
 pub fn generate_index_map(nside: i64) -> Vec<f64> {
     let npix = 12 * nside * nside;
     (0..npix).map(|i| i as f64).collect()

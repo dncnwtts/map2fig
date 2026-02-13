@@ -1,15 +1,60 @@
+//! FITS file reading and data extraction.
+//!
+//! This module provides functions for reading HEALPix astronomical data from FITS files.
+//! It supports both:
+//! - **Dense maps**: Complete sky coverage (standard NSIDE² pixels)
+//! - **Sparse maps**: Partial sky coverage with explicit PIXEL column indexing
+//!
+//! # FITS Format Support
+//!
+//! - Binary table format (.fits files)
+//! - HEALPix RING or NEST pixel ordering
+//! - Sparse maps with IMPLICIT or EXPLICIT indexing schemes via the INDXSCHM keyword
+//!
+//! # Sparse Map Handling
+//!
+//! For sparse maps with EXPLICIT indexing, this module automatically expands the data
+//! to a full dense array with UNSEEN values for omitted pixels.
+//!
+//! # Examples
+//!
+//! ```ignore
+//! use map2fig::read_healpix_column;
+//!
+//! let data = read_healpix_column("map.fits", 0);
+//! println!("Loaded {} pixels", data.len());
+//! ```
+
 use std::fs::File;
 use std::io::BufReader;
 
 use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
 
-/// Reads a HEALPix FITS binary table column and returns a Vec<f64>.
-/// For sparse/partial maps with explicit indexing, expands to full NSIDE map.
-/// 
+/// Read a HEALPix column from a FITS binary table.
+///
+/// Extracts data from a specific column of a HEALPix FITS binary table.
+/// Automatically handles both dense and sparse (EXPLICIT) indexing schemes.
+/// For sparse maps, expands the result to full NSIDE² size with UNSEEN values.
+///
 /// # Arguments
+///
 /// * `filename` - Path to the FITS file
-/// * `col_idx`  - 0-based column index (data column, not PIXEL column)
+/// * `col_idx`  - 0-based data column index (not the PIXEL column, just the data)
+///
+/// # Returns
+///
+/// Vector of f64 values with length = 12 * NSIDE²
+/// - Dense maps: all pixels present in FITS
+/// - Sparse maps: UNSEEN (-1.6375e30) for missing pixels
+///
+/// # Panics
+///
+/// Panics if:
+/// - File cannot be opened
+/// - FITS structure is invalid
+/// - Column index is out of bounds
+/// - Required HEALPix headers are missing
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     let f = File::open(filename).expect("Failed to open FITS file");
     let reader = BufReader::new(f);

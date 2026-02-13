@@ -1,3 +1,41 @@
+//! HEALPix coordinate system and data sampling utilities.
+//!
+//! This module provides core HEALPix functionality for hierarchical equal-area pixelization
+//! of the sphere. It includes:
+//!
+//! - **Pixel ordering**: RING and NESTED schemes
+//! - **Coordinate transformation**: Between angular (θ, φ) and pixel indices
+//! - **FITS integration**: Reading HEALPix metadata from FITS headers
+//! - **Data sampling**: Efficient sampling of HEALPix maps at arbitrary angular positions
+//! - **Resolution management**: Computing appropriate NSIDE for given resolution
+//! - **Resampling**: Downgrading maps to lower resolution
+//!
+//! # HEALPix Overview
+//!
+//! HEALPix is a hierarchical tessellation of the sphere with equal-area pixels. It provides:
+//! - Isotropic resolution at all sky locations
+//! - Hierarchical structure amenable to fast searches
+//! - 12×NSIDE² pixels total, where NSIDE is the resolution parameter (power of 2)
+//!
+//! # RING vs NESTED Ordering
+//!
+//! - **RING**: Pixels ordered by latitude strips, simpler for visualization
+//! - **NESTED**: Hierarchical quadtree ordering, better for data compression
+//!
+//! # Examples
+//!
+//! ```ignore
+//! use map2fig::healpix::{read_healpix_meta, pix2ang_ring, sample_healpix};
+//!
+//! // Read metadata from FITS file
+//! let meta = read_healpix_meta("map.fits").expect("Invalid FITS");
+//! println!("NSIDE: {}, Ordering: {:?}", meta.nside, meta.ordering);
+//!
+//! // Convert pixel index to celestial coordinates
+//! let (theta, phi) = pix2ang_ring(meta.nside, 0);
+//! println!("Pixel 0 is at θ={}, φ={}", theta, phi);
+//! ```
+
 use std::f64::consts::PI;
 
 pub const HPX_UNSEEN: f64 = -1.6375e30;
@@ -20,22 +58,57 @@ use fitsrs::hdu::header::Header;
 use crate::rotation::CoordSystem;
 use crate::rotation::{vec_to_sph,sph_to_vec};
 
+/// HEALPix pixel ordering scheme.
+///
+/// Two standard HEALPix pixel numbering schemes:
+/// - **RING**: Pixels ordered by latitude rings (0° to 90°, 90° to -90°)
+/// - **NESTED**: Hierarchical quadtree ordering for efficient data access
 #[derive(Debug, Clone, Copy)]
 pub enum HealpixOrdering {
+    /// Ring ordering by latitude
     Ring,
+    /// Nested quadtree ordering
     Nested,
 }
 
+/// HEALPix map metadata extracted from FITS header.
+///
+/// Contains essential information about a HEALPix celestial map,
+/// read from the FITS binary table header.
+///
+/// # Fields
+///
+/// * `ordering` - Pixel ordering scheme (RING or NESTED)
+/// * `nside` - Resolution parameter (12×nside² = total pixels, must be power of 2)
+/// * `coord` - Celestial coordinate system (Galactic, Equatorial, etc.)
 #[derive(Debug, Clone, Copy)]
 pub struct HealpixMeta {
+    /// Pixel ordering scheme (RING or NESTED)
     pub ordering: HealpixOrdering,
+    /// Resolution parameter (1, 2, 4, 8, ..., 16384, ...)
     pub nside: i64,
+    /// Coordinate system (Galactic, Equatorial, etc.)
     pub coord: CoordSystem,
 }
 
 
 
 
+/// Read HEALPix metadata from a FITS file.
+///
+/// Extracts HEALPix-specific keywords from the FITS binary table header:
+/// - NSIDE: Resolution parameter
+/// - ORDERING: RING or NESTED
+/// - COORDSYS: Galactic ('G') or Equatorial ('C')
+///
+/// # Arguments
+///
+/// * `path` - Path to the FITS file
+///
+/// # Returns
+///
+/// - `Some(HealpixMeta)` if valid HEALPix FITS file
+/// - `None` if file doesn't exist, is invalid, or lacks HEALPix headers
 pub fn read_healpix_meta(path: &str) -> Option<HealpixMeta> {
     let f = File::open(path).ok()?;
     let reader = BufReader::new(f);
