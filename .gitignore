@@ -2,11 +2,22 @@
 /fuzz/target
 /fuzz/corpus
 /fuzz/artifacts
+
+# Data files (FITS, images, test outputs)
 *.fits
 *.png
 *.pdf
-*.lock
+*.txt
 perf.data*
+
+# Test artifacts and debug directories
+/test_debug/
+/test_edge/
+examples/output/*.png
+examples/output/*.txt
+
+# Python artifacts
 __pycache__/
 *.py[cod]
 *$py.class
+*.lock
