@@ -38,7 +38,7 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
         }
 }
 
-pub fn scale_t_to_value(
+fn scale_t_to_value(
     t: f64,
     min: f64,
     max: f64,
@@ -60,7 +60,7 @@ pub fn scale_t_to_value(
     }
 }
 
-pub fn value_to_t(
+fn value_to_t(
     value: f64,
     min: f64,
     max: f64,
@@ -404,7 +404,7 @@ fn histogram_minor_ticks(
 }
 
 
-pub fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
+fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
     let (major_values, major_positions) = histogram_major_ticks(hist);
     let (minor_values, minor_positions) =
         histogram_minor_ticks(hist, &major_positions);
@@ -483,7 +483,7 @@ fn scale_position(
     }
 }
 
-pub fn linear_ticks(min: f64, max: f64) -> ColorbarTicks {
+fn linear_ticks(min: f64, max: f64) -> ColorbarTicks {
     // Handle the case where all values are the same
     if min >= max {
         return ColorbarTicks {
@@ -534,7 +534,7 @@ pub fn linear_ticks(min: f64, max: f64) -> ColorbarTicks {
     }
 }
 
-pub fn log_ticks(min: f64, max: f64) -> ColorbarTicks {
+fn log_ticks(min: f64, max: f64) -> ColorbarTicks {
     let dmin = min.log10().floor() as i32;
     let dmax = max.log10().ceil() as i32;
 
@@ -564,12 +564,12 @@ pub fn log_ticks(min: f64, max: f64) -> ColorbarTicks {
     }
 }
 
-pub fn asinh_ticks(min: f64, max: f64, scale: f64) -> ColorbarTicks {
+fn asinh_ticks(min: f64, max: f64, scale: f64) -> ColorbarTicks {
     symlog_ticks(min, max, scale)
 }
 
 
-pub fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
+fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
     let mut major_values = vec![0.0, linthresh, -linthresh];
     let mut minor_values = Vec::new();
 

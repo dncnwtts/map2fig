@@ -98,7 +98,7 @@ impl Projection for MollweideProjection {
 
 
 #[inline]
-pub fn mollweide_inside_oval(x: f64, y: f64) -> bool {
+fn mollweide_inside_oval(x: f64, y: f64) -> bool {
     (x * x) / 4.0 + y * y <= 1.0
 }
 

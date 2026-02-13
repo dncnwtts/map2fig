@@ -18,7 +18,7 @@ pub struct MollweideScale {
     pub minv: f64,
     pub maxv: f64,
 }
-pub fn compute_mollweide_scale(
+fn compute_mollweide_scale(
     map: &[f64],
     minv: Option<f64>,
     maxv: Option<f64>,
@@ -71,7 +71,7 @@ pub fn compute_mollweide_scale(
 
 /// Compute scale limits for gnomonic projections using only FOV-contained pixels.
 /// This ensures the color scale is based on visible data, not the entire map.
-pub fn compute_gnomonic_scale(
+fn compute_gnomonic_scale(
     map: &[f64],
     minv: Option<f64>,
     maxv: Option<f64>,
@@ -153,7 +153,7 @@ pub fn compute_gnomonic_scale(
 }
 
 
-pub fn render_mollweide_pixels(
+fn render_mollweide_pixels(
     params: crate::params::RenderMollweideParams,
     layout: MollweideLayout,
     sink: &mut dyn PixelSink,
@@ -195,7 +195,7 @@ pub fn render_mollweide_pixels(
     blit_grid_to_sink(&grid, sink, 0, 0);
 }
 
-pub fn render_hammer_pixels(
+fn render_hammer_pixels(
     params: crate::params::RenderMollweideParams,
     layout: MollweideLayout,
     sink: &mut dyn PixelSink,
@@ -1082,7 +1082,7 @@ pub fn plot_mollweide_auto(params: MollweideParams) {
 
 /// Draw figure labels on PNG image
 /// Supports LaTeX rendering when latex_rendering is true
-pub fn draw_figure_labels_png(
+fn draw_figure_labels_png(
     img: &mut RgbaImage,
     width: u32,
     height: u32,
@@ -1204,7 +1204,7 @@ pub fn draw_figure_labels_png(
 
 /// Convert a scalar map value to a PixelValue (handles underflow/overflow)
 #[inline]
-pub fn map_to_pixel_value(
+fn map_to_pixel_value(
     val: f64,
     minv: f64,
     maxv: f64,
@@ -1216,7 +1216,7 @@ pub fn map_to_pixel_value(
 }
 /// Convert a PixelValue into an RGBA color
 #[inline]
-pub fn pixel_value_to_rgba(
+fn pixel_value_to_rgba(
     pv: PixelValue,
     cmap: &Colormap,
     gamma: f64,
@@ -1240,7 +1240,7 @@ pub fn pixel_value_to_rgba(
     }
 }
 
-pub fn render_projection_to_grid(
+fn render_projection_to_grid(
     params: crate::params::RenderGridParams,
     grid: &mut RasterGrid,
 ) {
@@ -1314,7 +1314,7 @@ pub fn render_projection_to_grid(
     }
 }
 
-pub fn blit_grid_to_sink(
+fn blit_grid_to_sink(
     grid: &RasterGrid,
     sink: &mut dyn PixelSink,
     x0: u32,
@@ -1368,7 +1368,7 @@ impl DebugOverlay {
 }
 
 
-pub fn draw_debug_overlay(
+fn draw_debug_overlay(
     sink: &mut dyn RenderBackend,
     grid: &RasterGrid,
     x0: u32,
@@ -1402,7 +1402,7 @@ pub fn draw_debug_overlay(
     }
 }
 
-pub fn draw_debug_overlay_raster(
+fn draw_debug_overlay_raster(
     grid: &mut RasterGrid,
     overlay: DebugOverlay,
 ) {

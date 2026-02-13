@@ -134,7 +134,7 @@ pub fn render_gnomonic_local_grid(
 }
 
 /// Render local grid graticule on gnomonic projection with custom color
-pub fn render_gnomonic_local_grid_colored(
+fn render_gnomonic_local_grid_colored(
     grid: &mut RasterGrid,
     proj: &GnomonicProjection,
     dlon_deg: f64,

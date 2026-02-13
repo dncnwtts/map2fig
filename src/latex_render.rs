@@ -76,13 +76,6 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
     
     let cache_path = get_cache_dir().join(&cache_key);
     
-    if cache_path.exists()
-        && let Ok(image_data) = std::fs::read(&cache_path)
-            && let Ok((width, height)) = extract_png_dimensions(&image_data) {
-                return Some(RenderedLatex { image_data, width, height });
-            }
-    
-    eprintln!("DEBUG: Cache miss, generating fresh");
     // Create temporary directory for compilation
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
@@ -93,7 +86,6 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
     
     // Create minimal LaTeX document with no vertical padding
 
-    eprintln!("DEBUG: render_latex_to_hires_png generating LaTeX with {}pt font at {}dpi", font_size_pt, dpi);
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}
@@ -481,7 +473,6 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
     
     let temp_path = temp_dir.path();
     // Create minimal LaTeX document with zero vspace margins
-    eprintln!("DEBUG: render_latex_to_png rendering LaTeX");
     let latex_doc = format!(
         r#"\documentclass[{}pt]{{standalone}}
 \usepackage{{amsmath,amssymb,mathtools,xcolor}}

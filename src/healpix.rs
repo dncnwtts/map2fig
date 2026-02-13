@@ -108,7 +108,7 @@ pub fn ang_dist(theta1: f64, phi1: f64, theta2: f64, phi2: f64) -> f64 {
 }
 
 #[inline]
-pub fn ang2pix(meta: HealpixMeta, theta: f64, phi: f64) -> i64 {
+fn ang2pix(meta: HealpixMeta, theta: f64, phi: f64) -> i64 {
     match meta.ordering {
         HealpixOrdering::Ring => ang2pix_ring(meta.nside, theta, phi),
         HealpixOrdering::Nested => ang2pix_nest(meta.nside, theta, phi),
@@ -159,7 +159,7 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     (theta, phi)
 }
 
-pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
+fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
     assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();
@@ -201,7 +201,7 @@ pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
 
 
 
-pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
+fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
     let nl4 = 4 * nside;
     let fact2 = 4.0 / npix as f64;
@@ -233,7 +233,7 @@ pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     (theta, phi)
 }
 
-pub fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
+fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
     assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();
@@ -299,7 +299,7 @@ pub fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
 
 
 /// Convert (ix, iy, face) → NESTED pixel index
-pub fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
+fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
     let mut morton: i64 = 0;
 
     // Interleave bits of ix and iy
@@ -312,7 +312,7 @@ pub fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
 }
 
 /// Convert NESTED pixel index → (ix, iy, face)
-pub fn nest2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
+fn nest2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
     let npface = nside * nside;
 
     let face = (pix / npface) as usize;
@@ -336,7 +336,7 @@ pub fn nest2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
     (ix as i64, iy as i64, face)
 }
 
-pub fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
+fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
     let nl4 = 4 * nside;
     let jr = JRLL[face] * nside - ix - iy - 1;
 
@@ -372,7 +372,7 @@ pub fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
 }
 
 
-pub fn ring2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
+fn ring2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
     let ncap = 2 * nside * (nside - 1);
     let npix = 12 * nside * nside;
     let nl2 = 2 * nside;
@@ -447,7 +447,7 @@ fn special_div(a: i64, b: i64) -> i64 {
 
 
 /// Convert a nested pixel index to a ring pixel index
-pub fn nest2ring(nside: i64, ipnest: i64) -> i64 {
+fn nest2ring(nside: i64, ipnest: i64) -> i64 {
     if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");
     }
@@ -457,7 +457,7 @@ pub fn nest2ring(nside: i64, ipnest: i64) -> i64 {
 }
 
 /// Convert a ring pixel index to a nested pixel index
-pub fn ring2nest(nside: i64, ipring: i64) -> i64 {
+fn ring2nest(nside: i64, ipring: i64) -> i64 {
     if !(nside as u64).is_power_of_two() {
         panic!("nside must be a power of two");
     }
@@ -725,7 +725,7 @@ pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
 }
 
 /// Downgrade a HEALPix map from high nside to lower nside by averaging pixels
-pub fn downgrade_healpix_map_ang(
+fn downgrade_healpix_map_ang(
     map: &[f64],
     source_nside: i64,
     target_nside: i64,
@@ -783,7 +783,7 @@ pub fn downgrade_healpix_map_ang(
 
 
 
-pub fn downgrade_healpix_map_xyf(
+fn downgrade_healpix_map_xyf(
     map: &[f64],
     source_nside: i64,
     target_nside: i64,

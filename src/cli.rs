@@ -152,19 +152,19 @@ pub struct Args {
     #[arg(long, default_value_t = 1)]
     pub grat_line_width: u32,
 
-    /// Disable resolution and pixel size label on gnomonic projection
+    /// Disable text labels (title and resolution/pixel size labels)
     #[arg(long)]
     pub no_text: bool,
 
-    /// Disable title on gnomonic projection
+    /// Disable title display
     #[arg(long)]
     pub no_title: bool,
 
-    /// Disable text scaling with FOV (use constant text sizes)
+    /// Disable text scaling with FOV (use constant text sizes, gnomonic projection only)
     #[arg(long)]
     pub no_scale_text: bool,
 
-    /// Custom title for gnomonic projection (default: (lon, lat) at center)
+    /// Custom title for map (gnomonic: default is (lon, lat) at center)
     #[arg(long)]
     pub title: Option<String>,
 

@@ -132,7 +132,7 @@ pub fn draw_projection_border_pdf(
 
 
 
-pub fn draw_colorbar_pdf_gradient(
+fn draw_colorbar_pdf_gradient(
     cr: &Context,
     cbar_x: f64,
     cbar_y: f64,
@@ -169,7 +169,7 @@ pub fn draw_colorbar_pdf_gradient(
     cr.paint().unwrap();
 }
 
-pub fn draw_colorbar_pdf_ticks(
+fn draw_colorbar_pdf_ticks(
     cr: &Context,
     layout: &ColorbarLayout,
     ticks: &ColorbarTicks,
@@ -205,7 +205,7 @@ pub fn draw_colorbar_pdf_ticks(
     cr.stroke().unwrap();
 }
 
-pub fn draw_colorbar_pdf_labels(
+fn draw_colorbar_pdf_labels(
     cr: &Context,
     layout: &ColorbarLayout,
     ticks: &ColorbarTicks,
@@ -555,7 +555,7 @@ impl RenderTarget for PdfRenderTarget<'_> {
 }
 
 /// Draw colorbar extend arrows for PDF
-pub fn draw_colorbar_pdf_extends(
+fn draw_colorbar_pdf_extends(
     cr: &Context,
     layout: &ColorbarLayout,
     extend: &crate::cli::Extend,

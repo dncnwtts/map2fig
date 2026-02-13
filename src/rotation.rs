@@ -70,7 +70,7 @@ impl Rotation {
 
 }
 
-pub fn transpose(m: &Mat3) -> Mat3 {
+fn transpose(m: &Mat3) -> Mat3 {
     [
         [m[0][0], m[1][0], m[2][0]],
         [m[0][1], m[1][1], m[2][1]],
@@ -123,7 +123,7 @@ pub fn coord_rotation(from: CoordSystem, to: CoordSystem) -> Rotation {
 }
 
 
-pub fn rot_y(angle: f64) -> Mat3 {
+fn rot_y(angle: f64) -> Mat3 {
     let (s, c) = angle.sin_cos();
     [
         [ c, 0.0,  s],
@@ -133,7 +133,7 @@ pub fn rot_y(angle: f64) -> Mat3 {
 }
 
 
-pub fn rot_z(angle: f64) -> Mat3 {
+fn rot_z(angle: f64) -> Mat3 {
     let (s, c) = angle.sin_cos();
     [
         [ c, -s, 0.0],
@@ -263,7 +263,7 @@ pub fn vec_to_sph(v: [f64; 3]) -> (f64, f64) {
 }
 
 #[inline(always)]
-pub fn dot(v: [f64; 3], w: [f64; 3]) -> f64 {
+fn dot(v: [f64; 3], w: [f64; 3]) -> f64 {
     let mut sum = 0.0;
     for i in 0..3 {
         sum += v[i]*w[i];
@@ -273,7 +273,7 @@ pub fn dot(v: [f64; 3], w: [f64; 3]) -> f64 {
 
 
 #[inline]
-pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
         a[2] * b[0] - a[0] * b[2],
@@ -289,7 +289,7 @@ pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 //
 
 #[inline]
-pub fn matvec(m: &Mat3, v: [f64; 3]) -> [f64; 3] {
+fn matvec(m: &Mat3, v: [f64; 3]) -> [f64; 3] {
     [
         m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2],
         m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2],
@@ -298,7 +298,7 @@ pub fn matvec(m: &Mat3, v: [f64; 3]) -> [f64; 3] {
 }
 
 #[inline]
-pub fn normalize(v: [f64; 3]) -> [f64; 3] {
+fn normalize(v: [f64; 3]) -> [f64; 3] {
     let n = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
     [v[0]/n, v[1]/n, v[2]/n]
 }
@@ -306,7 +306,7 @@ pub fn normalize(v: [f64; 3]) -> [f64; 3] {
 /// Galactic longitude ℓ, latitude b → Cartesian unit vector
 /// ℓ, b in radians
 #[inline(always)]
-pub fn galactic_lonlat_to_vec(l: f64, b: f64) -> [f64; 3] {
+fn galactic_lonlat_to_vec(l: f64, b: f64) -> [f64; 3] {
     let cb = b.cos();
     [
         cb * l.cos(),
@@ -327,7 +327,7 @@ fn matmul(a: &Mat3, b: &Mat3) -> Mat3 {
 }
 
 #[inline]
-pub fn angular_sep(a: [f64; 3], b: [f64; 3]) -> f64 {
+fn angular_sep(a: [f64; 3], b: [f64; 3]) -> f64 {
     let dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
     dot.clamp(-1.0, 1.0).acos()
 }
