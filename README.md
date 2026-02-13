@@ -86,8 +86,6 @@ This creates a default Mollweide projection with:
 
 **Output**: Generates `map.pdf`—full-sky map with professional formatting, colorbar, and axis labels. The Mollweide projection displays the entire sky in an oval format suitable for astronomical publications.
 
-![Example 1: Mollweide projection](examples/outputs/example1_mollweide.pdf)
-
 ---
 
 ### 2. Log-Scale Map with Custom Color Limits
@@ -105,8 +103,6 @@ This creates a default Mollweide projection with:
 The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color scale limits. The Plasma colormap is good for perceptually uniform maps.
 
 **Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels.
-
-![Example 2: Log-scale with Plasma colormap](examples/outputs/example2_log_scale.pdf)
 
 ---
 
@@ -136,8 +132,6 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 - Adjust `--fov` (arcmin) and `--res` (arcmin/pixel) to change zoom level
 
 **Output**: Generates `galactic_center.png`—zoomed 300×300 pixel PNG centered on the Galactic center region with visible 2° coordinate grid. Black lines show local tangent-plane coordinates.
-
-[![Example 3: Gnomonic view with local graticule](examples/outputs/example3_gnomonic_graticule_preview.png)](examples/outputs/example3_gnomonic_graticule.png)
 
 **Examples of different zoom levels**:
 ```bash
@@ -181,8 +175,6 @@ The overlay graticule shows how different coordinate systems relate on the same 
 
 **Output**: Generates `gal_with_eq_overlay.pdf`—600×600 pixel PDF with black local graticule and yellow equatorial overlay at 30° spacing, showing coordinate system relationships.
 
-![Example 4: Overlay graticule](examples/outputs/example4_overlay_graticule.pdf)
-
 ---
 
 ### 4b. Gnomonic with Image Rotation
@@ -203,8 +195,6 @@ The overlay graticule shows how different coordinate systems relate on the same 
 - Works with both graticule modes (local and overlay)
 
 **Output**: Generates `rotated_view.png`—600×600 pixel PNG of the gnomonic projection rotated 45° counterclockwise. The projection center remains fixed while the map rotates around it.
-
-[![Example 4b: Gnomonic with 45° roll](examples/outputs/example4b_roll_preview.png)](examples/outputs/example4b_roll.png)
 
 ---
 
@@ -242,8 +232,6 @@ The overlay graticule shows how different coordinate systems relate on the same 
   - Applies to both local graticule and overlay coordinates
 
 **Output**: Generates `detailed_graticule.png`—high-resolution 120×120 arcmin PNG with black local graticule and red equatorial overlay, both with 2-pixel line thickness.
-
-[![Example 4c: Customized graticule with thick red lines](examples/outputs/example4c_graticule_customization_preview.png)](examples/outputs/example4c_graticule_customization.png)
 
 **Advanced Example** - Publication figure with multiple overlays:
 
@@ -303,7 +291,6 @@ This creates:
 
 **Output**: Generates `publication_figure.pdf`—high-resolution 2400×1200 pixel PDF with Coolwarm colormap, black Galactic graticule, cyan Equatorial overlay, and LaTeX-formatted colorbar showing temperature in µK.
 
-![Example 5: Mollweide with dual graticules](examples/outputs/example5_dual_graticules.pdf)
 
 ---
 
@@ -327,7 +314,6 @@ This creates:
 
 **Output**: Generates `survey_equalized.pdf`—1600×800 pixel PDF with histogram-equalized Inferno colormap and dark charcoal background, revealing subtle features across the full dynamic range.
 
-![Example 6: Histogram equalization](examples/outputs/example6_histogram_equalization.pdf)
 
 ---
 
@@ -354,7 +340,6 @@ Arcsinh scaling is ideal for data where you need to see both small and large dev
 
 **Output**: Generates `cmb_asinh.pdf`—full-sky map with arcsinh-scaled Red-Blue colormap, ideal for publication-quality CMB or other symmetric data visualizations.
 
-![Example 7: Arcsinh scaling](examples/outputs/example7_asinh_scaling.pdf)
 
 ---
 
@@ -383,7 +368,6 @@ Symlog creates a linear region in the middle (±linthresh) and logarithmic scali
 
 **Output**: Generates `cmb_symlog.pdf`—full-sky map with symlog-scaled Red-Blue colormap showing both small-scale structure and extreme features.
 
-![Example 8: Symlog scaling](examples/outputs/example8_symlog_scaling.pdf)
 
 ---
 
@@ -416,7 +400,6 @@ Symlog creates a linear region in the middle (±linthresh) and logarithmic scali
 
 **Output**: Generates `cmb_with_units.pdf`—full-sky map with colorbar showing properly formatted units μK_{CMB} using Unicode mathematical symbols.
 
-![Example 9: LaTeX units in colorbar](examples/outputs/example9_latex_units.pdf)
 
 ---
 
@@ -781,7 +764,7 @@ The vector-to-raster conversion preserves mathematical quality through careful s
 - **Runtime impact**: Negligible for typical plots with 1-3 units labels
 
 #### Example Output
-See [example10_latex_rendering.pdf](examples/outputs/example10_latex_rendering.pdf) for publication-quality rendered units.
+Run the example commands to generate publication-quality figures with rendered units.
 
 ### Coordinate Systems
 - **Galactic (gal)**: Standard for CMB/ISM science
