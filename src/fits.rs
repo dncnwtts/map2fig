@@ -61,7 +61,6 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
 
     let mut fits = Fits::from_reader(reader);
     let mut result: Vec<f64> = Vec::new();
-    let mut explicit_indices: Vec<i64> = Vec::new();
     let mut nside: i64 = 0;
 
     while let Some(Ok(hdu)) = fits.next() {
@@ -85,47 +84,55 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
             let data = fits.get_data(&hdu);
             let mut table = data.table_data();
             
-            // If explicit indexing, read both PIXEL and data columns
+            // If explicit indexing, read both PIXEL and data columns together
             if has_explicit_indexing && nside > 0 {
-                // Read both columns at once - select_fields returns an iterator through all selected cells
-                let all_values: Vec<DataValue> = table.select_fields(&[ColumnId::Index(0), ColumnId::Index(col_idx)]).collect();
-                let mut data_vec: Vec<f64> = Vec::new();
+                // For explicit indexing:
+                // - Column 0 is always PIXEL indices
+                // - Column 1+ are data columns
+                // - User's --col N refers to the N-th data column
+                // - Adjust file column: file_col = col_idx + 1
+                let file_col_for_data = col_idx + 1;
                 
-                // Process pairs of values: (pixel_index, data_value)
-                for chunk in all_values.chunks(2) {
-                    if chunk.len() == 2 {
-                        // Extract pixel index from first value
-                        let pix = match &chunk[0] {
+                // Read both PIXEL (col 0) and data column
+                let all_values: Vec<DataValue> = table.select_fields(&[
+                    ColumnId::Index(0), 
+                    ColumnId::Index(file_col_for_data)
+                ]).collect();
+                
+                if all_values.is_empty() {
+                    result = vec![f64::NEG_INFINITY; (12 * nside * nside) as usize];
+                } else {
+                    let n_rows = all_values.len() / 2;
+                    let npix = (12 * nside * nside) as usize;
+                    let mut full_map = vec![f64::NEG_INFINITY; npix];
+                    
+                    // extract pixel indices and data
+                    // NOTE: select_fields returns interleaved values [pix, data, pix, data, ...]
+                    for row_idx in 0..n_rows {
+                        let pix_idx = row_idx * 2;
+                        let data_idx = row_idx * 2 + 1;
+                        
+                        let pix = match &all_values[pix_idx] {
                             DataValue::Integer { value, .. } => *value as i64,
                             DataValue::Long { value, .. } => *value,
-                            other => {
-                                eprintln!("Warning: unexpected pixel index type: {:?}", other);
-                                -1
-                            }
+                            DataValue::Float { value, .. } => *value as i64,
+                            DataValue::Double { value, .. } => *value as i64,
+                            _ => -1,
                         };
                         
-                        // Extract data value from second value
-                        let val = match &chunk[1] {
+                        let val = match &all_values[data_idx] {
                             DataValue::Double { value, .. }  => *value,
                             DataValue::Float  { value, .. }  => *value as f64,
                             DataValue::Integer{ value, .. }  => *value as f64,
                             other => panic!("Unsupported column type in FITS table: {:?}", other),
                         };
                         
-                        explicit_indices.push(pix);
-                        data_vec.push(val);
+                        if pix >= 0 && (pix as usize) < npix {
+                            full_map[pix as usize] = val;
+                        }
                     }
+                    result = full_map;
                 }
-                
-                // Expand sparse map to full dense array
-                let npix = (12 * nside * nside) as usize;
-                let mut full_map = vec![f64::NEG_INFINITY; npix];  // Use NEG_INF for missing pixels
-                for (idx, &pix) in explicit_indices.iter().enumerate() {
-                    if idx < data_vec.len() && pix >= 0 && (pix as usize) < npix {
-                        full_map[pix as usize] = data_vec[idx];
-                    }
-                }
-                result = full_map;
             } else {
                 // Regular dense map: read column directly
                 let values = table.select_fields(&[ColumnId::Index(col_idx)]);

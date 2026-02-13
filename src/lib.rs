@@ -79,6 +79,8 @@ pub mod graticule;
 pub mod params;
 pub mod mask;
 pub mod cli_builder;
+pub mod executor;
+pub mod setup;
 
 // Re-export useful items
 pub use plot::{plot_mollweide_png, plot_mollweide_pdf, plot_mollweide_auto, plot_gnomonic_auto, plot_gnomonic_png, plot_gnomonic_pdf, plot_hammer_auto, plot_hammer_png, plot_hammer_pdf};
