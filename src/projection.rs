@@ -2,7 +2,7 @@ use crate::render::raster::RasterGrid;
 /// A map projection between spherical coordinates and normalized device coords.
 ///
 /// All coordinates are normalized to `[0, 1]` unless otherwise stated.
-pub trait Projection {
+pub trait Projection: Send + Sync {
     /// Inverse projection:
     /// Maps normalized pixel coordinates (u, v) ∈ `[0,1]²`
     /// to spherical coordinates (lon, lat) in radians.

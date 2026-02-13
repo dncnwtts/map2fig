@@ -68,6 +68,19 @@ fn render_mollweide_pixels(
     sink: &mut dyn PixelSink,
     debug_overlay: Option<DebugOverlay>,
 ) {
+    // This is a wrapper that gets called by the function pointer approach
+    // Extract use_parallel before moving params
+    let use_parallel = params.use_parallel;
+    render_mollweide_pixels_impl(params, layout, sink, debug_overlay, use_parallel);
+}
+
+fn render_mollweide_pixels_impl(
+    params: crate::params::RenderMollweideParams,
+    layout: MollweideLayout,
+    sink: &mut dyn PixelSink,
+    debug_overlay: Option<DebugOverlay>,
+    use_parallel: bool,
+) {
     use crate::mollweide::MollweideProjection;
     let proj = MollweideProjection;
 
@@ -79,23 +92,43 @@ fn render_mollweide_pixels(
         fill_grid_background(&mut grid);
     }
 
-    render_projection_to_grid(
-        crate::params::RenderGridParams {
-            map: params.map,
-            proj: &proj,
-            scale: params.scale,
-            cmap: params.cmap,
-            scale_type: params.scale_type,
-            neg_mode: params.neg_mode,
-            gamma: params.gamma,
-            bad_color: params.bad_color,
-            meta: params.meta,
-            hist_scale: params.hist_scale,
-            view: params.view,
-            mask: params.mask,
-        },
-        &mut grid,
-    );
+    if use_parallel {
+        crate::plot::render_projection_to_grid_with_parallel(
+            crate::params::RenderGridParams {
+                map: params.map,
+                proj: &proj,
+                scale: params.scale,
+                cmap: params.cmap,
+                scale_type: params.scale_type,
+                neg_mode: params.neg_mode,
+                gamma: params.gamma,
+                bad_color: params.bad_color,
+                meta: params.meta,
+                hist_scale: params.hist_scale,
+                view: params.view,
+                mask: params.mask,
+            },
+            &mut grid,
+        );
+    } else {
+        render_projection_to_grid(
+            crate::params::RenderGridParams {
+                map: params.map,
+                proj: &proj,
+                scale: params.scale,
+                cmap: params.cmap,
+                scale_type: params.scale_type,
+                neg_mode: params.neg_mode,
+                gamma: params.gamma,
+                bad_color: params.bad_color,
+                meta: params.meta,
+                hist_scale: params.hist_scale,
+                view: params.view,
+                mask: params.mask,
+            },
+            &mut grid,
+        );
+    }
 
     // Draw debug overlay only if provided
     if let Some(overlay) = debug_overlay {
@@ -224,6 +257,7 @@ where
             hist_scale: hist_scale_opt.as_ref(),
             view,
             mask,
+            use_parallel: params.use_parallel,
         },
         layout,
         &mut sink,
@@ -455,6 +489,7 @@ pub fn _plot_mollweide_png_impl_projected<F>(
             hist_scale: hist_scale.as_ref(),
             view,
             mask,
+            use_parallel: params.use_parallel,
         },
         layout,
         &mut sink,

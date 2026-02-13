@@ -59,6 +59,7 @@ pub fn plot_hammer_png(params: HammerParams) {
         graticule: params.graticule,
         meta: params.meta,
         view: params.view,
+        use_parallel: params.use_parallel,
     };
     _plot_mollweide_png_impl_projected(
         mollweide_params,
@@ -77,6 +78,7 @@ pub fn plot_hammer_pdf(params: HammerParams) {
         graticule: params.graticule,
         meta: params.meta,
         view: params.view,
+        use_parallel: params.use_parallel,
     };
     _plot_mollweide_pdf_impl(mollweide_params, render_hammer_pixels);
 }

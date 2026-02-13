@@ -226,6 +226,27 @@ pub fn draw_figure_labels_png(
 
 /// Render projection to grid
 pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
+    render_projection_to_grid_runtime(params, grid, false);
+}
+
+pub fn render_projection_to_grid_with_parallel(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
+    render_projection_to_grid_runtime(params, grid, true);
+}
+
+#[allow(dead_code)]
+fn render_projection_to_grid_runtime(params: crate::params::RenderGridParams, grid: &mut RasterGrid, use_parallel: bool) {
+    #[cfg(feature = "parallel")]
+    {
+        if use_parallel {
+            return render_projection_to_grid_parallel(params, grid);
+        }
+    }
+
+    render_projection_to_grid_sequential(params, grid);
+}
+
+/// Sequential version of projection rendering
+fn render_projection_to_grid_sequential(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
     let width = grid.width;
     let height = grid.height;
 
@@ -308,6 +329,117 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                 }
             } else {
                 grid.set_valid(px, py, false);
+            }
+        }
+    }
+}
+
+/// Parallel version of projection rendering using Rayon
+#[cfg(feature = "parallel")]
+fn render_projection_to_grid_parallel(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
+    use rayon::prelude::*;
+
+    let width = grid.width;
+    let height = grid.height;
+
+    // Precompute gamma value
+    let gamma_inv = if (params.gamma - 1.0).abs() < f64::EPSILON {
+        1.0
+    } else {
+        params.gamma
+    };
+
+    // Compute all pixel data in parallel into a vector of (pixel, valid) tuples
+    let pixel_data: Vec<Vec<(Option<(image::Rgba<u8>, bool)>, u32)>> = 
+        (0..height)
+            .into_par_iter()
+            .map(|py| {
+                let mut row_data = Vec::with_capacity(width as usize);
+                
+                for px in 0..width {
+                    // Use pixel_to_ang for all projections
+                    let result = if let Some((lon, lat)) = params.proj.pixel_to_ang(px, py, grid) {
+                        let theta = std::f64::consts::PI / 2.0 - lat;
+
+                        let pixel_val = match crate::healpix::sample_healpix(
+                            params.map,
+                            params.meta,
+                            params.view,
+                            theta,
+                            lon,
+                        ) {
+                            Some(val) => crate::scale::scale_value(
+                                val,
+                                params.scale.minv,
+                                params.scale.maxv,
+                                params.scale_type,
+                                params.neg_mode,
+                                params.hist_scale,
+                            ),
+                            None => PixelValue::Bad,
+                        };
+
+                        let mut rgba = match pixel_val {
+                            PixelValue::Color(t) => {
+                                let t = if gamma_inv == 1.0 {
+                                    t
+                                } else {
+                                    t.powf(gamma_inv)
+                                };
+                                let c = params.cmap.sample(t);
+                                Rgba([c[0], c[1], c[2], 255])
+                            }
+                            PixelValue::Underflow => {
+                                let c = params.cmap.sample(0.0);
+                                Rgba([c[0], c[1], c[2], 255])
+                            }
+                            PixelValue::Overflow => {
+                                let c = params.cmap.sample(1.0);
+                                Rgba([c[0], c[1], c[2], 255])
+                            }
+                            PixelValue::Bad => params.bad_color,
+                        };
+
+                        // Apply mask if present
+                        if let Some(mask) = params.mask {
+                            let healpix_idx = crate::healpix::sample_healpix_index(
+                                params.map,
+                                params.meta,
+                                params.view,
+                                theta,
+                                lon,
+                            );
+                            if let Some(idx) = healpix_idx
+                                && !mask.is_valid(idx)
+                            {
+                                if let Some(fill_color) = mask.fill_color {
+                                    rgba = fill_color;
+                                }
+                            }
+                        }
+
+                        Some((rgba, true))
+                    } else {
+                        Some((params.bad_color, false))
+                    };
+
+                    row_data.push((result, px));
+                }
+
+                row_data
+            })
+            .collect();
+
+    // Merge results back into grid (this part remains sequential but is fast)
+    for (py, row) in pixel_data.iter().enumerate() {
+        for (pixel_opt, px) in row {
+            if let Some((rgba, valid)) = pixel_opt {
+                unsafe {
+                    grid.set_pixel_unchecked(*px, py as u32, *rgba);
+                    if !valid {
+                        grid.set_valid_unchecked(*px, py as u32, false);
+                    }
+                }
             }
         }
     }

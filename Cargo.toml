@@ -15,9 +15,11 @@ cairo-rs = { version = "0.19", features = ["pdf"] }
 sha2 = "0.10"
 tempfile = "3"
 directories = "5.0"
+rayon = { version = "1.8", optional = true }
 
 [features]
 debug_overlay = []
+parallel = ["rayon"]
 
 [dev-dependencies]
 proptest = "1.4"

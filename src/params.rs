@@ -74,6 +74,7 @@ pub struct MollweideParams<'a> {
     pub graticule: GraticuleParams,
     pub meta: HealpixMeta,
     pub view: &'a crate::rotation::ViewTransform,
+    pub use_parallel: bool,
 }
 
 /// Hammer projection parameters bundling all related data.
@@ -85,6 +86,7 @@ pub struct HammerParams<'a> {
     pub graticule: GraticuleParams,
     pub meta: HealpixMeta,
     pub view: &'a crate::rotation::ViewTransform,
+    pub use_parallel: bool,
 }
 
 /// Gnomonic projection parameters bundling all related data.
@@ -103,6 +105,7 @@ pub struct GnomonicParams<'a> {
     pub roll_deg: f64,
     pub grat_line_width: u32,
     pub show_gnomonic_text: bool,
+    pub use_parallel: bool,
 }
 
 /// Pixel rendering parameters for mollweide projection.
@@ -118,6 +121,7 @@ pub struct RenderMollweideParams<'a> {
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub view: &'a crate::rotation::ViewTransform,
     pub mask: Option<&'a crate::mask::PixelMask>,
+    pub use_parallel: bool,
 }
 
 /// Grid rendering parameters for projection sampling.

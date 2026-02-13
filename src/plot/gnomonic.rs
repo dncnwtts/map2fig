@@ -952,6 +952,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
         roll_deg,
         grat_line_width: 1,
         show_gnomonic_text: show_text,
+        use_parallel: false,
     };
 
     match ext.as_str() {

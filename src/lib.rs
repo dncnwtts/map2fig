@@ -493,8 +493,7 @@ mod tests {
                 dmer_deg: 15.0,
             },
             meta,
-            view: &view,
-        };
+            view: &view,            use_parallel: false,        };
 
         plot_mollweide_png(params);
     }
@@ -688,6 +687,7 @@ mod tests {
             },
             meta,
             view: &view,
+            use_parallel: false,
         };
 
         plot_mollweide_png(params);

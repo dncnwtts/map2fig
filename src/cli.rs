@@ -172,6 +172,10 @@ pub struct Args {
     #[arg(long)]
     pub verbose: bool,
 
+    /// Enable parallel rendering (requires 'parallel' feature)
+    #[arg(long)]
+    pub parallel: bool,
+
     /// Enable graticule overlay (primary coordinate system for mollweide map)
     #[arg(long)]
     pub graticule: bool,

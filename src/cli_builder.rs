@@ -211,6 +211,7 @@ pub fn build_mollweide_params<'a>(
         },
         meta: data.meta,
         view,
+        use_parallel: args.parallel,
     })
 }
 
@@ -293,6 +294,7 @@ pub fn build_gnomonic_params<'a>(
         roll_deg: args.roll,
         grat_line_width: args.grat_line_width,
         show_gnomonic_text: !args.no_text,
+        use_parallel: args.parallel,
     })
 }
 
@@ -364,5 +366,6 @@ pub fn build_hammer_params<'a>(
         },
         meta: data.meta,
         view,
+        use_parallel: args.parallel,
     })
 }
