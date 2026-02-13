@@ -13,8 +13,8 @@ perf.data*
 # Test artifacts and debug directories
 /test_debug/
 /test_edge/
-examples/output/*.png
-examples/output/*.txt
+/examples/output/
+/examples/outputs/
 
 # Python artifacts
 __pycache__/
