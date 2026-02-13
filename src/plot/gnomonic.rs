@@ -1,29 +1,25 @@
-use image::{RgbaImage, Rgba};
-use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
-use crate::scale::{Scale, generate_colorbar_ticks, build_histogram_scale, HistogramRange, unsafe_float_cmp};
-use crate::layout::compute_gnomonic_layout;
-use imageproc::drawing::draw_text_mut;
-use rusttype::{Font, Scale as FontScale};
+use super::{MollweideScale, render_projection_to_grid};
 use crate::PngSink;
+use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
 use crate::healpix::is_seen;
-use cairo::{Context, PdfSurface, ImageSurface, Format};
-use std::path::Path;
+use crate::layout::compute_gnomonic_layout;
+use crate::params::{GnomonicParams, ScaleParams};
 use crate::render::raster::RasterGrid;
 use crate::rotation::CoordSystem;
-use crate::params::GnomonicParams;
-use super::{
-    render_projection_to_grid,
-    MollweideScale,
+use crate::scale::{
+    HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
+use cairo::{Context, Format, ImageSurface, PdfSurface};
+use image::{Rgba, RgbaImage};
+use imageproc::drawing::draw_text_mut;
+use rusttype::{Font, Scale as FontScale};
+use std::path::Path;
 
 /// Compute scale limits for gnomonic projections using only FOV-contained pixels.
 /// This ensures the color scale is based on visible data, not the entire map.
 pub fn compute_gnomonic_scale(
     map: &[f64],
-    minv: Option<f64>,
-    maxv: Option<f64>,
-    gamma: f64,
-    scale: Scale,
+    scale_params: &ScaleParams,
     projection: &dyn crate::projection::Projection,
     width: u32,
     meta: crate::healpix::HealpixMeta,
@@ -46,20 +42,17 @@ pub fn compute_gnomonic_scale(
 
                 // sample_healpix takes (map, meta, view, theta, lon)
                 if let Some(value) = crate::healpix::sample_healpix(map, meta, view, theta, lon)
-                    && is_seen(value) {
-                        values.push(value);
-                    }
+                    && is_seen(value)
+                {
+                    values.push(value);
+                }
             }
         }
     }
 
     if values.is_empty() {
         // Fallback to all valid data if no FOV data found
-        values = map
-            .iter()
-            .filter(|v| is_seen(**v))
-            .copied()
-            .collect();
+        values = map.iter().filter(|v| is_seen(**v)).copied().collect();
 
         if values.is_empty() {
             panic!("Map contains no valid HEALPix values");
@@ -71,15 +64,15 @@ pub fn compute_gnomonic_scale(
     let data_min = *values.first().unwrap();
     let data_max = *values.last().unwrap();
 
-    let (minv, maxv) = match scale {
+    let (minv, maxv) = match scale_params.scale {
         // For histogram scale, use full data range if not explicitly specified
-        Scale::Histogram => match (minv, maxv) {
+        Scale::Histogram => match (scale_params.minv, scale_params.maxv) {
             (Some(lo), Some(hi)) => (lo, hi),
             _ => (data_min, data_max),
         },
 
         // For other scales, use percentiles of FOV-contained data
-        _ => match (minv, maxv) {
+        _ => match (scale_params.minv, scale_params.maxv) {
             (Some(lo), Some(hi)) => (lo, hi),
             _ => (
                 super::percentile(&values, 5.0),
@@ -88,7 +81,7 @@ pub fn compute_gnomonic_scale(
         },
     };
 
-    if gamma <= 0.0 {
+    if scale_params.gamma <= 0.0 {
         panic!("Gamma must be > 0");
     }
 
@@ -140,12 +133,11 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         params.display.tick_direction.clone(),
         show_text,
         params.display.show_title,
-        Some(gnomonic_tick_font_size)
+        Some(gnomonic_tick_font_size),
     );
 
     let font_data = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8])
-        .expect("Failed to load font");
+    let font = Font::try_from_bytes(font_data as &[u8]).expect("Failed to load font");
 
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -153,11 +145,15 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, width);
 
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, view);
+    let scale_params =
+        compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
 
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
-            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit {
+                min: minv,
+                max: maxv,
+            },
             _ => HistogramRange::Full,
         };
         Some(build_histogram_scale(map, range, 1024))
@@ -205,8 +201,12 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         }
     }
 
-    let bg = Rgba([bg_color[0], bg_color[1], bg_color[2],
-        if transparent { 0 } else { 255 }]);
+    let bg = Rgba([
+        bg_color[0],
+        bg_color[1],
+        bg_color[2],
+        if transparent { 0 } else { 255 },
+    ]);
 
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
@@ -227,7 +227,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let title_font_size = if params.display.scale_text {
             13.0 * (width as f32 / 300.0)
         } else {
-            13.0  // constant size when text scaling is disabled
+            13.0 // constant size when text scaling is disabled
         };
 
         // Title positioned at top of image with minimal gap
@@ -294,10 +294,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let (tick_top, tick_bottom_actual) = match &params.display.tick_direction {
             crate::cli::TickDirection::Inward => {
                 (tick_bottom.saturating_sub(major_tick_height), tick_bottom)
-            },
-            crate::cli::TickDirection::Outward => {
-                (tick_bottom, tick_bottom + major_tick_height)
-            },
+            }
+            crate::cli::TickDirection::Outward => (tick_bottom, tick_bottom + major_tick_height),
         };
 
         // Draw major ticks and labels
@@ -315,7 +313,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             }
 
             // Draw label - position depends on tick direction
-            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
+            let label =
+                format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
             let font_scale = FontScale::uniform(cb_layout.tick_font_size as f32);
 
             // Measure actual text width using font metrics
@@ -350,10 +349,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         let (minor_tick_top, minor_tick_bottom) = match &params.display.tick_direction {
             crate::cli::TickDirection::Inward => {
                 (tick_bottom.saturating_sub(minor_tick_height), tick_bottom)
-            },
-            crate::cli::TickDirection::Outward => {
-                (tick_bottom, tick_bottom + minor_tick_height)
-            },
+            }
+            crate::cli::TickDirection::Outward => (tick_bottom, tick_bottom + minor_tick_height),
         };
 
         for (&t, &_val) in ticks.minor_positions.iter().zip(ticks.minor_values.iter()) {
@@ -392,32 +389,44 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             let units_y = (cb_layout.tick_label_pad + 12.0 * spacing_scale) as i32 + outward_offset;
 
             if latex_rendering {
-                let units_font_pt = params.display.units_font_size.unwrap_or_else(|| {
-                    28.0 / 1.5 * (width as f32 / 300.0)
-                });
+                let units_font_pt = params
+                    .display
+                    .units_font_size
+                    .unwrap_or_else(|| 28.0 / 1.5 * (width as f32 / 300.0));
                 let latex_font_size = units_font_pt.round().clamp(3.0, 24.0) as u32;
                 let latex_dpi = 300u32;
-                if let Some(rendered) = crate::latex_render::render_latex_to_hires_png(units_str, latex_font_size, latex_dpi) {
+                if let Some(rendered) = crate::latex_render::render_latex_to_hires_png(
+                    units_str,
+                    latex_font_size,
+                    latex_dpi,
+                ) {
                     let latex_img = image::load_from_memory(&rendered.image_data)
                         .expect("Failed to load rendered LaTeX");
                     let latex_rgba = latex_img.to_rgba8();
 
-                    let x_offset = (layout.cbar_x + layout.cbar_w / 2.0 - latex_rgba.width() as f64 / 2.0) as i32;
+                    let x_offset = (layout.cbar_x + layout.cbar_w / 2.0
+                        - latex_rgba.width() as f64 / 2.0)
+                        as i32;
 
                     for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
                         let img_x = x_offset + lx as i32;
                         let img_y = units_y + ly as i32;
 
-                        if img_x >= 0 && img_x < layout.width as i32 &&
-                            img_y >= 0 && img_y < layout.height as i32
+                        if img_x >= 0
+                            && img_x < layout.width as i32
+                            && img_y >= 0
+                            && img_y < layout.height as i32
                         {
                             let alpha = pixel[3] as f32 / 255.0;
                             if alpha > 0.01 {
                                 let existing = img.get_pixel(img_x as u32, img_y as u32);
                                 let blended = Rgba([
-                                    ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
-                                    ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
-                                    ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                    ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha))
+                                        as u8),
+                                    ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha))
+                                        as u8),
+                                    ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha))
+                                        as u8),
                                     255,
                                 ]);
                                 img.put_pixel(img_x as u32, img_y as u32, blended);
@@ -431,11 +440,13 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         .strip_suffix('$')
                         .unwrap_or(units_str);
 
-                    let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
-                        28.0 / 1.5 * (width as f32 / 300.0)
-                    });
+                    let units_font_size = params
+                        .display
+                        .units_font_size
+                        .unwrap_or_else(|| 28.0 / 1.5 * (width as f32 / 300.0));
                     let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
-                    let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                    let center_x =
+                        (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
 
                     draw_text_mut(
                         &mut img,
@@ -447,12 +458,16 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         units_label,
                     );
                 }
-            } else if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
-                let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
-                    28.0 / 1.5 * (width as f32 / 300.0)
-                });
+            } else if let Some(units_label) =
+                crate::colorbar::format_units_label(false, Some(units_str))
+            {
+                let units_font_size = params
+                    .display
+                    .units_font_size
+                    .unwrap_or_else(|| 28.0 / 1.5 * (width as f32 / 300.0));
                 let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
-                let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                let center_x =
+                    (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
 
                 draw_text_mut(
                     &mut img,
@@ -469,22 +484,27 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
     // Add gnomonic text label if requested
     if show_text {
-        let text = format!("{:.2} '/pix,   {}x{} pix",
-            resolution_arcmin,
-            width,
-            width);
+        let text = format!("{:.2} '/pix,   {}x{} pix", resolution_arcmin, width, width);
 
         let font_size = 11.0 * (layout.map_w / 300.0);
         let surface_width = (200.0 * (layout.map_w / 300.0)).round() as i32;
         let surface_height = (50.0 * (layout.map_w / 300.0)).round() as i32;
 
-        eprintln!("TEXT_RENDER: font_size={:.1}, surface={}x{}, map_w={:.1}", font_size, surface_width, surface_height, layout.map_w);
+        eprintln!(
+            "TEXT_RENDER: font_size={:.1}, surface={}x{}, map_w={:.1}",
+            font_size, surface_width, surface_height, layout.map_w
+        );
 
         let surface_width_padded = ((200.0 + 10.0) * (layout.map_w / 300.0)).round() as i32;
-        let mut text_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, surface_width_padded, surface_height)
-            .expect("Failed to create text surface");
+        let mut text_surface = cairo::ImageSurface::create(
+            cairo::Format::ARgb32,
+            surface_width_padded,
+            surface_height,
+        )
+        .expect("Failed to create text surface");
         {
-            let text_cr = cairo::Context::new(&text_surface).expect("Failed to create text context");
+            let text_cr =
+                cairo::Context::new(&text_surface).expect("Failed to create text context");
 
             // Set transparent background
             text_cr.set_source_rgba(1.0, 1.0, 1.0, 0.0);
@@ -523,25 +543,43 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         let rotated_x = src_y;
                         let rotated_y = start_y - src_x;
 
-                        if rotated_x >= 0 && rotated_y >= 0 &&
-                            rotated_x < img.width() as i32 && rotated_y < img.height() as i32
+                        if rotated_x >= 0
+                            && rotated_y >= 0
+                            && rotated_x < img.width() as i32
+                            && rotated_y < img.height() as i32
                         {
                             label_min_x = label_min_x.min(rotated_x);
                             label_max_x = label_max_x.max(rotated_x);
 
                             let dst_pixel = img.get_pixel_mut(rotated_x as u32, rotated_y as u32);
                             // Blend with alpha
-                            dst_pixel[0] = (data[src_idx + 2] as f32 * alpha + dst_pixel[0] as f32 * (1.0 - alpha)) as u8;
-                            dst_pixel[1] = (data[src_idx + 1] as f32 * alpha + dst_pixel[1] as f32 * (1.0 - alpha)) as u8;
-                            dst_pixel[2] = (data[src_idx] as f32 * alpha + dst_pixel[2] as f32 * (1.0 - alpha)) as u8;
+                            dst_pixel[0] = (data[src_idx + 2] as f32 * alpha
+                                + dst_pixel[0] as f32 * (1.0 - alpha))
+                                as u8;
+                            dst_pixel[1] = (data[src_idx + 1] as f32 * alpha
+                                + dst_pixel[1] as f32 * (1.0 - alpha))
+                                as u8;
+                            dst_pixel[2] = (data[src_idx] as f32 * alpha
+                                + dst_pixel[2] as f32 * (1.0 - alpha))
+                                as u8;
                         }
                     }
                 }
             }
         }
 
-        eprintln!("PNG_SPACE: image_w={}, label_x_range=[{}, {}], src_y_range=[{}, {}], map_x={:.1}, map_w={:.1}, surface_h={}, rotated_text_width={}",
-            img.width(), label_min_x, label_max_x, src_y_min, src_y_max, layout.map_x, layout.map_w, surface_height, label_max_x - label_min_x);
+        eprintln!(
+            "PNG_SPACE: image_w={}, label_x_range=[{}, {}], src_y_range=[{}, {}], map_x={:.1}, map_w={:.1}, surface_h={}, rotated_text_width={}",
+            img.width(),
+            label_min_x,
+            label_max_x,
+            src_y_min,
+            src_y_max,
+            layout.map_x,
+            layout.map_w,
+            surface_height,
+            label_max_x - label_min_x
+        );
     }
 
     // Save PNG
@@ -580,7 +618,13 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 
     let show_text = params.show_gnomonic_text;
 
-    let (layout, _cb_layout) = compute_gnomonic_layout(width as f64, show_colorbar, params.display.tick_direction.clone(), show_text, params.display.show_title);
+    let (layout, _cb_layout) = compute_gnomonic_layout(
+        width as f64,
+        show_colorbar,
+        params.display.tick_direction.clone(),
+        show_text,
+        params.display.show_title,
+    );
 
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -590,11 +634,15 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, img_height);
 
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params = compute_gnomonic_scale(map, minv, maxv, gamma, scale, &proj, width, meta, view);
+    let scale_params =
+        compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
 
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
-            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit {
+                min: minv,
+                max: maxv,
+            },
             _ => HistogramRange::Full,
         };
         Some(build_histogram_scale(map, range, 1024))
@@ -636,22 +684,23 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 grat_dlon,
                 grat_dlat,
                 overlay_sys,
-                CoordSystem::G,  // Map input is Galactic by default
+                CoordSystem::G, // Map input is Galactic by default
                 overlay_color,
             );
         }
     }
 
     // Create image surface for the full layout (including colorbar)
-    let mut img_surface = ImageSurface::create(Format::ARgb32, layout.width as i32, layout.height as i32)
-        .expect("Failed to create image surface");
+    let mut img_surface =
+        ImageSurface::create(Format::ARgb32, layout.width as i32, layout.height as i32)
+            .expect("Failed to create image surface");
 
     // Fill with white background
     {
         let mut data = img_surface.data().expect("Failed to get surface data");
 
         for idx in (0..data.len()).step_by(4) {
-            data[idx] = 255;     // B
+            data[idx] = 255; // B
             data[idx + 1] = 255; // G
             data[idx + 2] = 255; // R
             data[idx + 3] = 255; // A
@@ -672,7 +721,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                     if img_x < layout.width as usize && img_y < layout.height as usize {
                         let idx = img_y * stride + img_x * 4;
                         if idx + 3 < data.len() {
-                            data[idx] = pixel[2];     // B
+                            data[idx] = pixel[2]; // B
                             data[idx + 1] = pixel[1]; // G
                             data[idx + 2] = pixel[0]; // R
                             data[idx + 3] = pixel[3]; // A
@@ -692,7 +741,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let cr = Context::new(&pdf_surface).expect("Failed to create Cairo context");
 
     // Paint the image surface onto the PDF at map position
-    cr.set_source_surface(&img_surface, 0.0, 0.0).expect("Failed to set source");
+    cr.set_source_surface(&img_surface, 0.0, 0.0)
+        .expect("Failed to set source");
     cr.paint().expect("Failed to paint");
 
     // Add title if enabled
@@ -712,15 +762,21 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
         let title_font_size = if params.display.scale_text {
             13.0 * (width as f64 / 300.0)
         } else {
-            13.0  // constant size when text scaling is disabled
+            13.0 // constant size when text scaling is disabled
         };
 
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_font_size(title_font_size);
-        cr.select_font_face("sans-serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        cr.select_font_face(
+            "sans-serif",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+        );
 
         // Title positioned at top of reserved title_pad area
-        let extents = cr.text_extents(title_text).expect("Failed to get text extents");
+        let extents = cr
+            .text_extents(title_text)
+            .expect("Failed to get text extents");
         let text_width = extents.width();
         let text_height = extents.height();
         // Center horizontally
@@ -743,12 +799,14 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             params.display.tick_direction.clone(),
             show_text,
             params.display.show_title,
-            Some(gnomonic_tick_font_size)
-        ).1;
+            Some(gnomonic_tick_font_size),
+        )
+        .1;
 
-        let effective_units_font_size = params.display.units_font_size.or_else(|| {
-            Some(28.0 / 1.5 * (width as f32 / 300.0))
-        });
+        let effective_units_font_size = params
+            .display
+            .units_font_size
+            .or_else(|| Some(28.0 / 1.5 * (width as f32 / 300.0)));
 
         draw_colorbar_pdf(
             &cr,
@@ -764,17 +822,14 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 units,
                 extend: &params.display.extend,
                 units_font_size: effective_units_font_size,
-                map_width: Some(width as f64),  // Pass map width for DPI scaling
+                map_width: Some(width as f64), // Pass map width for DPI scaling
             },
         );
     }
 
     // Add gnomonic text label if requested
     if show_text {
-        let text = format!("{:.2} '/pix,   {}x{} pix",
-            resolution_arcmin,
-            width,
-            width);
+        let text = format!("{:.2} '/pix,   {}x{} pix", resolution_arcmin, width, width);
 
         // Position text in left margin with same scaling as PNG version
         let font_size = 11.0 * (width as f64 / 300.0);

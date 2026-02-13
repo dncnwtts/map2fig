@@ -1,6 +1,9 @@
-use crate::healpix::{read_healpix_meta, HealpixMeta, target_nside_for_resolution, downgrade_healpix_map,HealpixOrdering,HPX_UNSEEN, is_seen};
 use crate::fits::read_healpix_column;
 use crate::generate_index_map;
+use crate::healpix::{
+    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map, is_seen, read_healpix_meta,
+    target_nside_for_resolution,
+};
 use crate::rotation::CoordSystem;
 
 /// Processed HEALPix data ready for plotting
@@ -17,19 +20,22 @@ pub fn load_and_process_data(
     width: u32,
     verbose: bool,
 ) -> Result<ProcessedData, String> {
-    let Some(new_fits_path) = fits_path 
-        else {
-            let map = generate_index_map(1);
-            let meta = HealpixMeta {
-                ordering: HealpixOrdering::Ring,
-                nside:1,
-                coord: CoordSystem::G
-            };
-            return Ok(ProcessedData { map, meta })
+    let Some(new_fits_path) = fits_path else {
+        let map = generate_index_map(1);
+        let meta = HealpixMeta {
+            ordering: HealpixOrdering::Ring,
+            nside: 1,
+            coord: CoordSystem::G,
         };
+        return Ok(ProcessedData { map, meta });
+    };
     // Load metadata
-    let meta = read_healpix_meta(new_fits_path)
-        .ok_or_else(|| format!("Could not determine HEALPix ordering / NSIDE for file: {}", new_fits_path))?;
+    let meta = read_healpix_meta(new_fits_path).ok_or_else(|| {
+        format!(
+            "Could not determine HEALPix ordering / NSIDE for file: {}",
+            new_fits_path
+        )
+    })?;
 
     // Load and scale data
     let mut map = read_healpix_column(new_fits_path, col);
@@ -41,35 +47,42 @@ pub fn load_and_process_data(
         }
     }
 
-
     // Apply downgrade for high-resolution maps
     let (final_map, final_meta) = if meta.nside > crate::HIGH_RES_NSIDE_THRESHOLD {
-
         let target_nside = target_nside_for_resolution(width as usize, (width / 2) as usize);
 
-        if meta.nside  >target_nside {
-            if verbose {println!("Downgrading from nside={} to nside={} for {}x{} output",
-                    meta.nside, target_nside, width, width / 2);}
+        if meta.nside > target_nside {
+            if verbose {
+                println!(
+                    "Downgrading from nside={} to nside={} for {}x{} output",
+                    meta.nside,
+                    target_nside,
+                    width,
+                    width / 2
+                );
+            }
 
-            let downgraded_map = downgrade_healpix_map(&map, meta.nside, 
-                target_nside, meta.ordering);
+            let downgraded_map =
+                downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering);
             (
-                downgraded_map, 
-                HealpixMeta { 
-                    nside: target_nside, 
+                downgraded_map,
+                HealpixMeta {
+                    nside: target_nside,
                     ordering: meta.ordering,
                     coord: meta.coord,
-             }
-             )
-        }
-        else {
+                },
+            )
+        } else {
             (map, meta)
         }
     } else {
         (map, meta)
     };
 
-    Ok(ProcessedData { map: final_map, meta: final_meta })
+    Ok(ProcessedData {
+        map: final_map,
+        meta: final_meta,
+    })
 }
 
 /// Subtract monopole (and optionally dipole) from a HEALPix map.
@@ -181,7 +194,7 @@ pub fn subtract_mono_dipole(
         let dipole_amp = (multipoles[1] * multipoles[1]
             + multipoles[2] * multipoles[2]
             + multipoles[3] * multipoles[3])
-        .sqrt();
+            .sqrt();
         if dipole_amp > 0.0 {
             let lat = (multipoles[3] / dipole_amp).asin().to_degrees();
             let lon = multipoles[2].atan2(multipoles[1]).to_degrees();

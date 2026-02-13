@@ -1,33 +1,27 @@
-pub mod mollweide;
 pub mod gnomonic;
 pub mod hammer;
+pub mod mollweide;
 
-use image::Rgba;
 use crate::render::raster::RasterGrid;
 use crate::{PixelSink, PixelValue};
+use cairo::{Context, Format, ImageSurface};
+use image::Rgba;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-use cairo::{Context, ImageSurface, Format};
 
 // Re-export public APIs from projection modules
-pub use mollweide::{plot_mollweide_pdf, plot_mollweide_png, plot_mollweide_auto, compute_mollweide_scale};
-pub use gnomonic::{plot_gnomonic_pdf, plot_gnomonic_png, plot_gnomonic_auto};
-pub use hammer::{plot_hammer_pdf, plot_hammer_png, plot_hammer_auto};
+pub use gnomonic::{plot_gnomonic_auto, plot_gnomonic_pdf, plot_gnomonic_png};
+pub use hammer::{plot_hammer_auto, plot_hammer_pdf, plot_hammer_png};
+pub use mollweide::{
+    compute_mollweide_scale, plot_mollweide_auto, plot_mollweide_pdf, plot_mollweide_png,
+};
 
 /// Rasterize to Cairo image surface
-pub fn rasterize_to_surface<F>(
-    width: u32,
-    height: u32,
-    render: F,
-) -> ImageSurface
+pub fn rasterize_to_surface<F>(width: u32, height: u32, render: F) -> ImageSurface
 where
     F: FnOnce(&mut dyn PixelSink),
 {
-    let surf = ImageSurface::create(
-        Format::ARgb32,
-        width as i32,
-        height as i32,
-    ).unwrap();
+    let surf = ImageSurface::create(Format::ARgb32, width as i32, height as i32).unwrap();
 
     let cr = Context::new(&surf).unwrap();
     cr.set_operator(cairo::Operator::Source);
@@ -132,8 +126,7 @@ pub fn draw_figure_labels_png(
     let font_scale = FontScale::uniform(font_size);
 
     let font_data = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8])
-        .expect("Failed to load font");
+    let font = Font::try_from_bytes(font_data as &[u8]).expect("Failed to load font");
 
     let text_color = Rgba([0, 0, 0, 255]); // Black text
 
@@ -158,16 +151,17 @@ pub fn draw_figure_labels_png(
                     let img_x = x_left + lx as i32;
                     let img_y = y_label + ly as i32;
 
-                    if img_x >= 0 && img_x < width as i32 &&
-                        img_y >= 0 && img_y < height as i32
-                    {
+                    if img_x >= 0 && img_x < width as i32 && img_y >= 0 && img_y < height as i32 {
                         let alpha = pixel[3] as f32 / 255.0;
                         if alpha > 0.01 {
                             let existing = img.get_pixel(img_x as u32, img_y as u32);
                             let blended = Rgba([
-                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha))
+                                    as u8),
                                 255,
                             ]);
                             img.put_pixel(img_x as u32, img_y as u32, blended);
@@ -199,16 +193,17 @@ pub fn draw_figure_labels_png(
                     let img_x = x_right - latex_width + lx as i32;
                     let img_y = y_label + ly as i32;
 
-                    if img_x >= 0 && img_x < width as i32 &&
-                        img_y >= 0 && img_y < height as i32
-                    {
+                    if img_x >= 0 && img_x < width as i32 && img_y >= 0 && img_y < height as i32 {
                         let alpha = pixel[3] as f32 / 255.0;
                         if alpha > 0.01 {
                             let existing = img.get_pixel(img_x as u32, img_y as u32);
                             let blended = Rgba([
-                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha))
+                                    as u8),
                                 255,
                             ]);
                             img.put_pixel(img_x as u32, img_y as u32, blended);
@@ -230,10 +225,7 @@ pub fn draw_figure_labels_png(
 }
 
 /// Render projection to grid
-pub fn render_projection_to_grid(
-    params: crate::params::RenderGridParams,
-    grid: &mut RasterGrid,
-) {
+pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
     let width = grid.width;
     let height = grid.height;
 
@@ -251,7 +243,13 @@ pub fn render_projection_to_grid(
             if let Some((lon, lat)) = params.proj.pixel_to_ang(px, py, grid) {
                 let theta = std::f64::consts::PI / 2.0 - lat;
 
-                let pixel_val = match crate::healpix::sample_healpix(params.map, params.meta, params.view, theta, lon) {
+                let pixel_val = match crate::healpix::sample_healpix(
+                    params.map,
+                    params.meta,
+                    params.view,
+                    theta,
+                    lon,
+                ) {
                     Some(val) => crate::scale::scale_value(
                         val,
                         params.scale.minv,
@@ -266,7 +264,11 @@ pub fn render_projection_to_grid(
                 // Check if pixel is masked
                 let mut rgba = match pixel_val {
                     PixelValue::Color(t) => {
-                        let t = if gamma_inv == 1.0 { t } else { t.powf(gamma_inv) };
+                        let t = if gamma_inv == 1.0 {
+                            t
+                        } else {
+                            t.powf(gamma_inv)
+                        };
                         let c = params.cmap.sample(t);
                         Rgba([c[0], c[1], c[2], 255])
                     }
@@ -283,14 +285,21 @@ pub fn render_projection_to_grid(
 
                 // Apply mask if present
                 if let Some(mask) = params.mask {
-                    let healpix_idx = crate::healpix::sample_healpix_index(params.map, params.meta, params.view, theta, lon);
+                    let healpix_idx = crate::healpix::sample_healpix_index(
+                        params.map,
+                        params.meta,
+                        params.view,
+                        theta,
+                        lon,
+                    );
                     if let Some(idx) = healpix_idx
-                        && !mask.is_valid(idx) {
-                            // Pixel is masked: use maskfill color if specified, otherwise leave as is
-                            if let Some(fill_color) = mask.fill_color {
-                                rgba = fill_color;
-                            }
+                        && !mask.is_valid(idx)
+                    {
+                        // Pixel is masked: use maskfill color if specified, otherwise leave as is
+                        if let Some(fill_color) = mask.fill_color {
+                            rgba = fill_color;
                         }
+                    }
                 }
 
                 // Use unchecked access for hot path (bounds guaranteed by loop)
@@ -305,12 +314,7 @@ pub fn render_projection_to_grid(
 }
 
 /// Blit grid to sink
-pub fn blit_grid_to_sink(
-    grid: &RasterGrid,
-    sink: &mut dyn PixelSink,
-    x0: u32,
-    y0: u32,
-) {
+pub fn blit_grid_to_sink(grid: &RasterGrid, sink: &mut dyn PixelSink, x0: u32, y0: u32) {
     for y in 0..grid.height {
         for x in 0..grid.width {
             if let Some(p) = grid.get_pixel_if_valid(x, y) {
@@ -321,10 +325,7 @@ pub fn blit_grid_to_sink(
 }
 
 /// Draw debug overlay on raster grid
-pub fn draw_debug_overlay_raster(
-    grid: &mut RasterGrid,
-    overlay: DebugOverlay,
-) {
+pub fn draw_debug_overlay_raster(grid: &mut RasterGrid, overlay: DebugOverlay) {
     if !overlay.enabled {
         return;
     }

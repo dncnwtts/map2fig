@@ -9,7 +9,7 @@ use crate::cli_builder;
 use crate::mask::PixelMask;
 use crate::pipeline::ProcessedData;
 use crate::rotation::ViewTransform;
-use crate::{plot_hammer_auto, plot_gnomonic_auto, plot_mollweide_auto};
+use crate::{plot_gnomonic_auto, plot_hammer_auto, plot_mollweide_auto};
 
 /// Configuration bundle for plot execution.
 ///
@@ -64,8 +64,7 @@ pub struct ExecutionConfig<'a> {
 /// ```
 pub fn execute_plot(config: &ExecutionConfig, verbose: bool) -> Result<(), String> {
     if verbose {
-        let input_file = config.args.fits.as_deref()
-            .unwrap_or("<no input>");
+        let input_file = config.args.fits.as_deref().unwrap_or("<no input>");
         let output_file = config.args.get_output_filename();
         println!("\n{} -> {}", input_file, output_file);
     }
@@ -127,4 +126,4 @@ fn execute_hammer(config: &ExecutionConfig) -> Result<(), String> {
 }
 
 #[cfg(test)]
-    mod tests {}
+mod tests {}

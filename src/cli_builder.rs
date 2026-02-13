@@ -4,13 +4,13 @@
 //! structs from command-line arguments and configuration. It extracts common logic
 //! from main.rs to reduce duplication and improve maintainability.
 
-use std::str::FromStr;
-use image::Rgba;
 use crate::cli::{Args, resolve_color_with_alpha};
 use crate::mask::PixelMask;
 use crate::params::*;
-use crate::rotation::{CoordSystem, ViewTransform};
 use crate::pipeline::ProcessedData;
+use crate::rotation::{CoordSystem, ViewTransform};
+use image::Rgba;
+use std::str::FromStr;
 
 /// Create a pixel mask from command-line arguments.
 ///
@@ -26,14 +26,20 @@ use crate::pipeline::ProcessedData;
 ///
 /// # Returns
 ///
-/// Option<PixelMask> or error message if mask creation fails
-pub fn create_pixel_mask(args: &Args, data: &ProcessedData, verbose: bool) -> Result<Option<PixelMask>, String> {
+/// `Option<PixelMask>` or error message if mask creation fails
+pub fn create_pixel_mask(
+    args: &Args,
+    data: &ProcessedData,
+    verbose: bool,
+) -> Result<Option<PixelMask>, String> {
     if let Some(mask_below) = args.mask_below {
         if verbose {
             println!("Creating value-range mask (below: {})", mask_below);
         }
         let fill_color = crate::mask::parse_maskfill_color(&args.maskfill_color);
-        let coord = args.mask_coord.as_ref()
+        let coord = args
+            .mask_coord
+            .as_ref()
             .and_then(|s| CoordSystem::from_str(s).ok())
             .unwrap_or(data.meta.coord);
         return Ok(Some(PixelMask::from_value_range(
@@ -51,7 +57,9 @@ pub fn create_pixel_mask(args: &Args, data: &ProcessedData, verbose: bool) -> Re
             println!("Creating value-range mask (above: {})", mask_above);
         }
         let fill_color = crate::mask::parse_maskfill_color(&args.maskfill_color);
-        let coord = args.mask_coord.as_ref()
+        let coord = args
+            .mask_coord
+            .as_ref()
             .and_then(|s| CoordSystem::from_str(s).ok())
             .unwrap_or(data.meta.coord);
         return Ok(Some(PixelMask::from_value_range(
@@ -69,7 +77,9 @@ pub fn create_pixel_mask(args: &Args, data: &ProcessedData, verbose: bool) -> Re
             println!("Loading mask from {}", mask_file);
         }
         let fill_color = crate::mask::parse_maskfill_color(&args.maskfill_color);
-        let coord = args.mask_coord.as_ref()
+        let coord = args
+            .mask_coord
+            .as_ref()
             .and_then(|s| CoordSystem::from_str(s).ok());
         match PixelMask::from_fits_file(mask_file, fill_color, coord) {
             Ok(mask) => {
@@ -142,7 +152,10 @@ pub fn build_mollweide_params<'a>(
     mask: Option<PixelMask>,
 ) -> Result<MollweideParams<'a>, String> {
     let grat_coord = resolve_graticule_coord(args, data.meta.coord);
-    let grat_overlay = args.grat_coord_overlay.as_ref().map(|s| parse_overlay_coord(s));
+    let grat_overlay = args
+        .grat_coord_overlay
+        .as_ref()
+        .map(|s| parse_overlay_coord(s));
     let overlay_color = resolve_overlay_color(args)?;
 
     Ok(MollweideParams {
@@ -169,8 +182,14 @@ pub fn build_mollweide_params<'a>(
             draw_border: !args.no_border,
             latex_rendering: config.latex_rendering,
             units: config.units.clone(),
-            extend: args.extend.parse().map_err(|_| "Invalid extend option".to_string())?,
-            tick_direction: args.tick_direction.parse().map_err(|_| "Invalid tick direction option".to_string())?,
+            extend: args
+                .extend
+                .parse()
+                .map_err(|_| "Invalid extend option".to_string())?,
+            tick_direction: args
+                .tick_direction
+                .parse()
+                .map_err(|_| "Invalid tick direction option".to_string())?,
             tick_font_size: args.tick_font_size,
             units_font_size: args.units_font_size,
             rlabel: args.rlabel.clone(),
@@ -208,7 +227,10 @@ pub fn build_gnomonic_params<'a>(
     let fov = args.fov;
     let res = args.res;
 
-    let grat_overlay = args.grat_coord_overlay.as_ref().map(|s| parse_overlay_coord(s));
+    let grat_overlay = args
+        .grat_coord_overlay
+        .as_ref()
+        .map(|s| parse_overlay_coord(s));
     let overlay_color = resolve_overlay_color(args)?;
 
     Ok(GnomonicParams {
@@ -235,8 +257,14 @@ pub fn build_gnomonic_params<'a>(
             draw_border: false,
             latex_rendering: config.latex_rendering,
             units: config.units.clone(),
-            extend: args.extend.parse().map_err(|_| "Invalid extend option".to_string())?,
-            tick_direction: args.tick_direction.parse().map_err(|_| "Invalid tick direction option".to_string())?,
+            extend: args
+                .extend
+                .parse()
+                .map_err(|_| "Invalid extend option".to_string())?,
+            tick_direction: args
+                .tick_direction
+                .parse()
+                .map_err(|_| "Invalid tick direction option".to_string())?,
             tick_font_size: args.tick_font_size,
             units_font_size: args.units_font_size,
             rlabel: args.rlabel.clone(),
@@ -277,7 +305,10 @@ pub fn build_hammer_params<'a>(
     mask: Option<PixelMask>,
 ) -> Result<HammerParams<'a>, String> {
     let grat_coord = resolve_graticule_coord(args, data.meta.coord);
-    let grat_overlay = args.grat_coord_overlay.as_ref().map(|s| parse_overlay_coord(s));
+    let grat_overlay = args
+        .grat_coord_overlay
+        .as_ref()
+        .map(|s| parse_overlay_coord(s));
     let overlay_color = resolve_overlay_color(args)?;
 
     Ok(HammerParams {
@@ -304,8 +335,14 @@ pub fn build_hammer_params<'a>(
             draw_border: !args.no_border,
             latex_rendering: config.latex_rendering,
             units: config.units.clone(),
-            extend: args.extend.parse().map_err(|_| "Invalid extend option".to_string())?,
-            tick_direction: args.tick_direction.parse().map_err(|_| "Invalid tick direction option".to_string())?,
+            extend: args
+                .extend
+                .parse()
+                .map_err(|_| "Invalid extend option".to_string())?,
+            tick_direction: args
+                .tick_direction
+                .parse()
+                .map_err(|_| "Invalid tick direction option".to_string())?,
             tick_font_size: args.tick_font_size,
             units_font_size: args.units_font_size,
             rlabel: args.rlabel.clone(),

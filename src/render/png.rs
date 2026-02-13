@@ -1,16 +1,11 @@
-use crate::render::target::{RenderTarget,PixelSource};
+use crate::render::target::{PixelSource, RenderTarget};
 
 pub struct PngRenderTarget<'a> {
     pub img: &'a mut image::RgbaImage,
 }
 
 impl RenderTarget for PngRenderTarget<'_> {
-    fn blit_raster(
-        &mut self,
-        raster: &dyn PixelSource,
-        x: f64,
-        y: f64,
-    ) {
+    fn blit_raster(&mut self, raster: &dyn PixelSource, x: f64, y: f64) {
         let x0 = x as i32;
         let y0 = y as i32;
 
@@ -26,4 +21,3 @@ impl RenderTarget for PngRenderTarget<'_> {
         }
     }
 }
-

@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 /// LaTeX rendering using system pdflatex with caching
 ///
 /// Uses system pdflatex which is widely available on most Unix-like systems.
@@ -5,7 +6,6 @@
 /// Falls back to Unicode approximation if LaTeX is unavailable.
 use std::io::Write;
 use std::path::PathBuf;
-use sha2::{Sha256, Digest};
 use tempfile::TempDir;
 
 /// Get cache directory for rendered LaTeX images
@@ -18,7 +18,7 @@ fn get_cache_dir() -> PathBuf {
                 .unwrap_or_else(|| PathBuf::from(".map2fig_cache"))
         })
         .join("latex");
-    
+
     let _ = std::fs::create_dir_all(&cache_dir);
     cache_dir
 }
@@ -61,9 +61,13 @@ fn check_convert() -> bool {
 
 /// Render LaTeX to high-quality PNG for vector-like appearance
 /// Uses higher DPI for near-vector quality without actual vectorization
-pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -> Option<RenderedLatex> {
+pub fn render_latex_to_hires_png(
+    latex_str: &str,
+    font_size_pt: u32,
+    dpi: u32,
+) -> Option<RenderedLatex> {
     // Tools are checked elsewhere; assume they're available
-    
+
     // Check cache first using DPI in the key
     let hash_value = {
         let mut hasher = Sha256::new();
@@ -73,17 +77,17 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
         format!("{:x}", hasher.finalize())
     };
     let cache_key = format!("{}_{}.png", hash_value, dpi);
-    
+
     let cache_path = get_cache_dir().join(&cache_key);
-    
+
     // Create temporary directory for compilation
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
         Err(_) => return None,
     };
-    
+
     let temp_path = temp_dir.path();
-    
+
     // Create minimal LaTeX document with no vertical padding
 
     let latex_doc = format!(
@@ -99,7 +103,7 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
 \end{{document}}"#,
         font_size_pt, latex_str
     );
-    
+
     // Write LaTeX file
     let tex_path = temp_path.join("document.tex");
     match std::fs::File::create(&tex_path) {
@@ -110,7 +114,7 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
         }
         Err(_) => return None,
     }
-    
+
     // Run pdflatex
     let output = std::process::Command::new("pdflatex")
         .arg("-interaction=nonstopmode")
@@ -119,59 +123,69 @@ pub fn render_latex_to_hires_png(latex_str: &str, font_size_pt: u32, dpi: u32) -
         .current_dir(temp_path)
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         return None;
     }
-    
+
     // Convert PDF to PNG using pdftoppm at specified DPI
     let pdf_path = temp_path.join("document.pdf");
     let png_path = temp_path.join("document.png");
-    
+
     let dpi_str = dpi.to_string();
     let output = std::process::Command::new("pdftoppm")
         .arg("-singlefile")
         .arg("-png")
-        .arg("-r").arg(&dpi_str)  // Custom DPI for vector-like quality
+        .arg("-r")
+        .arg(&dpi_str) // Custom DPI for vector-like quality
         .arg(&pdf_path)
         .arg(png_path.with_extension(""))
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         return None;
     }
-    
+
     // Crop PNG to remove white margins using imagemagick
     // Use minimal border (1x1) for crisp edges on small fonts
     let cropped_path = temp_path.join("document_cropped.png");
     let trim_output = std::process::Command::new("convert")
         .arg(&png_path)
         .arg("-trim")
-        .arg("+repage")  // Remove virtual canvas
-        .arg("-bordercolor").arg("white")
-        .arg("-border").arg("1x1")  // Minimal border for crisp rendering
+        .arg("+repage") // Remove virtual canvas
+        .arg("-bordercolor")
+        .arg("white")
+        .arg("-border")
+        .arg("1x1") // Minimal border for crisp rendering
         .arg(&cropped_path)
         .output();
-    
-    let trim_success = trim_output.as_ref().map(|o| o.status.success()).unwrap_or(false);
+
+    let trim_success = trim_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
     let cropped_exists = cropped_path.exists();
-    
+
     // Use cropped version if available, otherwise fall back to original
     let final_png_path = if trim_success && cropped_exists {
         cropped_path
     } else {
         png_path.clone()
     };
-    
+
     // Read PNG
     let image_data = std::fs::read(&final_png_path).ok()?;
     let (width, height) = extract_png_dimensions(&image_data).ok()?;
-    
+
     // Cache the result
     let _ = std::fs::write(&cache_path, &image_data);
-    
-    Some(RenderedLatex { image_data, width, height })
+
+    Some(RenderedLatex {
+        image_data,
+        width,
+        height,
+    })
 }
 
 /// Rendered LaTeX output as PNG
@@ -213,26 +227,26 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
     if !check_pdf2svg() && !check_convert() {
         return None;
     }
-    
+
     // Generate PDF using tectonic or system pdflatex
     let pdf_bytes = render_latex_to_pdf(latex_str, font_size_pt)?;
-    
+
     // Create temporary directory for SVG conversion
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
         Err(_) => return None,
     };
-    
+
     let temp_path = temp_dir.path();
     let pdf_path = temp_path.join("document.pdf");
     let svg_path = temp_path.join("document.svg");
-    
+
     // Write PDF to temp file
     match std::fs::write(&pdf_path, &pdf_bytes) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => return None,
     }
-    
+
     // Try pdf2svg first (best quality)
     if check_pdf2svg() {
         let output = std::process::Command::new("pdf2svg")
@@ -240,35 +254,46 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
             .arg(&svg_path)
             .output()
             .ok()?;
-        
+
         if output.status.success()
             && let Ok(svg_data) = std::fs::read_to_string(&svg_path)
-                && let Some((width, height)) = extract_svg_dimensions(&svg_data) {
-                    return Some(RenderedLatexSvg { svg_data, width, height });
-                }
+            && let Some((width, height)) = extract_svg_dimensions(&svg_data)
+        {
+            return Some(RenderedLatexSvg {
+                svg_data,
+                width,
+                height,
+            });
+        }
     }
-    
+
     // Fallback to ImageMagick convert
     if check_convert() {
         let output = std::process::Command::new("convert")
-            .arg("-density").arg("150")
+            .arg("-density")
+            .arg("150")
             .arg(format!("{}[0]", pdf_path.display())) // Convert PDF page 1
             .arg(&svg_path)
             .output()
             .ok()?;
-        
+
         if output.status.success()
             && let Ok(svg_data) = std::fs::read_to_string(&svg_path)
-                && let Some((width, height)) = extract_svg_dimensions(&svg_data) {
-                    return Some(RenderedLatexSvg { svg_data, width, height });
-                }
+            && let Some((width, height)) = extract_svg_dimensions(&svg_data)
+        {
+            return Some(RenderedLatexSvg {
+                svg_data,
+                width,
+                height,
+            });
+        }
     }
-    
+
     None
 }
 
 /// Render LaTeX to SVG (vector format) then convert to PNG
-/// 
+///
 /// This function uses pdf2svg to create vector output, then rasterizes to PNG
 /// for embedding in Cairo. The PDF is generated at high quality, so the rasterization
 /// preserves vector sharpness better than direct PDFLaTeX→PNG conversion.
@@ -283,11 +308,11 @@ pub fn render_latex_to_svg(latex_str: &str, font_size_pt: u32) -> Option<Rendere
 pub fn render_latex_to_svg_png(latex_str: &str, font_size_pt: u32) -> Option<RenderedLatex> {
     // Try to render to SVG first
     let _ = render_latex_to_svg(latex_str, font_size_pt)?;
-    
+
     // Convert SVG to PNG using ImageMagick or similar (requires external tool)
     // For now, we skip this and rely on the existing PDF→PNG pipeline
     // TODO: Implement SVG→PNG conversion using usvg or similar
-    
+
     None
 }
 
@@ -298,20 +323,20 @@ fn extract_svg_dimensions(svg_data: &str) -> Option<(f64, f64)> {
     let after_viewbox = &svg_data[start + 9..];
     let end = after_viewbox.find("\"")?;
     let viewbox_str = &after_viewbox[..end];
-    
+
     let parts: Vec<&str> = viewbox_str.split_whitespace().collect();
     if parts.len() < 4 {
         return None;
     }
-    
+
     let width = parts[2].parse::<f64>().ok()?;
     let height = parts[3].parse::<f64>().ok()?;
-    
+
     Some((width, height))
 }
 
 /// Render LaTeX to PDF using Tectonic command-line (preferred pure-Rust implementation)
-/// 
+///
 /// Tectonic is self-contained and doesn't require system TeX installation.
 /// This provides the best quality and avoids platform-specific issues.
 ///
@@ -328,10 +353,10 @@ pub fn render_latex_to_pdf_tectonic(latex_str: &str, font_size_pt: u32) -> Optio
         Ok(dir) => dir,
         Err(_) => return None,
     };
-    
+
     let temp_path = temp_dir.path();
     let pdf_path = temp_path.join("document.pdf");
-    
+
     // Create minimal LaTeX document with substantial vertical padding
     // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
@@ -344,7 +369,7 @@ pub fn render_latex_to_pdf_tectonic(latex_str: &str, font_size_pt: u32) -> Optio
 \end{{document}}"#,
         font_size_pt, latex_str
     );
-    
+
     // Write LaTeX file
     let tex_path = temp_path.join("document.tex");
     match std::fs::File::create(&tex_path) {
@@ -355,18 +380,18 @@ pub fn render_latex_to_pdf_tectonic(latex_str: &str, font_size_pt: u32) -> Optio
         }
         Err(_) => return None,
     }
-    
+
     // Use Tectonic CLI to compile (simpler invocation without -X)
     let output = std::process::Command::new("tectonic")
         .arg(&tex_path)
         .current_dir(temp_path)
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         return None;
     }
-    
+
     // Read the generated PDF
     std::fs::read(&pdf_path).ok()
 }
@@ -388,15 +413,15 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
     if !check_pdflatex() {
         return None;
     }
-    
+
     // Create temporary directory for compilation
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
         Err(_) => return None,
     };
-    
+
     let temp_path = temp_dir.path();
-    
+
     // Create minimal LaTeX document with substantial vertical padding
     // Use invisible vertical rule to force bounding box size (standalone class is strict)
     let latex_doc = format!(
@@ -409,7 +434,7 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
 \end{{document}}"#,
         font_size_pt, latex_str
     );
-    
+
     // Write LaTeX file
     let tex_path = temp_path.join("document.tex");
     match std::fs::File::create(&tex_path) {
@@ -420,7 +445,7 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
         }
         Err(_) => return None,
     }
-    
+
     // Run pdflatex
     let output = std::process::Command::new("pdflatex")
         .arg("-interaction=nonstopmode")
@@ -429,18 +454,18 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
         .current_dir(temp_path)
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         return None;
     }
-    
+
     // Read the generated PDF
     let pdf_path = temp_path.join("document.pdf");
     std::fs::read(&pdf_path).ok()
 }
 
 /// Render LaTeX string to PNG image
-/// 
+///
 /// Uses system pdflatex if available, caches results.
 /// If LaTeX unavailable, returns None to fall back to Unicode.
 ///
@@ -454,23 +479,28 @@ pub fn render_latex_to_pdf(latex_str: &str, font_size_pt: u32) -> Option<Vec<u8>
 pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<RenderedLatex> {
     // Use tectonic for rendering since it's more reliable and already available
     // We'll use pdftoppm for PDF->PNG conversion
-    
+
     // Check cache first
     let cache_key = get_cache_key(latex_str, font_size_pt);
     let cache_path = get_cache_dir().join(&cache_key);
-    
+
     if cache_path.exists()
         && let Ok(image_data) = std::fs::read(&cache_path)
-            && let Ok((width, height)) = extract_png_dimensions(&image_data) {
-                return Some(RenderedLatex { image_data, width, height });
-            }
-    
+        && let Ok((width, height)) = extract_png_dimensions(&image_data)
+    {
+        return Some(RenderedLatex {
+            image_data,
+            width,
+            height,
+        });
+    }
+
     // Create temporary directory for compilation
     let temp_dir = match TempDir::new() {
         Ok(dir) => dir,
         Err(_) => return None,
     };
-    
+
     let temp_path = temp_dir.path();
     // Create minimal LaTeX document with zero vspace margins
     let latex_doc = format!(
@@ -486,7 +516,7 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
 \end{{document}}"#,
         font_size_pt, latex_str
     );
-    
+
     // Write LaTeX file
     let tex_path = temp_path.join("document.tex");
     match std::fs::File::create(&tex_path) {
@@ -497,7 +527,7 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
         }
         Err(_) => return None,
     }
-    
+
     // Run pdflatex
     let output = std::process::Command::new("pdflatex")
         .arg("-interaction=nonstopmode")
@@ -506,38 +536,43 @@ pub fn render_latex_to_png(latex_str: &str, font_size_pt: u32) -> Option<Rendere
         .current_dir(temp_path)
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         eprintln!("pdflatex compilation failed for: {}", latex_str);
         return None;
     }
-    
+
     // Convert PDF to PNG using pdftoppm
     let pdf_path = temp_path.join("document.pdf");
     let png_path = temp_path.join("document.png");
-    
+
     let output = std::process::Command::new("pdftoppm")
         .arg("-singlefile")
         .arg("-png")
-        .arg("-r").arg("150")  // 150 DPI for good quality
+        .arg("-r")
+        .arg("150") // 150 DPI for good quality
         .arg(&pdf_path)
         .arg(png_path.with_extension(""))
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         eprintln!("pdftoppm failed for: {}", latex_str);
         return None;
     }
-    
+
     // Read PNG
     let image_data = std::fs::read(&png_path).ok()?;
     let (width, height) = extract_png_dimensions(&image_data).ok()?;
-    
+
     // Cache the result
     let _ = std::fs::write(&cache_path, &image_data);
-    
-    Some(RenderedLatex { image_data, width, height })
+
+    Some(RenderedLatex {
+        image_data,
+        width,
+        height,
+    })
 }
 
 /// Extract PNG dimensions from IHDR chunk
@@ -545,54 +580,49 @@ fn extract_png_dimensions(png_data: &[u8]) -> Result<(u32, u32), String> {
     if png_data.len() < 24 {
         return Err("PNG too short".to_string());
     }
-    
+
     if &png_data[0..8] != b"\x89PNG\r\n\x1a\n" {
         return Err("Invalid PNG signature".to_string());
     }
-    
-    let width = u32::from_be_bytes([
-        png_data[16], png_data[17], png_data[18], png_data[19]
-    ]);
-    let height = u32::from_be_bytes([
-        png_data[20], png_data[21], png_data[22], png_data[23]
-    ]);
-    
+
+    let width = u32::from_be_bytes([png_data[16], png_data[17], png_data[18], png_data[19]]);
+    let height = u32::from_be_bytes([png_data[20], png_data[21], png_data[22], png_data[23]]);
+
     Ok((width, height))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_cache_key_uniqueness() {
         let key1 = get_cache_key("$x^2$", 12);
         let key2 = get_cache_key("$x^2$", 12);
         assert_eq!(key1, key2);
-        
+
         let key3 = get_cache_key("$x^3$", 12);
         assert_ne!(key1, key3);
-        
+
         let key4 = get_cache_key("$x^2$", 14);
         assert_ne!(key1, key4);
     }
-    
+
     #[test]
     fn test_png_dimension_parsing() {
         // Minimal 1x1 PNG
         let png = vec![
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-            0x00, 0x00, 0x00, 0x02,  // width: 2
-            0x00, 0x00, 0x00, 0x03,  // height: 3
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x02, // width: 2
+            0x00, 0x00, 0x00, 0x03, // height: 3
             0x08, 0x02, 0x00, 0x00, 0x00, 0x00,
         ];
-        
+
         let (w, h) = extract_png_dimensions(&png).unwrap();
         assert_eq!(w, 2);
         assert_eq!(h, 3);
     }
-    
+
     #[test]
     fn test_svg_rendering() {
         // Skip if pdflatex or conversion tools not available
@@ -600,25 +630,30 @@ mod tests {
             eprintln!("Skipping SVG test: pdflatex or conversion tools not available");
             return;
         }
-        
+
         // Test simple LaTeX
         if let Some(svg) = render_latex_to_svg("$K$", 10) {
             assert!(svg.width > 0.0, "SVG width should be > 0");
             assert!(svg.height > 0.0, "SVG height should be > 0");
             assert!(svg.svg_data.len() > 0, "SVG data should not be empty");
-            eprintln!("SVG render test: {}x{} with {} bytes", svg.width, svg.height, svg.svg_data.len());
+            eprintln!(
+                "SVG render test: {}x{} with {} bytes",
+                svg.width,
+                svg.height,
+                svg.svg_data.len()
+            );
         } else {
             eprintln!("SVG rendering returned None");
         }
     }
-    
+
     #[test]
     fn test_svg_dimension_extraction() {
         let svg_data = r#"<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">
   <text>Test</text>
 </svg>"#;
-        
+
         if let Some((w, h)) = extract_svg_dimensions(svg_data) {
             assert_eq!(w, 100.0);
             assert_eq!(h, 50.0);

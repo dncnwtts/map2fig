@@ -1,8 +1,8 @@
 use clap::Parser;
 use map2fig::cli::Args;
 use map2fig::cli_builder;
-use map2fig::setup;
 use map2fig::executor::{self, ExecutionConfig};
+use map2fig::setup;
 
 fn main() {
     if let Err(e) = run() {
@@ -38,6 +38,3 @@ fn run() -> Result<(), String> {
 
     Ok(())
 }
-
-
-

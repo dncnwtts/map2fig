@@ -52,11 +52,11 @@ const JPLL: [i64; 12] = [1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7];
 use std::fs::File;
 use std::io::BufReader;
 
-use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::header::Header;
+use fitsrs::{Fits, HDU, card::Value};
 
 use crate::rotation::CoordSystem;
-use crate::rotation::{vec_to_sph,sph_to_vec};
+use crate::rotation::{sph_to_vec, vec_to_sph};
 
 /// HEALPix pixel ordering scheme.
 ///
@@ -90,9 +90,6 @@ pub struct HealpixMeta {
     /// Coordinate system (Galactic, Equatorial, etc.)
     pub coord: CoordSystem,
 }
-
-
-
 
 /// Read HEALPix metadata from a FITS file.
 ///
@@ -152,19 +149,20 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
     let coord = match header.get("COORDSYS") {
         Some(Value::String { value, .. }) => match value.trim() {
             "C" | "CEL" | "CELESTIAL" => CoordSystem::C,
-            "G" | "GAL" | "GALACTIC"  => CoordSystem::G,
-            "E" | "ECL" | "ECLIPTIC"  => CoordSystem::E,
+            "G" | "GAL" | "GALACTIC" => CoordSystem::G,
+            "E" | "ECL" | "ECLIPTIC" => CoordSystem::E,
             _ => CoordSystem::G, // HEALPix default
         },
         None => CoordSystem::G, // HEALPix convention
         _ => todo!(),
     };
 
-    Some(HealpixMeta { ordering, nside, coord})
+    Some(HealpixMeta {
+        ordering,
+        nside,
+        coord,
+    })
 }
-
-
-
 
 #[inline]
 pub fn is_seen(v: f64) -> bool {
@@ -188,7 +186,6 @@ fn ang2pix(meta: HealpixMeta, theta: f64, phi: f64) -> i64 {
     }
 }
 
-
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
     let ncap = 2 * nside * (nside - 1);
@@ -202,7 +199,6 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
         let z = 1.0 - (iring * iring) as f64 * fact2;
         let phi = (iphi as f64 - 0.5) * HALF_PI / iring as f64;
         (z, phi)
-
     } else if ipix < (npix - ncap) {
         // Equatorial region
         let fact1 = (2 * nside) as f64 * fact2;
@@ -216,7 +212,6 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
         let z = (nl2 - iring) as f64 * fact1;
         let phi = (iphi as f64 - fodd) * PI / nl2 as f64;
         (z, phi)
-
     } else {
         // South polar cap
         let ip = npix - ipix;
@@ -272,8 +267,6 @@ fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
     }
 }
 
-
-
 fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
     let nl4 = 4 * nside;
@@ -297,8 +290,12 @@ fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     };
 
     let mut jp = (JPLL[face] * nr + ix - iy + 1 + kshift) / 2;
-    if jp > nl4 { jp -= nl4; }
-    if jp < 1   { jp += nl4; }
+    if jp > nl4 {
+        jp -= nl4;
+    }
+    if jp < 1 {
+        jp += nl4;
+    }
 
     let phi = (jp as f64 - 0.5 * (kshift + 1) as f64) * HALF_PI / nr as f64;
     let theta = z.acos();
@@ -351,8 +348,12 @@ fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
         let mut jp = (tp * tmp).floor() as i64;
         let mut jm = ((1.0 - tp) * tmp).floor() as i64;
 
-        if jp >= nside { jp = nside - 1; }
-        if jm >= nside { jm = nside - 1; }
+        if jp >= nside {
+            jp = nside - 1;
+        }
+        if jm >= nside {
+            jm = nside - 1;
+        }
 
         if z >= 0.0 {
             face = ntt as usize;
@@ -367,9 +368,6 @@ fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
 
     xyf2nest(nside, ix, iy, face)
 }
-
-
-
 
 /// Convert (ix, iy, face) → NESTED pixel index
 fn xyf2nest(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
@@ -418,22 +416,13 @@ fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
         (nr, 0, 2 * nr * (nr - 1))
     } else if jr > 3 * nside {
         let nr = nl4 - jr;
-        (
-            nr,
-            0,
-            12 * nside * nside - 2 * (nr + 1) * nr,
-        )
+        (nr, 0, 12 * nside * nside - 2 * (nr + 1) * nr)
     } else {
         let ncap = 2 * nside * (nside - 1);
-        (
-            nside,
-            (jr - nside) & 1,
-            ncap + (jr - nside) * nl4,
-        )
+        (nside, (jr - nside) & 1, ncap + (jr - nside) * nl4)
     };
 
-    let mut jp =
-        (JPLL[face] * nr + ix - iy + 1 + kshift) / 2;
+    let mut jp = (JPLL[face] * nr + ix - iy + 1 + kshift) / 2;
 
     if jp > nl4 {
         jp -= nl4;
@@ -443,7 +432,6 @@ fn xyf2ring(nside: i64, ix: i64, iy: i64, face: usize) -> i64 {
 
     n_before + jp - 1
 }
-
 
 fn ring2xyf(nside: i64, pix: i64) -> (i64, i64, usize) {
     let ncap = 2 * nside * (nside - 1);
@@ -510,14 +498,8 @@ fn isqrt(x: i64) -> i64 {
 }
 
 fn special_div(a: i64, b: i64) -> i64 {
-    if a >= 0 {
-        a / b
-    } else {
-        -((-a - 1) / b) - 1
-    }
+    if a >= 0 { a / b } else { -((-a - 1) / b) - 1 }
 }
-
-
 
 /// Convert a nested pixel index to a ring pixel index
 #[allow(dead_code)]
@@ -598,7 +580,6 @@ pub fn sample_healpix_index(
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_xyf_nest_invertibility_small() {
@@ -682,7 +663,6 @@ fn test_nest_ring_roundtrip_simple() {
     }
 }
 
-
 #[test]
 fn test_ang_roundtrip_nest() {
     let nside = 16;
@@ -694,7 +674,6 @@ fn test_ang_roundtrip_nest() {
         assert_eq!(ipix, ipix2);
     }
 }
-
 
 #[test]
 fn test_random_angles() {
@@ -713,7 +692,6 @@ fn test_random_angles() {
     }
 }
 
-
 #[test]
 fn test_ang_pix_ang_consistency() {
     let nside = 8;
@@ -723,7 +701,12 @@ fn test_ang_pix_ang_consistency() {
     for pix in 0..npix {
         let (theta, phi) = pix2ang_ring(nside, pix);
         let pix2 = ang2pix_ring(nside, theta, phi);
-        let d = ang_dist(theta, phi, pix2ang_ring(nside, pix2).0, pix2ang_ring(nside, pix2).1);
+        let d = ang_dist(
+            theta,
+            phi,
+            pix2ang_ring(nside, pix2).0,
+            pix2ang_ring(nside, pix2).1,
+        );
         assert!(d < EPSILON, "Too far: d={}", d);
     }
 }
@@ -740,15 +723,24 @@ fn test_is_seen_filters_fits_class_unseen_value() {
     // of the UNSEEN value: -1.637499996306027e+30 vs -1.6375e30
     // Our filter should catch both due to using -1e30 threshold
     let class_unseen = -1.637499996306027e30;
-    assert!(!is_seen(class_unseen), "CLASS FITS UNSEEN value should be filtered");
+    assert!(
+        !is_seen(class_unseen),
+        "CLASS FITS UNSEEN value should be filtered"
+    );
 }
 
 #[test]
 fn test_is_seen_filters_very_negative_values() {
     // Any value much more negative than -1e30 should be filtered
     assert!(!is_seen(-2.0e30), "Very negative values should be filtered");
-    assert!(!is_seen(-1.5e30), "Values near UNSEEN threshold should be filtered");
-    assert!(!is_seen(f64::NEG_INFINITY), "Negative infinity should be filtered (non-finite)");
+    assert!(
+        !is_seen(-1.5e30),
+        "Values near UNSEEN threshold should be filtered"
+    );
+    assert!(
+        !is_seen(f64::NEG_INFINITY),
+        "Negative infinity should be filtered (non-finite)"
+    );
 }
 
 #[test]
@@ -766,11 +758,11 @@ fn test_is_seen_filters_non_finite() {
     // Non-finite values should be filtered regardless of magnitude
     assert!(!is_seen(f64::NAN), "NaN should be filtered");
     assert!(!is_seen(f64::INFINITY), "Infinity should be filtered");
-    assert!(!is_seen(f64::NEG_INFINITY), "Negative infinity should be filtered");
+    assert!(
+        !is_seen(f64::NEG_INFINITY),
+        "Negative infinity should be filtered"
+    );
 }
-
-
-
 
 #[test]
 fn test_pix_ang_pix_roundtrip_ring() {
@@ -789,7 +781,7 @@ pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
     // For very high resolution maps, we want to downgrade to improve cache performance
     // Target around 1024 nside for typical plot sizes
     let pixels = (width * height) as f64;
-    let target_resolution = pixels.sqrt(); 
+    let target_resolution = pixels.sqrt();
     let target_nside = target_resolution.round() as i64;
     // Ensure nside is a power of 2
     let mut nside = 1;
@@ -835,8 +827,11 @@ fn downgrade_healpix_map_ang(
                 let d_theta = (i as f64 + 0.5) * step - 0.5;
                 let d_phi = (j as f64 + 0.5) * step - 0.5;
 
-                let sample_theta = (theta + d_theta * std::f64::consts::PI / (2.0 * target_nside as f64)).clamp(0.0, std::f64::consts::PI);
-                let sample_phi = (phi + d_phi * 2.0 * std::f64::consts::PI / target_nside as f64).rem_euclid(2.0 * std::f64::consts::PI);
+                let sample_theta = (theta
+                    + d_theta * std::f64::consts::PI / (2.0 * target_nside as f64))
+                    .clamp(0.0, std::f64::consts::PI);
+                let sample_phi = (phi + d_phi * 2.0 * std::f64::consts::PI / target_nside as f64)
+                    .rem_euclid(2.0 * std::f64::consts::PI);
 
                 let source_pix = match ordering {
                     HealpixOrdering::Ring => ang2pix_ring(source_nside, sample_theta, sample_phi),
@@ -850,13 +845,15 @@ fn downgrade_healpix_map_ang(
             }
         }
 
-        *result_elem = if count > 0 { sum / count as f64 } else { HPX_UNSEEN };
+        *result_elem = if count > 0 {
+            sum / count as f64
+        } else {
+            HPX_UNSEEN
+        };
     }
 
     result
 }
-
-
 
 fn downgrade_healpix_map_xyf(
     map: &[f64],
@@ -869,7 +866,7 @@ fn downgrade_healpix_map_xyf(
     }
     assert_eq!(source_nside % target_nside, 0);
 
-    let fact = source_nside / target_nside ;
+    let fact = source_nside / target_nside;
     let min_hits = 1;
     let target_npix = (12 * target_nside * target_nside) as usize;
     let mut result = vec![HPX_UNSEEN; target_npix];
@@ -891,12 +888,8 @@ fn downgrade_healpix_map_xyf(
         for j in y0..(y0 + fact) {
             for i in x0..(x0 + fact) {
                 let source_pix = match ordering {
-                    HealpixOrdering::Ring => {
-                        xyf2ring(source_nside, i, j, face)
-                    }
-                    HealpixOrdering::Nested => {
-                        xyf2nest(source_nside, i, j, face)
-                    }
+                    HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                    HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
                 } as usize;
 
                 let val = map[source_pix];

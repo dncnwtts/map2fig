@@ -1,22 +1,23 @@
-use image::{RgbaImage, Rgba};
+use super::{
+    DebugOverlay, MollweideScale, blit_grid_to_sink, draw_debug_overlay_raster,
+    draw_figure_labels_png, fill_grid_background, percentile, render_projection_to_grid,
+};
 use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
-use crate::render::pdf::{draw_projection_border_pdf, draw_colorbar_pdf};
-use crate::scale::{Scale, generate_colorbar_ticks, build_histogram_scale, HistogramRange, unsafe_float_cmp};
-use crate::layout::{compute_mollweide_layout, MollweideLayout};
+use crate::healpix::is_seen;
+use crate::layout::{MollweideLayout, compute_mollweide_layout};
+use crate::params::MollweideParams;
+use crate::render::pdf::{draw_colorbar_pdf, draw_projection_border_pdf};
+use crate::render::raster::RasterGrid;
+use crate::rotation::CoordSystem;
+use crate::scale::{
+    HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
+};
+use crate::{CairoImageSink, PixelSink, PngSink};
+use cairo::{Context, Format, ImageSurface, PdfSurface};
+use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
-use crate::{PixelSink, CairoImageSink, PngSink};
-use crate::healpix::is_seen;
-use crate::render::raster::RasterGrid;
-use cairo::{Context, PdfSurface, ImageSurface, Format};
 use std::path::Path;
-use crate::rotation::CoordSystem;
-use crate::params::MollweideParams;
-use super::{
-    percentile, draw_figure_labels_png, render_projection_to_grid,
-    blit_grid_to_sink, fill_grid_background, draw_debug_overlay_raster,
-    DebugOverlay, MollweideScale,
-};
 
 pub fn compute_mollweide_scale(
     map: &[f64],
@@ -25,11 +26,7 @@ pub fn compute_mollweide_scale(
     gamma: f64,
     scale: Scale,
 ) -> MollweideScale {
-    let mut values: Vec<f64> = map
-        .iter()
-        .filter(|v| is_seen(**v))
-        .copied()
-        .collect();
+    let mut values: Vec<f64> = map.iter().filter(|v| is_seen(**v)).copied().collect();
 
     if values.is_empty() {
         panic!("Map contains no valid HEALPix values");
@@ -50,10 +47,7 @@ pub fn compute_mollweide_scale(
         // 🟢 All other scales keep percentile default
         _ => match (minv, maxv) {
             (Some(lo), Some(hi)) => (lo, hi),
-            _ => (
-                percentile(&values, 5.0),
-                percentile(&values, 95.0),
-            ),
+            _ => (percentile(&values, 5.0), percentile(&values, 95.0)),
         },
     };
 
@@ -149,13 +143,13 @@ where
     let dmer_deg = params.graticule.dmer_deg;
     let mask = params.display.mask.as_ref();
 
-    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
+    let (layout, cb_layout) = compute_mollweide_layout(
+        width as f64,
+        show_colorbar,
+        params.display.tick_direction.clone(),
+    );
 
-    let mut values: Vec<f64> = map
-        .iter()
-        .filter(|&v| is_seen(*v))
-        .copied()
-        .collect();
+    let mut values: Vec<f64> = map.iter().filter(|&v| is_seen(*v)).copied().collect();
 
     if values.is_empty() {
         panic!("Map contains no valid HEALPix values");
@@ -163,11 +157,8 @@ where
 
     values.sort_unstable_by(unsafe_float_cmp);
 
-    let surface_pdf = PdfSurface::new(
-        layout.width,
-        layout.height,
-        filename,
-    ).expect("Failed to create PDF surface");
+    let surface_pdf = PdfSurface::new(layout.width, layout.height, filename)
+        .expect("Failed to create PDF surface");
 
     let cr_pdf = Context::new(&surface_pdf).unwrap();
 
@@ -182,7 +173,8 @@ where
         Format::ARgb32,
         (layout.map_w + 2.0 * layout.map_pad) as i32,
         (layout.map_h + 2.0 * layout.map_pad) as i32,
-    ).expect("Failed to create image surface");
+    )
+    .expect("Failed to create image surface");
 
     let cr_img = Context::new(&surface_img).unwrap();
 
@@ -198,14 +190,15 @@ where
 
     let hist_scale_opt = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
-            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit {
+                min: minv,
+                max: maxv,
+            },
             _ => HistogramRange::Full,
         };
 
         Some(build_histogram_scale(
-            map,
-            range,
-            1024, // number of bins
+            map, range, 1024, // number of bins
         ))
     } else {
         None
@@ -240,16 +233,15 @@ where
     surface_img.flush();
 
     // Embed raster into PDF
-    let _ = cr_pdf.set_source_surface(
-        &surface_img,
-        layout.map_x,
-        layout.map_y,
-    );
+    let _ = cr_pdf.set_source_surface(&surface_img, layout.map_x, layout.map_y);
     cr_pdf.paint().unwrap();
 
     // Draw graticule BEFORE border (so border appears on top)
     if show_graticule {
-        use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
+        use crate::graticule::{
+            render_graticule_cairo, render_graticule_cairo_with_color,
+            render_graticule_mollweide_vectorized,
+        };
 
         let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
 
@@ -356,8 +348,11 @@ pub enum ProjectionType {
     Hammer,
 }
 
-pub fn _plot_mollweide_png_impl_projected<F>(params: MollweideParams, pixel_renderer: F, projection: ProjectionType)
-where
+pub fn _plot_mollweide_png_impl_projected<F>(
+    params: MollweideParams,
+    pixel_renderer: F,
+    projection: ProjectionType,
+) where
     F: Fn(
         crate::params::RenderMollweideParams,
         MollweideLayout,
@@ -391,17 +386,16 @@ where
     let dmer_deg = params.graticule.dmer_deg;
     let mask = params.display.mask.as_ref();
 
-    let (layout, cb_layout) = compute_mollweide_layout(width as f64, show_colorbar, params.display.tick_direction.clone());
+    let (layout, cb_layout) = compute_mollweide_layout(
+        width as f64,
+        show_colorbar,
+        params.display.tick_direction.clone(),
+    );
 
     let font_data = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8])
-        .expect("Failed to load font");
+    let font = Font::try_from_bytes(font_data as &[u8]).expect("Failed to load font");
 
-    let mut values: Vec<f64> = map
-        .iter()
-        .filter(|&v| is_seen(*v))
-        .copied()
-        .collect();
+    let mut values: Vec<f64> = map.iter().filter(|&v| is_seen(*v)).copied().collect();
 
     if values.is_empty() {
         panic!("Map contains no valid HEALPix values");
@@ -409,8 +403,12 @@ where
 
     values.sort_unstable_by(unsafe_float_cmp);
 
-    let bg = Rgba([bg_color[0], bg_color[1], bg_color[2],
-        if transparent { 0 } else { 255 }]);
+    let bg = Rgba([
+        bg_color[0],
+        bg_color[1],
+        bg_color[2],
+        if transparent { 0 } else { 255 },
+    ]);
 
     let mut img = RgbaImage::from_pixel(layout.width as u32, layout.height as u32, bg);
 
@@ -418,14 +416,15 @@ where
 
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
-            (Some(minv), Some(maxv)) => HistogramRange::Explicit { min: minv, max: maxv },
+            (Some(minv), Some(maxv)) => HistogramRange::Explicit {
+                min: minv,
+                max: maxv,
+            },
             _ => HistogramRange::Full,
         };
 
         Some(build_histogram_scale(
-            map,
-            range,
-            1024, // number of bins
+            map, range, 1024, // number of bins
         ))
     } else {
         None
@@ -463,18 +462,14 @@ where
     );
 
     if draw_border || show_graticule {
-        use cairo::{ImageSurface, Context, Format};
+        use cairo::{Context, Format, ImageSurface};
 
         // Creating a padded surface (shared for both border and graticule)
         let pad = layout.border_width_px.ceil() as i32;
         let surf_w = layout.map_w as i32 + 2 * pad;
         let surf_h = layout.map_h as i32 + 2 * pad;
 
-        let mut border_surf = ImageSurface::create(
-            Format::ARgb32,
-            surf_w,
-            surf_h,
-        ).unwrap();
+        let mut border_surf = ImageSurface::create(Format::ARgb32, surf_w, surf_h).unwrap();
 
         {
             let border_cr = Context::new(&border_surf).unwrap();
@@ -484,7 +479,10 @@ where
 
             // Draw graticule using Cairo (anti-aliased) before border
             if show_graticule {
-                use crate::graticule::{render_graticule_mollweide_vectorized, render_graticule_hammer_vectorized, render_graticule_cairo, render_graticule_cairo_with_color};
+                use crate::graticule::{
+                    render_graticule_cairo, render_graticule_cairo_with_color,
+                    render_graticule_hammer_vectorized, render_graticule_mollweide_vectorized,
+                };
 
                 let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
 
@@ -673,7 +671,8 @@ where
             }
 
             // Draw label
-            let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
+            let label =
+                format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
             let font_scale = FontScale::uniform(cb_layout.tick_font_size as f32);
 
             // Measure actual text width using font metrics
@@ -761,40 +760,47 @@ where
     }
 
     // Draw units label below colorbar
-    if show_colorbar
-        && let Some(units_str) = units
-    {
+    if show_colorbar && let Some(units_str) = units {
         let scale = layout.width / 1200.0;
         let units_y = (cb_layout.tick_label_pad + 30.0 * scale) as i32;
 
         if latex_rendering {
             // Scale LaTeX font size with width (reduced for appropriate sizing)
-            let latex_font_size = (cb_layout.tick_font_size * 0.467).round().clamp(3.0, 24.0) as u32;
+            let latex_font_size =
+                (cb_layout.tick_font_size * 0.467).round().clamp(3.0, 24.0) as u32;
             // Try to render LaTeX and composite onto image
-            if let Some(rendered) = crate::latex_render::render_latex_to_png(units_str, latex_font_size) {
+            if let Some(rendered) =
+                crate::latex_render::render_latex_to_png(units_str, latex_font_size)
+            {
                 // Composite the rendered LaTeX PNG onto the main image
                 let latex_img = image::load_from_memory(&rendered.image_data)
                     .expect("Failed to load rendered LaTeX");
                 let latex_rgba = latex_img.to_rgba8();
 
                 // Center horizontally
-                let x_offset = (layout.cbar_pad + layout.cbar_w / 2.0 - latex_rgba.width() as f64 / 2.0) as i32;
+                let x_offset = (layout.cbar_pad + layout.cbar_w / 2.0
+                    - latex_rgba.width() as f64 / 2.0) as i32;
 
                 // Composite with alpha blending
                 for (lx, ly, pixel) in latex_rgba.enumerate_pixels() {
                     let img_x = x_offset + lx as i32;
                     let img_y = units_y + ly as i32;
 
-                    if img_x >= 0 && img_x < layout.width as i32 &&
-                        img_y >= 0 && img_y < layout.height as i32
+                    if img_x >= 0
+                        && img_x < layout.width as i32
+                        && img_y >= 0
+                        && img_y < layout.height as i32
                     {
                         let alpha = pixel[3] as f32 / 255.0;
                         if alpha > 0.01 {
                             let existing = img.get_pixel(img_x as u32, img_y as u32);
                             let blended = Rgba([
-                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha)) as u8),
-                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha)) as u8),
+                                ((pixel[0] as f32 * alpha + existing[0] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[1] as f32 * alpha + existing[1] as f32 * (1.0 - alpha))
+                                    as u8),
+                                ((pixel[2] as f32 * alpha + existing[2] as f32 * (1.0 - alpha))
+                                    as u8),
                                 255,
                             ]);
                             img.put_pixel(img_x as u32, img_y as u32, blended);
@@ -809,9 +815,10 @@ where
                     .strip_suffix('$')
                     .unwrap_or(units_str);
 
-                let text_width_est = (units_label.len() as f32 *
-                    cb_layout.tick_font_size as f32 * 0.6) as i32;
-                let center_x = (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                let text_width_est =
+                    (units_label.len() as f32 * cb_layout.tick_font_size as f32 * 0.6) as i32;
+                let center_x =
+                    (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
 
                 draw_text_mut(
                     &mut img,
@@ -826,9 +833,10 @@ where
         } else {
             // Non-LaTeX: render as plain text
             if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
-                let text_width_est = (units_label.len() as f32 *
-                    cb_layout.tick_font_size as f32 * 0.6) as i32;
-                let center_x = (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+                let text_width_est =
+                    (units_label.len() as f32 * cb_layout.tick_font_size as f32 * 0.6) as i32;
+                let center_x =
+                    (layout.cbar_pad + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
 
                 draw_text_mut(
                     &mut img,

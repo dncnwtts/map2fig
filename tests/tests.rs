@@ -1,14 +1,8 @@
 use std::str::FromStr;
 
-use map2fig::{
-    cli::InputColor, NegMode, PixelValue,
-    RgbaArg, generate_index_map,
-};
+use map2fig::{NegMode, PixelValue, RgbaArg, cli::InputColor, generate_index_map};
 
 use map2fig::scale::{Scale, scale_value};
-
-
-
 
 /// ----------------------------
 /// Test RGBAArg parsing
@@ -16,7 +10,7 @@ use map2fig::scale::{Scale, scale_value};
 #[test]
 fn test_rgbaarg_from_str() {
     let rgba = RgbaArg::from_str("10,20,30,40").unwrap();
-    assert_eq!((rgba.r, rgba.g, rgba.b, rgba.a), (10,20,30,40));
+    assert_eq!((rgba.r, rgba.g, rgba.b, rgba.a), (10, 20, 30, 40));
 
     assert!(RgbaArg::from_str("10,20,30").is_err());
     assert!(RgbaArg::from_str("a,b,c,d").is_err());
@@ -27,10 +21,18 @@ fn test_rgbaarg_from_str() {
 /// ----------------------------
 #[test]
 fn test_bad_color_parse() {
-    assert!(matches!(InputColor::from_str("gray").unwrap(), InputColor::Gray));
-    assert!(matches!(InputColor::from_str("grey").unwrap(), InputColor::Gray));
-    assert!(matches!(InputColor::from_str("255,128,0,255").unwrap(),
-        InputColor::Rgba(255,128,0,255)));
+    assert!(matches!(
+        InputColor::from_str("gray").unwrap(),
+        InputColor::Gray
+    ));
+    assert!(matches!(
+        InputColor::from_str("grey").unwrap(),
+        InputColor::Gray
+    ));
+    assert!(matches!(
+        InputColor::from_str("255,128,0,255").unwrap(),
+        InputColor::Rgba(255, 128, 0, 255)
+    ));
 }
 
 /// ----------------------------
@@ -65,7 +67,14 @@ fn test_scale_value_transformations() {
     }
 
     // Asinh scale
-    let t = scale_value(50.0, min, max, Scale::Asinh { scale: 10.0 }, NegMode::Zero, None);
+    let t = scale_value(
+        50.0,
+        min,
+        max,
+        Scale::Asinh { scale: 10.0 },
+        NegMode::Zero,
+        None,
+    );
     match t {
         PixelValue::Color(c) => assert!(c > 0.0 && c < 1.0),
         _ => panic!(),
@@ -86,42 +95,51 @@ fn test_neg_mode_behavior() {
         PixelValue::Color(c) => assert_eq!(c, 0.0),
         _ => panic!(),
     }
-
 }
 
 #[test]
 fn test_plot_smoke() {
     use map2fig::healpix::{HealpixMeta, HealpixOrdering};
-    use map2fig::rotation::{CoordSystem,ViewTransform};
-    use map2fig::params::{PlotData, ScaleParams, ColorParams, DisplayParams, GraticuleParams, MollweideParams};
-    
+    use map2fig::params::{
+        ColorParams, DisplayParams, GraticuleParams, MollweideParams, PlotData, ScaleParams,
+    };
+    use map2fig::rotation::{CoordSystem, ViewTransform};
+
     let map = map2fig::generate_index_map(1);
     let cmap = map2fig::get_colormap("viridis");
-    let meta = HealpixMeta { ordering: HealpixOrdering::Ring, nside: 1, coord: CoordSystem::G};
+    let meta = HealpixMeta {
+        ordering: HealpixOrdering::Ring,
+        nside: 1,
+        coord: CoordSystem::G,
+    };
     let input = CoordSystem::G;
     let output = CoordSystem::G;
     let rot = None;
-    let view = ViewTransform::new(input,output,rot);
+    let view = ViewTransform::new(input, output, rot);
 
     let params = MollweideParams {
-        plot: PlotData { map: &map, width: 32, filename: "smoke.png".to_string() },
-        scale: ScaleParams { 
-            minv: None, 
-            maxv: None, 
-            gamma: 1.0, 
-            scale: map2fig::scale::Scale::Linear, 
-            neg_mode: map2fig::NegMode::Zero 
+        plot: PlotData {
+            map: &map,
+            width: 32,
+            filename: "smoke.png".to_string(),
         },
-        color: ColorParams { 
-            cmap, 
-            bad_color: image::Rgba([0, 0, 0, 0]), 
-            bg_color: image::Rgba([0, 0, 0, 0]) 
+        scale: ScaleParams {
+            minv: None,
+            maxv: None,
+            gamma: 1.0,
+            scale: map2fig::scale::Scale::Linear,
+            neg_mode: map2fig::NegMode::Zero,
         },
-        display: DisplayParams { 
-            show_colorbar: false, 
-            transparent: true, 
-            draw_border: false, 
-            latex_rendering: false, 
+        color: ColorParams {
+            cmap,
+            bad_color: image::Rgba([0, 0, 0, 0]),
+            bg_color: image::Rgba([0, 0, 0, 0]),
+        },
+        display: DisplayParams {
+            show_colorbar: false,
+            transparent: true,
+            draw_border: false,
+            latex_rendering: false,
             units: Some("str".to_string()),
             extend: map2fig::cli::Extend::None,
             tick_direction: map2fig::cli::TickDirection::Inward,
@@ -133,16 +151,16 @@ fn test_plot_smoke() {
             mask: None,
             title: None,
             show_title: true,
-                scale_text: true,
+            scale_text: true,
         },
-        graticule: GraticuleParams { 
-            show_graticule: false, 
-            grat_coord: None, 
-            grat_overlay: None, 
-            overlay_color: image::Rgba([255, 255, 0, 200]), 
-            show_labels: false, 
-            dpar_deg: 15.0, 
-            dmer_deg: 15.0 
+        graticule: GraticuleParams {
+            show_graticule: false,
+            grat_coord: None,
+            grat_overlay: None,
+            overlay_color: image::Rgba([255, 255, 0, 200]),
+            show_labels: false,
+            dpar_deg: 15.0,
+            dmer_deg: 15.0,
         },
         meta,
         view: &view,
@@ -150,4 +168,3 @@ fn test_plot_smoke() {
 
     map2fig::plot_mollweide_png(params);
 }
-

@@ -11,12 +11,10 @@ pub trait RenderBackend {
     fn draw_text(&mut self, x: f64, y: f64, size: f64, text: &str);
 }
 
-pub mod target;
-pub mod raster;
 pub mod pdf;
 pub mod png;
+pub mod raster;
+pub mod target;
 
-pub use raster::RasterBackend;
 pub use pdf::PdfBackend;
-
-
+pub use raster::RasterBackend;

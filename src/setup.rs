@@ -118,4 +118,4 @@ pub fn load_data(args: &Args, _verbose: bool) -> Result<crate::pipeline::Process
 }
 
 #[cfg(test)]
-    mod tests {}
+mod tests {}

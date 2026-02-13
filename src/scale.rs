@@ -25,10 +25,10 @@
 //! // Result: PixelValue::Color(0.5)
 //! ```
 
-use crate::PixelValue;
 use crate::NegMode;
-use crate::healpix::is_seen;
+use crate::PixelValue;
 use crate::colorbar::ColorbarTicks;
+use crate::healpix::is_seen;
 use std::cmp::Ordering;
 
 /// Direct float comparison using std::cmp for faster sorting.
@@ -64,29 +64,19 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
     if scale == &Scale::Log {
         let min = min.expect("log scale requires --min to be specified");
         if min <= 0.0 {
-            panic!(
-                "Invalid --min value for log scale: {} (must be > 0)",
-                min
-            );
+            panic!("Invalid --min value for log scale: {} (must be > 0)", min);
         }
     }
 
     if let (Some(min), Some(max)) = (min, max)
-        && min >= max {
-            panic!(
-                "Invalid scale range: min ({}) must be < max ({})",
-                min, max
-            );
-        }
+        && min >= max
+    {
+        panic!("Invalid scale range: min ({}) must be < max ({})", min, max);
+    }
 }
 
 #[allow(dead_code)]
-fn scale_t_to_value(
-    t: f64,
-    min: f64,
-    max: f64,
-    scale: Scale,
-) -> f64 {
+fn scale_t_to_value(t: f64, min: f64, max: f64, scale: Scale) -> f64 {
     match scale {
         Scale::Linear => min + t * (max - min),
         Scale::Log => {
@@ -104,12 +94,7 @@ fn scale_t_to_value(
 }
 
 #[allow(dead_code)]
-fn value_to_t(
-    value: f64,
-    min: f64,
-    max: f64,
-    scale: Scale,
-) -> Option<f64> {
+fn value_to_t(value: f64, min: f64, max: f64, scale: Scale) -> Option<f64> {
     match scale {
         Scale::Linear => Some((value - min) / (max - min)),
 
@@ -117,19 +102,11 @@ fn value_to_t(
             if value <= 0.0 || min <= 0.0 {
                 None
             } else {
-                Some(
-                    (value.ln() - min.ln()) /
-                    (max.ln() - min.ln())
-                )
+                Some((value.ln() - min.ln()) / (max.ln() - min.ln()))
             }
         }
 
-        Scale::Asinh { scale: s } => {
-            Some(
-                (value / s).asinh() /
-                (max / s).asinh()
-            )
-        }
+        Scale::Asinh { scale: s } => Some((value / s).asinh() / (max / s).asinh()),
 
         Scale::Symlog { linthresh } => {
             let f = |x: f64| {
@@ -139,10 +116,7 @@ fn value_to_t(
                     x.signum() * (x.abs() / linthresh).ln()
                 }
             };
-            Some(
-                (f(value) - f(min)) /
-                (f(max) - f(min))
-            )
+            Some((f(value) - f(min)) / (f(max) - f(min)))
         }
 
         Scale::PlanckLog { linthresh } => {
@@ -154,20 +128,16 @@ fn value_to_t(
                     x.signum() * (1.0 + (x.abs() / linthresh).ln())
                 }
             };
-            Some(
-                (f(value) - f(min)) /
-                (f(max) - f(min))
-            )
+            Some((f(value) - f(min)) / (f(max) - f(min)))
         }
 
-        Scale::Histogram => todo!()
+        Scale::Histogram => todo!(),
     }
 }
 
-
 pub struct HistogramScale {
-    pub values: Vec<f64>,   // sorted unique values or bin centers
-    pub cdf: Vec<f64>,      // monotonically increasing [0,1]
+    pub values: Vec<f64>, // sorted unique values or bin centers
+    pub cdf: Vec<f64>,    // monotonically increasing [0,1]
 
     pub minv: f64,
     pub maxv: f64,
@@ -179,7 +149,10 @@ impl HistogramScale {
             return None;
         }
 
-        match self.values.binary_search_by(|v| v.partial_cmp(&value).unwrap()) {
+        match self
+            .values
+            .binary_search_by(|v| v.partial_cmp(&value).unwrap())
+        {
             Ok(i) => Some(self.cdf[i]),
             Err(i) => {
                 if i == 0 {
@@ -270,10 +243,7 @@ impl HistogramScale {
         }
 
         // 4. Normalize to [0,1]
-        let max_d = dvdt
-            .iter()
-            .cloned()
-            .fold(0.0_f64, f64::max);
+        let max_d = dvdt.iter().cloned().fold(0.0_f64, f64::max);
 
         if max_d > 0.0 {
             for d in dvdt.iter_mut() {
@@ -285,7 +255,6 @@ impl HistogramScale {
     }
 }
 
-
 #[derive(Clone, Copy, Debug)]
 pub enum HistogramRange {
     Percentile { low: f64, high: f64 },
@@ -293,11 +262,7 @@ pub enum HistogramRange {
     Full,
 }
 
-pub fn build_histogram_scale(
-    map: &[f64],
-    range: HistogramRange,
-    bins: usize,
-) -> HistogramScale {
+pub fn build_histogram_scale(map: &[f64], range: HistogramRange, bins: usize) -> HistogramScale {
     // 1. Filter valid values only
     let mut vals: Vec<f64> = map.iter().copied().filter(|v| is_seen(*v)).collect();
     if vals.is_empty() {
@@ -324,9 +289,17 @@ pub fn build_histogram_scale(
     };
 
     // 3. Filter to minv/maxv range for histogram LUT
-    let vals: Vec<f64> = vals.into_iter().filter(|v| *v >= minv && *v <= maxv).collect();
+    let vals: Vec<f64> = vals
+        .into_iter()
+        .filter(|v| *v >= minv && *v <= maxv)
+        .collect();
     if vals.is_empty() {
-        return HistogramScale { values: vec![], cdf: vec![], minv, maxv };
+        return HistogramScale {
+            values: vec![],
+            cdf: vec![],
+            minv,
+            maxv,
+        };
     }
 
     // 4. Downsample to bins
@@ -342,20 +315,19 @@ pub fn build_histogram_scale(
         cdf.push(t.min(1.0));
     }
 
-    HistogramScale { values, cdf, minv, maxv }
+    HistogramScale {
+        values,
+        cdf,
+        minv,
+        maxv,
+    }
 }
-
 
 const TARGET_MAJOR_TICKS: usize = 7;
 
-
 fn uniform_quantiles(n: usize) -> Vec<f64> {
-    (0..n)
-        .map(|i| i as f64 / (n - 1) as f64)
-        .collect()
+    (0..n).map(|i| i as f64 / (n - 1) as f64).collect()
 }
-
-
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Scale {
@@ -367,7 +339,6 @@ pub enum Scale {
     Histogram,
 }
 
-
 pub fn generate_colorbar_ticks(
     min: f64,
     max: f64,
@@ -375,9 +346,7 @@ pub fn generate_colorbar_ticks(
     hist: Option<&HistogramScale>,
 ) -> ColorbarTicks {
     if scale == &Scale::Histogram {
-        let ticks = histogram_ticks(
-            hist.expect("Histogram ticks require histogram scale")
-        );
+        let ticks = histogram_ticks(hist.expect("Histogram ticks require histogram scale"));
         return ticks;
     }
 
@@ -405,8 +374,6 @@ pub fn generate_colorbar_ticks(
     ticks
 }
 
-
-
 fn histogram_major_ticks(hist: &HistogramScale) -> (Vec<f64>, Vec<f64>) {
     let mut values = Vec::new();
     let mut positions = Vec::new();
@@ -421,10 +388,7 @@ fn histogram_major_ticks(hist: &HistogramScale) -> (Vec<f64>, Vec<f64>) {
     (values, positions)
 }
 
-fn histogram_minor_ticks(
-    hist: &HistogramScale,
-    _major_q: &[f64],
-) -> (Vec<f64>, Vec<f64>) {
+fn histogram_minor_ticks(hist: &HistogramScale, _major_q: &[f64]) -> (Vec<f64>, Vec<f64>) {
     let mut values = Vec::new();
     let mut positions = Vec::new();
 
@@ -447,11 +411,9 @@ fn histogram_minor_ticks(
     (values, positions)
 }
 
-
 fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
     let (major_values, major_positions) = histogram_major_ticks(hist);
-    let (minor_values, minor_positions) =
-        histogram_minor_ticks(hist, &major_positions);
+    let (minor_values, minor_positions) = histogram_minor_ticks(hist, &major_positions);
 
     ColorbarTicks {
         major_values,
@@ -461,26 +423,15 @@ fn histogram_ticks(hist: &HistogramScale) -> ColorbarTicks {
     }
 }
 
-
-fn scale_position(
-    value: f64,
-    min: f64,
-    max: f64,
-    scale: &Scale,
-) -> Option<f64> {
+fn scale_position(value: f64, min: f64, max: f64, scale: &Scale) -> Option<f64> {
     match scale {
-        Scale::Linear => {
-            Some(((value - min) / (max - min)).clamp(0.0, 1.0))
-        }
+        Scale::Linear => Some(((value - min) / (max - min)).clamp(0.0, 1.0)),
 
         Scale::Log => {
             if value <= 0.0 || min <= 0.0 {
                 None
             } else {
-                Some(
-                    ((value.ln() - min.ln()) / (max.ln() - min.ln()))
-                        .clamp(0.0, 1.0),
-                )
+                Some(((value.ln() - min.ln()) / (max.ln() - min.ln())).clamp(0.0, 1.0))
             }
         }
 
@@ -495,16 +446,16 @@ fn scale_position(
             let v = value;
             let sign = v.signum();
             let abs = v.abs();
-        
+
             let max_abs = max.abs().max(min.abs());
             if max_abs <= *linthresh {
                 return Some(0.5);
             }
-        
+
             let log_max = (max_abs / linthresh).ln();
             let linear_width = *linthresh;
             let total = linear_width + log_max;
-        
+
             let mapped = if abs <= *linthresh {
                 // Linear core
                 0.5 + 0.5 * (v / total)
@@ -513,17 +464,23 @@ fn scale_position(
                 let log_part = (abs / linthresh).ln();
                 0.5 + 0.5 * sign * (linear_width + log_part) / total
             };
-        
+
             Some(mapped.clamp(0.0, 1.0))
         }
 
-
         Scale::PlanckLog { linthresh } => {
             // identical behavior for ticks
-            scale_position(value, min, max, &Scale::Symlog { linthresh: *linthresh })
+            scale_position(
+                value,
+                min,
+                max,
+                &Scale::Symlog {
+                    linthresh: *linthresh,
+                },
+            )
         }
 
-        Scale::Histogram => todo!() // intentionally unsupported here
+        Scale::Histogram => todo!(), // intentionally unsupported here
     }
 }
 
@@ -612,7 +569,6 @@ fn asinh_ticks(min: f64, max: f64, scale: f64) -> ColorbarTicks {
     symlog_ticks(min, max, scale)
 }
 
-
 fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
     let mut major_values = vec![0.0, linthresh, -linthresh];
     let mut minor_values = Vec::new();
@@ -621,7 +577,7 @@ fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
     let n = 4;
     let step = linthresh / n as f64;
 
-    for i in (-n+1)..=(n-1) {
+    for i in (-n + 1)..=(n - 1) {
         let v = i as f64 * step;
         if v != 0.0 {
             minor_values.push(v);
@@ -660,10 +616,6 @@ fn symlog_ticks(min: f64, max: f64, linthresh: f64) -> ColorbarTicks {
     }
 }
 
-
-
-
-
 #[inline]
 pub fn scale_value(
     value: f64,
@@ -675,7 +627,10 @@ pub fn scale_value(
 ) -> PixelValue {
     if min > max {
         if std::env::var("FUZZ_SILENT").is_err() {
-            eprintln!("WARNING: scale_value called with min > max ({} > {}), swapping automatically", min, max);
+            eprintln!(
+                "WARNING: scale_value called with min > max ({} > {}), swapping automatically",
+                min, max
+            );
         }
         std::mem::swap(&mut min, &mut max);
     }
@@ -693,7 +648,7 @@ pub fn scale_value(
     if !is_seen(value) {
         return PixelValue::Bad;
     }
-    
+
     // Fast path for linear scale (most common case)
     if matches!(scale, Scale::Linear) {
         let t = if value <= min {
@@ -705,7 +660,7 @@ pub fn scale_value(
         };
         return PixelValue::Color(t);
     }
-    
+
     let t = match scale {
         Scale::Linear => unreachable!(),
 
@@ -726,40 +681,33 @@ pub fn scale_value(
             }
         }
 
-    
         Scale::Asinh { scale } => {
             let val = (value / scale).asinh();
             let min_val = (min / scale).asinh();
             let max_val = (max / scale).asinh();
             (val - min_val) / (max_val - min_val)
         }
-    
+
         // ✅ Symlog explicitly supports negative values
         Scale::Symlog { linthresh } => {
             let abs_val = value.abs();
             let max_abs = max.abs();
-    
+
             if abs_val < linthresh {
                 0.5 + 0.5 * (value / linthresh)
             } else {
-                0.5
-                    + 0.5
-                        * value.signum()
-                        * (linthresh + (abs_val - linthresh).ln())
-                        / (linthresh + (max_abs - linthresh).ln())
+                0.5 + 0.5 * value.signum() * (linthresh + (abs_val - linthresh).ln())
+                    / (linthresh + (max_abs - linthresh).ln())
             }
         }
-    
+
         // ✅ PlanckLog also symmetric
         Scale::PlanckLog { linthresh } => {
             if value.abs() < linthresh {
                 0.5 + 0.5 * (value / linthresh)
             } else {
-                0.5
-                    + 0.5
-                        * value.signum()
-                        * (linthresh + (value.abs() - linthresh).ln())
-                        / (linthresh + (max - linthresh).ln())
+                0.5 + 0.5 * value.signum() * (linthresh + (value.abs() - linthresh).ln())
+                    / (linthresh + (max - linthresh).ln())
             }
         }
 
@@ -772,8 +720,11 @@ pub fn scale_value(
             if value >= hist.maxv {
                 return PixelValue::Color(1.0);
             }
-        
-            match hist.values.binary_search_by(|v| v.partial_cmp(&value).unwrap()) {
+
+            match hist
+                .values
+                .binary_search_by(|v| v.partial_cmp(&value).unwrap())
+            {
                 Ok(i) => hist.cdf[i],
                 Err(i) => {
                     if i == 0 {
@@ -786,14 +737,10 @@ pub fn scale_value(
                 }
             }
         }
-
-
     };
-    
+
     PixelValue::Color(t.clamp(0.0, 1.0))
-
 }
-
 
 #[test]
 fn linear_underflow_always_saturates() {
@@ -803,4 +750,3 @@ fn linear_underflow_always_saturates() {
         _ => panic!("Linear underflow should saturate, not go Bad"),
     }
 }
-

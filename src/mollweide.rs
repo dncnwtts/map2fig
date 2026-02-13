@@ -1,6 +1,6 @@
-use std::f64::consts::PI;
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
+use std::f64::consts::PI;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MollweideProjection;
@@ -54,19 +54,13 @@ impl Projection for MollweideProjection {
         let u = (2.0 - x) * 0.25;
         let v = (1.0 - y) * 0.5;
 
-
         if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
             return None;
         }
 
         Some((u, v))
     }
-    fn pixel_to_ang(
-        &self,
-        x: u32,
-        y: u32,
-        grid: &RasterGrid,
-    ) -> Option<(f64, f64)> {
+    fn pixel_to_ang(&self, x: u32, y: u32, grid: &RasterGrid) -> Option<(f64, f64)> {
         let nx = grid.norm_x(x);
         let ny = grid.norm_y(y);
 
@@ -95,11 +89,6 @@ impl Projection for MollweideProjection {
     }
 }
 
-
-
-
-
-
 #[test]
 fn mollweide_inverse_rejects_outside_oval() {
     let p = MollweideProjection;
@@ -113,8 +102,6 @@ fn mollweide_inverse_rejects_outside_oval() {
     assert!(p.inverse(1.1, 0.5).is_none());
 }
 
-
-
 #[test]
 fn mollweide_inverse_center() {
     let p = MollweideProjection;
@@ -123,7 +110,6 @@ fn mollweide_inverse_center() {
     assert!(lon.abs() < 1e-12);
     assert!(lat.abs() < 1e-12);
 }
-
 
 #[test]
 fn mollweide_roundtrip() {
@@ -138,8 +124,6 @@ fn mollweide_roundtrip() {
     assert!((lon - lon2).abs() < 1e-6);
     assert!((lat - lat2).abs() < 1e-6);
 }
-
-
 
 #[test]
 fn raster_and_inverse_agree_on_validity() {
@@ -168,17 +152,28 @@ fn pixel_to_ang_matches_inverse() {
 
         match (inv, pixel_to_ang) {
             (Some((lon1, lat1)), Some((lon2, lat2))) => {
-                assert!((lon1 - lon2).abs() < 1e-10, 
-                    "lon mismatch at ({}, {}): inverse={}, pixel_to_ang={}", 
-                    px, py, lon1, lon2);
-                assert!((lat1 - lat2).abs() < 1e-10,
-                    "lat mismatch at ({}, {}): inverse={}, pixel_to_ang={}", 
-                    px, py, lat1, lat2);
+                assert!(
+                    (lon1 - lon2).abs() < 1e-10,
+                    "lon mismatch at ({}, {}): inverse={}, pixel_to_ang={}",
+                    px,
+                    py,
+                    lon1,
+                    lon2
+                );
+                assert!(
+                    (lat1 - lat2).abs() < 1e-10,
+                    "lat mismatch at ({}, {}): inverse={}, pixel_to_ang={}",
+                    px,
+                    py,
+                    lat1,
+                    lat2
+                );
             }
             (None, None) => {} // Both should reject
             _ => panic!(
                 "Validity mismatch at ({}, {}): inverse={}, pixel_to_ang={}",
-                px, py,
+                px,
+                py,
                 inv.is_some(),
                 pixel_to_ang.is_some()
             ),
@@ -213,16 +208,32 @@ fn pixel_to_ang_returns_lon_lat_in_correct_order() {
     // Pixel (112, 128) is on the right and inside the oval
     if let Some((lon, lat)) = p.pixel_to_ang(112, 128, &grid) {
         // This pixel has positive px, which maps to positive longitude
-        assert!(lon > 0.0, "Right side (px>0) should have positive lon: {}", lon);
-        assert!(lat.abs() < 0.3, "Near equator should have small lat: {}", lat);
+        assert!(
+            lon > 0.0,
+            "Right side (px>0) should have positive lon: {}",
+            lon
+        );
+        assert!(
+            lat.abs() < 0.3,
+            "Near equator should have small lat: {}",
+            lat
+        );
     }
 
     // Test a point on the left side where px is negative
     // Pixel (400, 128) is on the left and inside the oval
     if let Some((lon, lat)) = p.pixel_to_ang(400, 128, &grid) {
         // This pixel has negative px, which maps to negative longitude
-        assert!(lon < 0.0, "Left side (px<0) should have negative lon: {}", lon);
-        assert!(lat.abs() < 0.3, "Near equator should have small lat: {}", lat);
+        assert!(
+            lon < 0.0,
+            "Left side (px<0) should have negative lon: {}",
+            lon
+        );
+        assert!(
+            lat.abs() < 0.3,
+            "Near equator should have small lat: {}",
+            lat
+        );
     }
 }
 
@@ -231,31 +242,31 @@ fn test_mollweide_all_pixels_inside_ellipse() {
     // This test verifies that pixel_to_ang correctly enforces ellipse bounds.
     // No pixel should produce valid coordinates if it's outside x²/4 + y² ≤ 1.
     // Conversely, if a pixel is inside the ellipse, it must produce valid coordinates.
-    
+
     let proj = MollweideProjection;
-    let grid = RasterGrid::new(1200, 600);  // Standard rendering size
-    
+    let grid = RasterGrid::new(1200, 600); // Standard rendering size
+
     let mut inside_count = 0;
     let mut outside_count = 0;
     let mut boundary_pixels = Vec::new();
     let mut invalid_returns = Vec::new();
-    
+
     for (px, py, u, v) in grid.iter() {
         // Manually compute ellipse membership
         let x = 2.0 - 4.0 * u;
         let y = 1.0 - 2.0 * v;
         let ellipse_val = (x * x) / 4.0 + y * y;
         let should_be_inside = ellipse_val <= 1.0;
-        
+
         // Track boundary pixels
         if (ellipse_val - 1.0).abs() < 1e-10 {
             boundary_pixels.push((px, py, ellipse_val, should_be_inside));
         }
-        
+
         // Get result from pixel_to_ang
         let result = proj.pixel_to_ang(px, py, &grid);
         let is_valid = result.is_some();
-        
+
         if should_be_inside {
             inside_count += 1;
             if !is_valid {
@@ -265,16 +276,25 @@ fn test_mollweide_all_pixels_inside_ellipse() {
             outside_count += 1;
             // Outside pixels should not have valid returns
             if is_valid {
-                panic!("Pixel ({}, {}) outside ellipse (val={:.6}) returned valid coordinates", px, py, ellipse_val);
+                panic!(
+                    "Pixel ({}, {}) outside ellipse (val={:.6}) returned valid coordinates",
+                    px, py, ellipse_val
+                );
             }
         }
     }
-    
-    println!("Mollweide ellipse coverage: {} inside, {} outside", inside_count, outside_count);
+
+    println!(
+        "Mollweide ellipse coverage: {} inside, {} outside",
+        inside_count, outside_count
+    );
     if !boundary_pixels.is_empty() {
         println!("Boundary pixels (ellipse_val ≈ 1.0):");
         for (px, py, val, inside) in &boundary_pixels {
-            println!("  ({:4}, {:3}): ellipse_val={:.16}, should_be_inside={}", px, py, val, inside);
+            println!(
+                "  ({:4}, {:3}): ellipse_val={:.16}, should_be_inside={}",
+                px, py, val, inside
+            );
         }
     }
 }

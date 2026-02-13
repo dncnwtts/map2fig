@@ -28,8 +28,8 @@
 use std::fs::File;
 use std::io::BufReader;
 
-use fitsrs::{Fits, HDU, card::Value};
 use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
+use fitsrs::{Fits, HDU, card::Value};
 
 /// Read a HEALPix column from a FITS binary table.
 ///
@@ -66,13 +66,13 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     while let Some(Ok(hdu)) = fits.next() {
         if let HDU::XBinaryTable(hdu) = hdu {
             let header = hdu.get_header();
-            
+
             // Check if this uses explicit indexing (sparse/partial sky map)
             let has_explicit_indexing = match header.get("INDXSCHM") {
                 Some(Value::String { value, .. }) => value.trim() == "EXPLICIT",
                 _ => false,
             };
-            
+
             // Get NSIDE if not already set
             if nside == 0 {
                 nside = match header.get("NSIDE") {
@@ -80,10 +80,10 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                     _ => 0,
                 };
             }
-            
+
             let data = fits.get_data(&hdu);
             let mut table = data.table_data();
-            
+
             // If explicit indexing, read both PIXEL and data columns together
             if has_explicit_indexing && nside > 0 {
                 // For explicit indexing:
@@ -92,26 +92,25 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 // - User's --col N refers to the N-th data column
                 // - Adjust file column: file_col = col_idx + 1
                 let file_col_for_data = col_idx + 1;
-                
+
                 // Read both PIXEL (col 0) and data column
-                let all_values: Vec<DataValue> = table.select_fields(&[
-                    ColumnId::Index(0), 
-                    ColumnId::Index(file_col_for_data)
-                ]).collect();
-                
+                let all_values: Vec<DataValue> = table
+                    .select_fields(&[ColumnId::Index(0), ColumnId::Index(file_col_for_data)])
+                    .collect();
+
                 if all_values.is_empty() {
                     result = vec![f64::NEG_INFINITY; (12 * nside * nside) as usize];
                 } else {
                     let n_rows = all_values.len() / 2;
                     let npix = (12 * nside * nside) as usize;
                     let mut full_map = vec![f64::NEG_INFINITY; npix];
-                    
+
                     // extract pixel indices and data
                     // NOTE: select_fields returns interleaved values [pix, data, pix, data, ...]
                     for row_idx in 0..n_rows {
                         let pix_idx = row_idx * 2;
                         let data_idx = row_idx * 2 + 1;
-                        
+
                         let pix = match &all_values[pix_idx] {
                             DataValue::Integer { value, .. } => *value as i64,
                             DataValue::Long { value, .. } => *value,
@@ -119,14 +118,14 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                             DataValue::Double { value, .. } => *value as i64,
                             _ => -1,
                         };
-                        
+
                         let val = match &all_values[data_idx] {
-                            DataValue::Double { value, .. }  => *value,
-                            DataValue::Float  { value, .. }  => *value as f64,
-                            DataValue::Integer{ value, .. }  => *value as f64,
+                            DataValue::Double { value, .. } => *value,
+                            DataValue::Float { value, .. } => *value as f64,
+                            DataValue::Integer { value, .. } => *value as f64,
                             other => panic!("Unsupported column type in FITS table: {:?}", other),
                         };
-                        
+
                         if pix >= 0 && (pix as usize) < npix {
                             full_map[pix as usize] = val;
                         }
@@ -138,9 +137,9 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 let values = table.select_fields(&[ColumnId::Index(col_idx)]);
                 for cell in values {
                     match cell {
-                        DataValue::Double { value, .. }  => result.push(value),
-                        DataValue::Float  { value, .. }  => result.push(value as f64),
-                        DataValue::Integer{ value, .. }  => result.push(value as f64),
+                        DataValue::Double { value, .. } => result.push(value),
+                        DataValue::Float { value, .. } => result.push(value as f64),
+                        DataValue::Integer { value, .. } => result.push(value as f64),
                         other => panic!("Unsupported column type in FITS table: {:?}", other),
                     }
                 }
@@ -150,4 +149,3 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
 
     result
 }
-

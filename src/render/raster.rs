@@ -1,5 +1,5 @@
 use image::{Rgba, RgbaImage};
-use rusttype::{Font};
+use rusttype::Font;
 
 use crate::render::RenderBackend;
 use crate::render::target::PixelSource;
@@ -53,7 +53,6 @@ impl<'a> RenderBackend for RasterBackend<'a> {
                 ])
             },
         );
-
     }
 
     fn width(&self) -> f64 {
@@ -72,7 +71,11 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 
         for py in y0..y1 {
             for px in x0..x1 {
-                if px >= 0 && py >= 0 && (px as u32) < self.img.width() && (py as u32) < self.img.height() {
+                if px >= 0
+                    && py >= 0
+                    && (px as u32) < self.img.width()
+                    && (py as u32) < self.img.height()
+                {
                     self.img.put_pixel(px as u32, py as u32, self.color);
                 }
             }
@@ -113,7 +116,6 @@ impl<'a> RenderBackend for RasterBackend<'a> {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct RasterGrid {
     pub width: u32,
@@ -132,7 +134,7 @@ impl RasterGrid {
         }
     }
 
-    /// Set a pixel from Rgba<u8>
+    /// Set a pixel from `Rgba<u8>`
     pub fn set_pixel(&mut self, x: u32, y: u32, color: Rgba<u8>) {
         if x < self.width && y < self.height {
             let idx = (y * self.width + x) as usize;
@@ -146,10 +148,10 @@ impl RasterGrid {
         self.valid[idx] = validity;
     }
 
-    /// Set a pixel from Rgba<u8> without bounds checking
-    /// 
+    /// Set a pixel from `Rgba<u8>` without bounds checking
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that `x < self.width` and `y < self.height`, otherwise
     /// this will access memory out of bounds.
     #[inline]
@@ -162,9 +164,9 @@ impl RasterGrid {
     }
 
     /// Set validity without bounds checking
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that `x < self.width` and `y < self.height`, otherwise
     /// this will access memory out of bounds.
     #[inline]
@@ -192,8 +194,7 @@ impl RasterGrid {
         }
     }
 
-
-    /// Get as Rgba<u8>
+    /// Get as `Rgba<u8>`
     pub fn get_pixel(&self, x: u32, y: u32) -> Rgba<u8> {
         if x < self.width && y < self.height {
             self.buffer[(y * self.width + x) as usize]
@@ -202,7 +203,7 @@ impl RasterGrid {
         }
     }
 
-    /// Get as [u8;4] for PixelSource
+    /// Get as `[u8;4]` for PixelSource
     pub fn get_pixel_array(&self, x: u32, y: u32) -> [u8; 4] {
         let Rgba(p) = self.get_pixel(x, y);
         p
@@ -239,8 +240,6 @@ impl RasterGrid {
     }
 }
 
-
-
 impl PixelSource for RasterGrid {
     fn width(&self) -> u32 {
         self.width
@@ -254,5 +253,3 @@ impl PixelSource for RasterGrid {
         self.get_pixel_array(x, y)
     }
 }
-
-

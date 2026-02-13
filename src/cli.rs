@@ -103,16 +103,16 @@ pub struct Args {
     /// Input coordinate system: gal, eq, ecl
     #[arg(long, default_value = "gal")]
     pub input_coord: String,
-    
+
     /// Output coordinate system: gal, eq, ecl
     #[arg(long, default_value = "gal")]
     pub output_coord: String,
 
-    /// Rotate view so that (lon,lat) becomes the new center [degrees]
+    /// Rotate view so that (lon,lat) becomes the new center `[degrees]`
     #[arg(long, value_name = "LON,LAT")]
     pub rotate_to: Option<String>,
-    
-    /// Roll angle around the new center [degrees]
+
+    /// Roll angle around the new center `[degrees]`
     #[arg(long, default_value_t = 0.0)]
     pub roll: f64,
 
@@ -124,7 +124,7 @@ pub struct Args {
     #[arg(long, alias = "gnom-lon", allow_negative_numbers = true)]
     pub lon: Option<f64>,
 
-    /// Center latitude in degrees (gnomonic: projection center; mollweide: rotation center)
+    /// Center latitude in `[degrees]` (gnomonic: projection center; mollweide: rotation center)
     #[arg(long, alias = "gnom-lat", allow_negative_numbers = true)]
     pub lat: Option<f64>,
 
@@ -140,11 +140,11 @@ pub struct Args {
     #[arg(long, alias = "gnom-graticule")]
     pub local_graticule: bool,
 
-    /// Graticule spacing for parallels [degrees] (gnomonic projection only)
+    /// Graticule spacing for parallels `[degrees]` (gnomonic projection only)
     #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0)]
     pub local_grat_dlat: f64,
 
-    /// Graticule spacing for meridians [degrees] (gnomonic projection only)
+    /// Graticule spacing for meridians `[degrees]` (gnomonic projection only)
     #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0)]
     pub local_grat_dlon: f64,
 
@@ -195,11 +195,11 @@ pub struct Args {
     #[arg(long)]
     pub grat_labels: bool,
 
-    /// Graticule spacing for parallels [degrees]
+    /// Graticule spacing for parallels `[degrees]`
     #[arg(long, default_value_t = 15.0)]
     pub grat_par: f64,
 
-    /// Graticule spacing for meridians [degrees]
+    /// Graticule spacing for meridians `[degrees]`
     #[arg(long, default_value_t = 15.0)]
     pub grat_mer: f64,
 
@@ -270,7 +270,10 @@ impl FromStr for Extend {
             "min" => Ok(Extend::Min),
             "max" => Ok(Extend::Max),
             "both" => Ok(Extend::Both),
-            _ => Err(format!("Invalid extend option '{}'. Expected: none, min, max, or both", s)),
+            _ => Err(format!(
+                "Invalid extend option '{}'. Expected: none, min, max, or both",
+                s
+            )),
         }
     }
 }
@@ -289,7 +292,10 @@ impl FromStr for TickDirection {
         match s.to_lowercase().as_str() {
             "inward" | "in" => Ok(TickDirection::Inward),
             "outward" | "out" => Ok(TickDirection::Outward),
-            _ => Err(format!("Invalid tick direction '{}'. Expected: inward (in) or outward (out)", s)),
+            _ => Err(format!(
+                "Invalid tick direction '{}'. Expected: inward (in) or outward (out)",
+                s
+            )),
         }
     }
 }
@@ -312,32 +318,40 @@ impl FromStr for InputColor {
         let s_lower = s.to_lowercase();
         match s_lower.as_str() {
             "under" => Ok(InputColor::Underflow),
-            "over"  => Ok(InputColor::Overflow),
+            "over" => Ok(InputColor::Overflow),
             "gray" | "grey" => Ok(InputColor::Gray),
             "transparent" | "trans" => Ok(InputColor::Transparent),
             _ => {
                 // Try hex color first
-                if s.starts_with('#') || (s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit())) {
+                if s.starts_with('#') || (s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit()))
+                {
                     return Ok(InputColor::Hex(s.to_string()));
                 }
-                
+
                 // Try RGBA format
                 let parts: Vec<_> = s.split(',').collect();
                 if parts.len() == 4 {
                     let vals: Result<Vec<u8>, _> = parts.iter().map(|x| x.trim().parse()).collect();
                     return match vals {
                         Ok(v) => Ok(InputColor::Rgba(v[0], v[1], v[2], v[3])),
-                        Err(_) => Err("RGBA values must be 0–255".into())
+                        Err(_) => Err("RGBA values must be 0–255".into()),
                     };
                 }
-                
-                Err(format!("Invalid color format: '{}'. Expected hex (#RRGGBB), RGBA (r,g,b,a), or keyword (gray/transparent)", s))
+
+                Err(format!(
+                    "Invalid color format: '{}'. Expected hex (#RRGGBB), RGBA (r,g,b,a), or keyword (gray/transparent)",
+                    s
+                ))
             }
         }
     }
 }
 
-pub fn resolve_input_color(input: Option<InputColor>, cmap: &Colormap, transparent: bool) -> Rgba<u8> {
+pub fn resolve_input_color(
+    input: Option<InputColor>,
+    cmap: &Colormap,
+    transparent: bool,
+) -> Rgba<u8> {
     match input.unwrap_or(InputColor::Gray) {
         InputColor::Underflow => {
             let c = cmap.under();
@@ -348,13 +362,16 @@ pub fn resolve_input_color(input: Option<InputColor>, cmap: &Colormap, transpare
             Rgba([c[0], c[1], c[2], if transparent { 0 } else { 255 }])
         }
         InputColor::Gray => Rgba([128, 128, 128, if transparent { 0 } else { 255 }]),
-        InputColor::Transparent => Rgba([255,255,255,0]),
-        InputColor::Rgba(r,g,b,a) => Rgba([r,g,b,a]),
+        InputColor::Transparent => Rgba([255, 255, 255, 0]),
+        InputColor::Rgba(r, g, b, a) => Rgba([r, g, b, a]),
         InputColor::Hex(hex_str) => {
             match parse_hex_color(&hex_str, if transparent { 0 } else { 255 }) {
                 Ok(color) => color,
                 Err(e) => {
-                    eprintln!("Warning: Failed to parse hex color '{}': {}, using gray", hex_str, e);
+                    eprintln!(
+                        "Warning: Failed to parse hex color '{}': {}, using gray",
+                        hex_str, e
+                    );
                     Rgba([128, 128, 128, if transparent { 0 } else { 255 }])
                 }
             }
@@ -365,18 +382,18 @@ pub fn resolve_input_color(input: Option<InputColor>, cmap: &Colormap, transpare
 /// Parse hex color string (e.g., "#FFFF00" or "FFFF00") to RGBA
 pub fn parse_hex_color(hex: &str, alpha: u8) -> Result<Rgba<u8>, String> {
     let hex = hex.trim_start_matches('#');
-    
+
     if hex.len() != 6 {
         return Err(format!("Hex color must be 6 digits, got: {}", hex));
     }
-    
-    let r = u8::from_str_radix(&hex[0..2], 16)
-        .map_err(|_| format!("Invalid hex color: {}", hex))?;
-    let g = u8::from_str_radix(&hex[2..4], 16)
-        .map_err(|_| format!("Invalid hex color: {}", hex))?;
-    let b = u8::from_str_radix(&hex[4..6], 16)
-        .map_err(|_| format!("Invalid hex color: {}", hex))?;
-    
+
+    let r =
+        u8::from_str_radix(&hex[0..2], 16).map_err(|_| format!("Invalid hex color: {}", hex))?;
+    let g =
+        u8::from_str_radix(&hex[2..4], 16).map_err(|_| format!("Invalid hex color: {}", hex))?;
+    let b =
+        u8::from_str_radix(&hex[4..6], 16).map_err(|_| format!("Invalid hex color: {}", hex))?;
+
     Ok(Rgba([r, g, b, alpha]))
 }
 
@@ -408,39 +425,41 @@ impl Args {
     /// Validate that projection-specific arguments are only used with their respective projection
     pub fn validate_projection_args(&self) -> Result<(), String> {
         let projection = self.projection.to_lowercase();
-        
+
         // Check gnomonic-only args (--lon and --lat are shared, used for rotation in mollweide)
         let gnom_only_provided = self.fov != 300.0
             || self.res != 1.0
             || self.local_graticule
             || self.local_grat_dlat != 1.0
             || self.local_grat_dlon != 1.0;
-        
+
         if gnom_only_provided && projection != "gnomonic" {
             return Err(
                 "Gnomonic-specific arguments (--fov, --res, --local-graticule, \
                  --local-grat-dlat, --local-grat-dlon) can only be used with \
-                 --projection gnomonic".to_string()
+                 --projection gnomonic"
+                    .to_string(),
             );
         }
-        
+
         // Check mollweide-specific args (also applies to hammer)
         let mollweide_args_provided = self.graticule;
-        
+
         if mollweide_args_provided && projection != "mollweide" && projection != "hammer" {
             return Err(
                 "Mollweide/Hammer projection arguments (--graticule, --grat-coord, --grat-par, \
-                 --grat-mer) can only be used with --projection mollweide or hammer".to_string()
+                 --grat-mer) can only be used with --projection mollweide or hammer"
+                    .to_string(),
             );
         }
-        
+
         Ok(())
     }
 
     pub fn resolve_config(&self) -> Result<PlotConfig, String> {
         // Validate projection-specific arguments first
         self.validate_projection_args()?;
-        
+
         // Resolve scale
         let (scale, cmap_name) = if self.planck_log {
             (
@@ -483,8 +502,16 @@ impl Args {
         };
 
         // Resolve colors
-        let bad_color_rgba = resolve_input_color(self.bad_color.clone().or(Some(InputColor::Gray)), colormap, self.transparent);
-        let bg_color_rgba = resolve_input_color(self.bg_color.clone().or(Some(InputColor::Transparent)), colormap, self.transparent);
+        let bad_color_rgba = resolve_input_color(
+            self.bad_color.clone().or(Some(InputColor::Gray)),
+            colormap,
+            self.transparent,
+        );
+        let bg_color_rgba = resolve_input_color(
+            self.bg_color.clone().or(Some(InputColor::Transparent)),
+            colormap,
+            self.transparent,
+        );
 
         Ok(PlotConfig {
             scale,
@@ -523,9 +550,11 @@ impl Args {
     /// Returns Some(from_to_string) if input_coord != output_coord
     pub fn describe_coord_transform(&self) -> Option<String> {
         if self.input_coord != self.output_coord {
-            Some(format!("Rotating from {} to {} coordinates",
+            Some(format!(
+                "Rotating from {} to {} coordinates",
                 self.describe_coord(&self.input_coord),
-                self.describe_coord(&self.output_coord)))
+                self.describe_coord(&self.output_coord)
+            ))
         } else {
             None
         }
@@ -564,5 +593,3 @@ impl Args {
         Ok(ViewTransform::new(input, output, view))
     }
 }
-
-

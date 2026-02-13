@@ -4,9 +4,9 @@
 #[cfg(test)]
 mod integration_tests {
     use map2fig::healpix::{HealpixMeta, HealpixOrdering};
+    use map2fig::params::PlotData;
     use map2fig::rotation::CoordSystem;
     use map2fig::scale::Scale;
-    use map2fig::params::PlotData;
 
     /// Test that basic PlotData can be constructed
     #[test]
@@ -14,17 +14,17 @@ mod integration_tests {
         let nside = 64;
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
-        
+
         for i in 0..npix {
             map[i] = (i as f64 / npix as f64) * 100.0;
         }
-        
+
         let plot_data = PlotData {
             map: &map,
             width: 800,
             filename: "test_basic.pdf".to_string(),
         };
-        
+
         assert_eq!(plot_data.map.len(), npix);
         assert_eq!(plot_data.width, 800);
         assert!(!plot_data.filename.is_empty());
@@ -36,7 +36,7 @@ mod integration_tests {
         let nside = 32;
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
-        
+
         for i in 0..npix {
             if i % 3 == 0 {
                 map[i] = 1e-6;
@@ -46,13 +46,13 @@ mod integration_tests {
                 map[i] = 0.0;
             }
         }
-        
+
         let plot_data = PlotData {
             map: &map,
             width: 600,
             filename: "test_extreme.pdf".to_string(),
         };
-        
+
         assert!(plot_data.map.iter().any(|&v| v > 0.0));
         assert!(plot_data.map.iter().any(|&v| v < 1.0));
     }
@@ -61,11 +61,11 @@ mod integration_tests {
     #[test]
     fn test_coordinate_systems() {
         let systems = vec![
-            CoordSystem::G,  // Galactic
-            CoordSystem::E,  // Equatorial
-            CoordSystem::C,  // Ecliptic
+            CoordSystem::G, // Galactic
+            CoordSystem::E, // Equatorial
+            CoordSystem::C, // Ecliptic
         ];
-        
+
         assert_eq!(systems.len(), 3);
     }
 
@@ -75,7 +75,7 @@ mod integration_tests {
         let nside = 16;
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
-        
+
         for i in 0..npix {
             if i % 10 == 0 {
                 map[i] = f64::NAN;
@@ -83,7 +83,7 @@ mod integration_tests {
                 map[i] = i as f64;
             }
         }
-        
+
         let valid_count = map.iter().filter(|&&v| !v.is_nan()).count();
         assert!(valid_count > npix / 2);
     }
@@ -93,7 +93,7 @@ mod integration_tests {
     fn test_healpix_orderings() {
         let ring = HealpixOrdering::Ring;
         let _nested = HealpixOrdering::Nested;
-        
+
         let _meta = HealpixMeta {
             ordering: ring,
             nside: 64,
@@ -117,7 +117,7 @@ mod integration_tests {
     #[test]
     fn test_colormap_availability() {
         use map2fig::colormap::available_colormaps;
-        
+
         let cmaps = available_colormaps();
         assert!(cmaps.iter().any(|c| c.contains("viridis")));
         assert!(cmaps.iter().any(|c| c.contains("plasma")));
@@ -130,14 +130,14 @@ mod integration_tests {
         let nside = 32;
         let npix = 12 * nside * nside;
         let map = vec![1.0f64; npix];
-        
+
         for width in &[400u32, 800, 1200, 1600, 2400] {
             let plot_data = PlotData {
                 map: &map,
                 width: *width,
                 filename: format!("test_{}.pdf", width),
             };
-            
+
             assert_eq!(plot_data.width, *width);
         }
     }
@@ -148,13 +148,13 @@ mod integration_tests {
         let nside = 1;
         let npix = 12 * nside * nside;
         let map = vec![1.0f64; npix];
-        
+
         let plot_data = PlotData {
             map: &map,
             width: 100,
             filename: "test_minimal.pdf".to_string(),
         };
-        
+
         assert_eq!(plot_data.map.len(), npix);
         assert_eq!(npix, 12);
     }
@@ -165,7 +165,7 @@ mod integration_tests {
         for nside_pow in 0..10 {
             let nside = 1u32 << nside_pow;
             let npix = 12 * nside * nside;
-            
+
             assert_eq!(npix, 12 * nside * nside);
         }
     }

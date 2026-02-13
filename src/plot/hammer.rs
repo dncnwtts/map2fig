@@ -1,5 +1,7 @@
+use super::mollweide::{
+    _plot_mollweide_pdf_impl, _plot_mollweide_png_impl_projected, ProjectionType,
+};
 use crate::params::HammerParams;
-use super::mollweide::{_plot_mollweide_png_impl_projected, _plot_mollweide_pdf_impl, ProjectionType};
 use crate::params::MollweideParams;
 use std::path::Path;
 
@@ -58,7 +60,11 @@ pub fn plot_hammer_png(params: HammerParams) {
         meta: params.meta,
         view: params.view,
     };
-    _plot_mollweide_png_impl_projected(mollweide_params, render_hammer_pixels, ProjectionType::Hammer);
+    _plot_mollweide_png_impl_projected(
+        mollweide_params,
+        render_hammer_pixels,
+        ProjectionType::Hammer,
+    );
 }
 
 /// Plot a Hammer projection map as PDF.

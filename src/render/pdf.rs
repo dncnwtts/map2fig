@@ -1,17 +1,15 @@
-use cairo::{Context, ImageSurface, Format};
-use crate::render::RenderBackend;
-use crate::{Colormap, Scale, CairoImageSink};
-use crate::colorbar::{format_tick_label_with_units,format_units_label,ColorbarTicks};
-use std::f64::consts::PI;
-use crate::colorbar::{render_colorbar_gradient};
-use crate::plot::rasterize_to_surface;
-use crate::layout::{ColorbarLayout};
-use crate::render::target::{RenderTarget,PixelSource};
 use crate::PixelSink;
-use crate::scale::generate_colorbar_ticks;
+use crate::colorbar::render_colorbar_gradient;
+use crate::colorbar::{ColorbarTicks, format_tick_label_with_units, format_units_label};
 use crate::latex_render;
-
-
+use crate::layout::ColorbarLayout;
+use crate::plot::rasterize_to_surface;
+use crate::render::RenderBackend;
+use crate::render::target::{PixelSource, RenderTarget};
+use crate::scale::generate_colorbar_ticks;
+use crate::{CairoImageSink, Colormap, Scale};
+use cairo::{Context, Format, ImageSurface};
+use std::f64::consts::PI;
 
 pub struct PdfBackend<'a> {
     cr: &'a Context,
@@ -51,18 +49,22 @@ impl<'a> RenderBackend for PdfBackend<'a> {
         self.cr.set_font_size(size);
 
         // Try to use STIX fonts for mathematical text, fall back to default
-        self.cr.set_font_face(&cairo::FontFace::toy_create(
-            "STIXGeneral",
-            cairo::FontSlant::Normal,
-            cairo::FontWeight::Normal,
-        ).unwrap_or_else(|_| {
-            // Fallback to default font if STIX is not available
-            cairo::FontFace::toy_create(
-                "DejaVu Sans",
+        self.cr.set_font_face(
+            &cairo::FontFace::toy_create(
+                "STIXGeneral",
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Normal,
-            ).unwrap()
-        }));
+            )
+            .unwrap_or_else(|_| {
+                // Fallback to default font if STIX is not available
+                cairo::FontFace::toy_create(
+                    "DejaVu Sans",
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Normal,
+                )
+                .unwrap()
+            }),
+        );
 
         self.cr.move_to(x, y);
         self.cr.show_text(text).unwrap();
@@ -87,7 +89,6 @@ impl<'a> RenderBackend for PdfBackend<'a> {
         self.cr.line_to(x1, y1);
         let _ = self.cr.stroke();
     }
-
 }
 
 pub fn draw_projection_border_pdf(
@@ -129,13 +130,7 @@ pub fn draw_projection_border_pdf(
     cr.stroke().unwrap();
 }
 
-
-
-fn draw_colorbar_pdf_ticks(
-    cr: &Context,
-    layout: &ColorbarLayout,
-    ticks: &ColorbarTicks,
-) {
+fn draw_colorbar_pdf_ticks(cr: &Context, layout: &ColorbarLayout, ticks: &ColorbarTicks) {
     let y0 = layout.y + layout.h;
     let major_len = layout.major_tick_height;
     let minor_len = layout.minor_tick_height;
@@ -178,10 +173,14 @@ fn draw_colorbar_pdf_labels(
     map_width: Option<f64>,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
-    
+
     // Use serif font for all text to match TeX/astronomy publication standards
-    cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    
+    cr.select_font_face(
+        "Liberation Serif",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+    );
+
     // Tick font size scales with FOV like resolution label
     // Resolution label at FOV 300 is 11pt, tick labels at 3/4 of 1.5x = 12.375pt
     let adjusted_tick_font_size = if let Some(w) = map_width {
@@ -196,7 +195,9 @@ fn draw_colorbar_pdf_labels(
     // For outward ticks, labels need extra space to avoid overlapping with ticks
     let base_label_y = layout.y + layout.h;
     let tick_label_offset = match layout.tick_direction {
-        crate::cli::TickDirection::Outward => layout.major_tick_height + 0.5 * layout.major_tick_height,
+        crate::cli::TickDirection::Outward => {
+            layout.major_tick_height + 0.5 * layout.major_tick_height
+        }
         crate::cli::TickDirection::Inward => 1.0 * layout.major_tick_height,
     };
     let label_y = base_label_y + tick_label_offset;
@@ -238,35 +239,34 @@ fn draw_colorbar_pdf_labels(
             crate::cli::TickDirection::Outward => layout.major_tick_height,
             crate::cli::TickDirection::Inward => 0.0,
         };
-        
+
         // Add significant vertical spacing to keep units well clear of tick labels
         // Use map_width-based scale for consistent spacing across FOV sizes
         let spacing_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
-        let vertical_gap = 12.0 * spacing_scale;  // Extra spacing grows with FOV
-        let units_y_pos = label_y + tick_offset + vertical_gap;  // Position well below tick labels
-        
+        let vertical_gap = 12.0 * spacing_scale; // Extra spacing grows with FOV
+        let units_y_pos = label_y + tick_offset + vertical_gap; // Position well below tick labels
+
         // Use a reasonable LaTeX font size for units text
         // Scale both font size and DPI with map width for proper scaling
         let dpi_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
         // units_font_size already includes the (width/300) scaling, multiply by 1.25 for desired size
         let latex_font_size = ((units_font_size.unwrap_or(28.0) * 1.25) as u32).max(12);
-        let latex_dpi = ((300.0 * dpi_scale) as u32).max(100);  // Scale DPI with map width
-        
-        
+        let latex_dpi = ((300.0 * dpi_scale) as u32).max(100); // Scale DPI with map width
+
         // Try LaTeX rendering at scaled DPI for crisp embedding
-        if let Some(rendered) = latex_render::render_latex_to_hires_png(units_str, latex_font_size, latex_dpi) {
+        if let Some(rendered) =
+            latex_render::render_latex_to_hires_png(units_str, latex_font_size, latex_dpi)
+        {
             // High resolution PNG - will be embedded at appropriate size for the map dimensions
-            embed_latex_png_in_colorbar(
-                cr,
-                &rendered,
-                layout.x,
-                layout.w,
-                units_y_pos,
-            );
+            embed_latex_png_in_colorbar(cr, &rendered, layout.x, layout.w, units_y_pos);
         } else if let Some(units_label) = format_units_label(true, Some(units_str)) {
             // Fallback to direct Cairo text rendering if LaTeX fails
             // Use serif font to match TeX fonts used in astronomy publications
-            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.select_font_face(
+                "Liberation Serif",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+            );
             // Use provided font size or default 14pt
             let font_size = units_font_size.unwrap_or(14.0) as f64;
             cr.set_font_size(font_size);
@@ -277,7 +277,11 @@ fn draw_colorbar_pdf_labels(
         } else if let Some(units_label) = format_units_label(false, Some(units_str)) {
             // Final fallback to non-LaTeX plain text
             // Use serif font to match TeX fonts used in astronomy publications
-            cr.select_font_face("Liberation Serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.select_font_face(
+                "Liberation Serif",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+            );
             // Use provided font size or default 14pt
             let font_size = units_font_size.unwrap_or(14.0) as f64;
             cr.set_font_size(font_size);
@@ -300,28 +304,29 @@ fn embed_latex_png_in_colorbar(
     y_pos: f64,
 ) {
     // Convert PNG to Cairo surface
-    if let Ok(img_buf) = image::load_from_memory_with_format(
-        &rendered.image_data,
-        image::ImageFormat::Png,
-    ) {
+    if let Ok(img_buf) =
+        image::load_from_memory_with_format(&rendered.image_data, image::ImageFormat::Png)
+    {
         let rgba = img_buf.to_rgba8();
-        
+
         // Create Cairo surface from the image
-        if let Ok(mut surf) = ImageSurface::create(Format::ARgb32, rgba.width() as i32, rgba.height() as i32) {
+        if let Ok(mut surf) =
+            ImageSurface::create(Format::ARgb32, rgba.width() as i32, rgba.height() as i32)
+        {
             let surf_stride = surf.stride() as usize;
             {
                 let mut surf_data = surf.data().expect("Failed to get surface data");
-                
+
                 // Copy image data with proper RGBA -> ARGB conversion
                 let raw_data = rgba.as_raw();
                 for (i, chunk) in raw_data.chunks_exact(4).enumerate() {
                     let y = i / rgba.width() as usize;
                     let x = i % rgba.width() as usize;
                     let dst_idx = y * surf_stride + x * 4;
-                    
+
                     if dst_idx + 3 < surf_data.len() {
                         // Copy as RGBA (Red, Green, Blue, Alpha)
-                        surf_data[dst_idx] = chunk[0];     // R
+                        surf_data[dst_idx] = chunk[0]; // R
                         surf_data[dst_idx + 1] = chunk[1]; // G
                         surf_data[dst_idx + 2] = chunk[2]; // B
                         surf_data[dst_idx + 3] = chunk[3]; // A
@@ -329,27 +334,28 @@ fn embed_latex_png_in_colorbar(
                 }
             }
             surf.flush();
-            
+
             // Find bounding box of non-transparent pixels for cropping info
             // but render the full image with transparency to preserve quality
             let mut min_y = rgba.height();
             let mut max_y = 0u32;
-            
+
             for (_x, y, pixel) in rgba.enumerate_pixels() {
-                if pixel[3] > 10 {  // Not fully transparent
+                if pixel[3] > 10 {
+                    // Not fully transparent
                     min_y = min_y.min(y);
                     max_y = max_y.max(y);
                 }
             }
-            
+
             // Scale factor: 0.25 = quarter size for compact display (keep full 300 DPI quality)
             let scale_factor = 0.25;
             let scaled_width = (rgba.width() as f64) * scale_factor;
             let scaled_height = (rgba.height() as f64) * scale_factor;
-            
+
             // Calculate centered position
             let center_x = colorbar_x + colorbar_width / 2.0 - scaled_width / 2.0;
-            
+
             // Position text: place it below y_pos to avoid covering the colorbar
             // Use only the actual content height range to position properly
             let content_height = if min_y < max_y {
@@ -357,9 +363,9 @@ fn embed_latex_png_in_colorbar(
             } else {
                 scaled_height
             };
-            
-            let adjusted_y = y_pos - content_height * 0.75;  // Move up slightly, leaving a small gap
-            
+
+            let adjusted_y = y_pos - content_height * 0.75; // Move up slightly, leaving a small gap
+
             // Apply scale transform before drawing
             cr.save().unwrap();
             cr.translate(center_x, adjusted_y);
@@ -379,12 +385,11 @@ fn embed_latex_tick_label(
     y_pos: f64,
 ) {
     // Convert PNG to Cairo surface
-    if let Ok(img_buf) = image::load_from_memory_with_format(
-        &rendered.image_data,
-        image::ImageFormat::Png,
-    ) {
+    if let Ok(img_buf) =
+        image::load_from_memory_with_format(&rendered.image_data, image::ImageFormat::Png)
+    {
         let rgba = img_buf.to_rgba8();
-        
+
         // Create surface with proper dimensions
         if let Ok(surf) = ImageSurface::create_for_data(
             rgba.clone().into_raw(),
@@ -397,19 +402,19 @@ fn embed_latex_tick_label(
             let scale_factor = 1.0;
             let display_width = rendered.width as f64 * scale_factor;
             let display_height = rendered.height as f64 * scale_factor;
-            
+
             // Position: center horizontally and vertically
             let x = x_pos - display_width / 2.0;
             let y = y_pos - display_height / 2.0;
-            
+
             // Translate and scale to draw the LaTeX image
             cr.save().unwrap();
             cr.translate(x, y);
             cr.scale(scale_factor, scale_factor);
-            
+
             cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
             cr.paint().unwrap();
-            
+
             cr.restore().unwrap();
         }
     }
@@ -420,65 +425,49 @@ pub fn draw_colorbar_pdf(
     cb_layout: ColorbarLayout,
     params: crate::params::ColorbarParams,
 ) {
+    let ticks = generate_colorbar_ticks(
+        params.minv,
+        params.maxv,
+        &params.scale_type,
+        params.hist_scale,
+    );
 
-        let ticks = generate_colorbar_ticks(
-            params.minv,
-            params.maxv,
-            &params.scale_type,
-            params.hist_scale,
-        );
+    let surf =
+        ImageSurface::create(Format::ARgb32, cb_layout.w as i32, cb_layout.h as i32).unwrap();
 
+    let surf_cr = cairo::Context::new(&surf).unwrap();
+    surf_cr.set_operator(cairo::Operator::Source);
+    surf_cr.set_antialias(cairo::Antialias::None);
 
-        let surf = ImageSurface::create(
-            Format::ARgb32,
-            cb_layout.w as i32,
-            cb_layout.h as i32,
-        ).unwrap();
-        
-        let surf_cr = cairo::Context::new(&surf).unwrap();
-        surf_cr.set_operator(cairo::Operator::Source);
-        surf_cr.set_antialias(cairo::Antialias::None);
-
-
-        let surf = rasterize_to_surface(cb_layout.w as u32, cb_layout.h as u32, |sink| {
-            render_colorbar_gradient(
-                0,
-                0,
-                cb_layout.w as u32,
-                cb_layout.h as u32,
-                params.cmap,
-                params.gamma,
-                sink,
-            );
-        });
-        
-        let _ = cr.set_source_surface(&surf, cb_layout.x, cb_layout.y);
-        cr.paint().unwrap();
-
-        draw_colorbar_pdf_ticks(
-            cr,
-            &cb_layout,
-            &ticks,
-        );
-    
-        draw_colorbar_pdf_labels(
-            cr,
-            &cb_layout,
-            &ticks,
-            params.scale_type,
-            params.latex_rendering,
-            params.units,
-            params.units_font_size,
-            params.map_width,  // Pass map_width for DPI scaling
-        );
-
-        draw_colorbar_pdf_extends(
-            cr,
-            &cb_layout,
-            params.extend,
+    let surf = rasterize_to_surface(cb_layout.w as u32, cb_layout.h as u32, |sink| {
+        render_colorbar_gradient(
+            0,
+            0,
+            cb_layout.w as u32,
+            cb_layout.h as u32,
             params.cmap,
+            params.gamma,
+            sink,
         );
+    });
 
+    let _ = cr.set_source_surface(&surf, cb_layout.x, cb_layout.y);
+    cr.paint().unwrap();
+
+    draw_colorbar_pdf_ticks(cr, &cb_layout, &ticks);
+
+    draw_colorbar_pdf_labels(
+        cr,
+        &cb_layout,
+        &ticks,
+        params.scale_type,
+        params.latex_rendering,
+        params.units,
+        params.units_font_size,
+        params.map_width, // Pass map_width for DPI scaling
+    );
+
+    draw_colorbar_pdf_extends(cr, &cb_layout, params.extend, params.cmap);
 }
 
 pub struct PdfRenderTarget<'a> {
@@ -486,17 +475,13 @@ pub struct PdfRenderTarget<'a> {
 }
 
 impl RenderTarget for PdfRenderTarget<'_> {
-    fn blit_raster(
-        &mut self,
-        raster: &dyn PixelSource,
-        x: f64,
-        y: f64,
-    ) {
+    fn blit_raster(&mut self, raster: &dyn PixelSource, x: f64, y: f64) {
         let surface = ImageSurface::create(
             cairo::Format::ARgb32,
             raster.width() as i32,
             raster.height() as i32,
-        ).unwrap();
+        )
+        .unwrap();
 
         {
             let cr = cairo::Context::new(&surface).unwrap();
@@ -526,7 +511,9 @@ fn draw_colorbar_pdf_extends(
     use crate::cli::Extend;
 
     // Skip if no extends requested
-    if extend == &Extend::None { return }
+    if extend == &Extend::None {
+        return;
+    }
 
     // Get colors for extend arrows from colormap endpoints
     let min_color_rgb = cmap.sample(0.0);
@@ -599,7 +586,7 @@ pub fn draw_figure_labels_pdf(
     // Units label: 14pt * 0.5 ≈ 7pt, so labels default to ~16pt
     let scale = width / 800.0;
     let font_size = if let Some(size) = label_font_size {
-        size as f64 * scale 
+        size as f64 * scale
     } else {
         // Default: 2pt larger than standard units label (14pt * scale + 2pt)
         14.0 * scale + 2.0
@@ -609,36 +596,41 @@ pub fn draw_figure_labels_pdf(
     } else {
         ((14.0 * scale as f32 + 2.0) as u32).max(6)
     };
-    
+
     // Set color to black
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_font_size(font_size);
-    
+
     // Set up font for plain text
-    cr.set_font_face(&cairo::FontFace::toy_create(
-        "STIXGeneral",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    ).unwrap_or_else(|_| {
-        cairo::FontFace::toy_create(
-            "DejaVu Sans",
+    cr.set_font_face(
+        &cairo::FontFace::toy_create(
+            "STIXGeneral",
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
-        ).unwrap()
-    }));
-    
+        )
+        .unwrap_or_else(|_| {
+            cairo::FontFace::toy_create(
+                "DejaVu Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            )
+            .unwrap()
+        }),
+    );
+
     // Position labels with larger padding to prevent clipping at top
     // Position at the average of ellipse-relative and figure-relative positions
-    let padding_x = 20.0 * scale;     // Horizontal padding from edges
+    let padding_x = 20.0 * scale; // Horizontal padding from edges
     let x_left = padding_x;
     let x_right = width - padding_x;
-    let y_label = padding_x + (height * 0.095);  // Average of two positions
-    
+    let y_label = padding_x + (height * 0.095); // Average of two positions
+
     // Draw left label (llabel)
     if let Some(text) = llabel {
         if latex_rendering {
             // Try to render as LaTeX
-            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150) {
+            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150)
+            {
                 embed_latex_png_in_label(cr, &rendered, x_left, y_label, false);
             } else if let Some(rendered) = latex_render::render_latex_to_png(text, font_size_pt) {
                 embed_latex_png_in_label(cr, &rendered, x_left, y_label, false);
@@ -652,12 +644,13 @@ pub fn draw_figure_labels_pdf(
             cr.show_text(text).unwrap();
         }
     }
-    
+
     // Draw right label (rlabel)
     if let Some(text) = rlabel {
         if latex_rendering {
             // Try to render as LaTeX
-            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150) {
+            if let Some(rendered) = latex_render::render_latex_to_hires_png(text, font_size_pt, 150)
+            {
                 embed_latex_png_in_label(cr, &rendered, x_right, y_label, true);
             } else if let Some(rendered) = latex_render::render_latex_to_png(text, font_size_pt) {
                 embed_latex_png_in_label(cr, &rendered, x_right, y_label, true);
@@ -686,12 +679,11 @@ fn embed_latex_png_in_label(
     right_aligned: bool,
 ) {
     // Convert PNG to Cairo surface
-    if let Ok(img_buf) = image::load_from_memory_with_format(
-        &rendered.image_data,
-        image::ImageFormat::Png,
-    ) {
+    if let Ok(img_buf) =
+        image::load_from_memory_with_format(&rendered.image_data, image::ImageFormat::Png)
+    {
         let rgba = img_buf.to_rgba8();
-        
+
         // Create surface with proper dimensions
         if let Ok(surf) = ImageSurface::create_for_data(
             rgba.clone().into_raw(),
@@ -704,24 +696,23 @@ fn embed_latex_png_in_label(
             let scale_factor = 1.0;
             let display_width = rendered.width as f64 * scale_factor;
             let display_height = rendered.height as f64 * scale_factor;
-            
+
             // Position: adjust for right-alignment if needed
             let x = if right_aligned {
                 x_pos - display_width
             } else {
                 x_pos
             };
-            
+
             // Translate and scale to draw the LaTeX image
             cr.save().unwrap();
             cr.translate(x, y_pos - display_height / 2.0);
             cr.scale(scale_factor, scale_factor);
-            
+
             cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
             cr.paint().unwrap();
-            
+
             cr.restore().unwrap();
         }
     }
 }
-

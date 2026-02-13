@@ -4,11 +4,11 @@
 //! 1. Local grid: Constant lat/lon lines in the tangent plane coordinate system
 //! 2. Sky coordinates: Constant lat/lon lines from a specified celestial coordinate system
 
-use std::f64::consts::PI;
 use crate::gnomonic::GnomonicProjection;
-use crate::rotation::{CoordSystem, ViewTransform, coord_rotation};
 use crate::render::raster::RasterGrid;
+use crate::rotation::{CoordSystem, ViewTransform, coord_rotation};
 use image::Rgba;
+use std::f64::consts::PI;
 
 /// Mode of graticule operation for gnomonic projections
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -68,10 +68,10 @@ impl GnomonicGraticule {
 /// These are in local spherical coords centered on the gnomonic projection center
 fn generate_graticule_degrees(spacing_deg: f64, is_latitude: bool) -> Vec<f64> {
     let mut degrees: Vec<f64> = Vec::new();
-    
+
     if is_latitude {
         // For latitude: include equator, and lines up to ±60 degrees
-        degrees.push(0.0);   // Equator
+        degrees.push(0.0); // Equator
         let mut deg = spacing_deg;
         while deg <= 60.0 {
             degrees.push(deg);
@@ -89,7 +89,7 @@ fn generate_graticule_degrees(spacing_deg: f64, is_latitude: bool) -> Vec<f64> {
             deg += spacing_deg;
         }
     }
-    
+
     // Sort
     degrees.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     degrees
@@ -99,10 +99,10 @@ fn generate_graticule_degrees(spacing_deg: f64, is_latitude: bool) -> Vec<f64> {
 /// Returns meridian lines (constant longitude) or parallel lines (constant latitude)
 fn generate_sky_graticule_degrees(spacing_deg: f64, is_latitude: bool) -> Vec<f64> {
     let mut degrees: Vec<f64> = Vec::new();
-    
+
     if is_latitude {
         // For latitude/declination: from -90° to +90°, including equator/celestial equator
-        degrees.push(0.0);   // Equator
+        degrees.push(0.0); // Equator
         let mut deg = spacing_deg;
         while deg <= 90.0 {
             degrees.push(deg);
@@ -117,7 +117,7 @@ fn generate_sky_graticule_degrees(spacing_deg: f64, is_latitude: bool) -> Vec<f6
             deg += spacing_deg;
         }
     }
-    
+
     // Sort
     degrees.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     degrees
@@ -130,7 +130,13 @@ pub fn render_gnomonic_local_grid(
     dlon_deg: f64,
     dlat_deg: f64,
 ) {
-    render_gnomonic_local_grid_colored(grid, proj, dlon_deg, dlat_deg, Rgba([0u8, 0u8, 0u8, 255u8]));
+    render_gnomonic_local_grid_colored(
+        grid,
+        proj,
+        dlon_deg,
+        dlat_deg,
+        Rgba([0u8, 0u8, 0u8, 255u8]),
+    );
 }
 
 /// Render local grid graticule on gnomonic projection with custom color
@@ -154,41 +160,59 @@ fn render_gnomonic_local_grid_colored(
     // Render meridians (constant longitude in local frame)
     for &lon_deg in &meridian_degrees {
         let lon_rad = lon_deg * PI / 180.0;
-        
+
         // Sample from -45° to +45° latitude (sufficient for local grid)
         let mut points = Vec::new();
         for lat_deg_int in -45..=45 {
             let lat_rad = lat_deg_int as f64 * PI / 180.0;
-            
+
             // Convert local spherical coords to tangent plane (gnomonic projection)
-            if let Some((px, py)) = gnomonic_local_to_pixel_abs(lon_rad, lat_rad, delta, center_x, center_y) {
+            if let Some((px, py)) =
+                gnomonic_local_to_pixel_abs(lon_rad, lat_rad, delta, center_x, center_y)
+            {
                 points.push((px, py));
             }
         }
-        
+
         // Draw line segments
         for window in points.windows(2) {
-            draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+            draw_line_on_grid_colored(
+                grid,
+                window[0].0,
+                window[0].1,
+                window[1].0,
+                window[1].1,
+                color,
+            );
         }
     }
 
     // Render parallels (constant latitude in local frame)
     for &lat_deg in &parallel_degrees {
         let lat_rad = lat_deg * PI / 180.0;
-        
+
         // Sample longitude range with finer steps
         let mut points = Vec::new();
         for lon_step in -60..60 {
             let lon_rad = lon_step as f64 * PI / 180.0;
-            
-            if let Some((px, py)) = gnomonic_local_to_pixel_abs(lon_rad, lat_rad, delta, center_x, center_y) {
+
+            if let Some((px, py)) =
+                gnomonic_local_to_pixel_abs(lon_rad, lat_rad, delta, center_x, center_y)
+            {
                 points.push((px, py));
             }
         }
-        
+
         // Draw line segments
         for window in points.windows(2) {
-            draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+            draw_line_on_grid_colored(
+                grid,
+                window[0].0,
+                window[0].1,
+                window[1].0,
+                window[1].1,
+                color,
+            );
         }
     }
 }
@@ -206,25 +230,25 @@ fn gnomonic_local_to_pixel_abs(
     //   x = tan(lon_local)
     //   y = tan(lat_local) / cos(lon_local)
     // These give coordinates on the tangent plane in the same scale as angles (radians)
-    
+
     let cos_lat = lat_local.cos();
     let cos_lon = lon_local.cos();
-    
+
     // Check if point is in front of the tangent plane
     if cos_lat * cos_lon <= 0.0 {
         return None;
     }
-    
+
     // Compute tangent plane coordinates
     let x_tangent = lon_local.tan();
     let y_tangent = lat_local.tan() / cos_lon;
-    
+
     // Convert from tangent plane coordinates (radians) to pixel coordinates
     // pixel_offset = tangent_offset / delta
     // pixel_coordinate = center + pixel_offset
-    let px = center_x - x_tangent / delta;  // Note: x offset is negated because pixel x increases rightward
-    let py = center_y - y_tangent / delta;  // Note: y offset is negated because pixel y increases downward
-    
+    let px = center_x - x_tangent / delta; // Note: x offset is negated because pixel x increases rightward
+    let py = center_y - y_tangent / delta; // Note: y offset is negated because pixel y increases downward
+
     Some((px, py))
 }
 
@@ -242,7 +266,7 @@ pub fn render_gnomonic_sky_overlay(
     // Generate graticule lines in the overlay coordinate system
     // Sample the full range to ensure all lines are attempted
     let parallel_degrees = generate_sky_graticule_degrees(dlat_deg, true);
-    
+
     // For meridians, generate lines at regular spacing around the full circle
     let mut meridian_degrees: Vec<f64> = Vec::new();
     let mut lon_deg = 0.0;
@@ -260,7 +284,7 @@ pub fn render_gnomonic_sky_overlay(
     let ysize = grid.height as f64;
     let center_x = xsize / 2.0;
     let center_y = ysize / 2.0;
-    
+
     // Adaptive sampling: step size in degrees based on grid resolution
     // Aim for roughly 1-2 pixels per sample to avoid oversampling
     // With very high resolution inputs, we can still have reasonable sampling with larger steps
@@ -289,10 +313,12 @@ pub fn render_gnomonic_sky_overlay(
             let v_view = view.apply(v_input);
 
             // Project to gnomonic local coordinates
-            if let Some((px, py)) = project_to_gnomonic_local(v_view, proj, delta, center_x, center_y) {
+            if let Some((px, py)) =
+                project_to_gnomonic_local(v_view, proj, delta, center_x, center_y)
+            {
                 points.push((px, py));
             }
-            
+
             lat_deg += step_deg;
         }
 
@@ -307,7 +333,14 @@ pub fn render_gnomonic_sky_overlay(
                 // If discontinuity detected (large jump), start new segment
                 if dist > 50.0 {
                     for window in current_segment.windows(2) {
-                        draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+                        draw_line_on_grid_colored(
+                            grid,
+                            window[0].0,
+                            window[0].1,
+                            window[1].0,
+                            window[1].1,
+                            color,
+                        );
                     }
                     current_segment.clear();
                     current_segment.push(point);
@@ -318,7 +351,14 @@ pub fn render_gnomonic_sky_overlay(
         }
         // Draw remaining segment
         for window in current_segment.windows(2) {
-            draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+            draw_line_on_grid_colored(
+                grid,
+                window[0].0,
+                window[0].1,
+                window[1].0,
+                window[1].1,
+                color,
+            );
         }
     }
 
@@ -345,10 +385,12 @@ pub fn render_gnomonic_sky_overlay(
             let v_view = view.apply(v_input);
 
             // Project to gnomonic local coordinates
-            if let Some((px, py)) = project_to_gnomonic_local(v_view, proj, delta, center_x, center_y) {
+            if let Some((px, py)) =
+                project_to_gnomonic_local(v_view, proj, delta, center_x, center_y)
+            {
                 points.push((px, py));
             }
-            
+
             lon_deg += step_deg;
         }
 
@@ -363,7 +405,14 @@ pub fn render_gnomonic_sky_overlay(
                 // If discontinuity detected (large jump), start new segment
                 if dist > 50.0 {
                     for window in current_segment.windows(2) {
-                        draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+                        draw_line_on_grid_colored(
+                            grid,
+                            window[0].0,
+                            window[0].1,
+                            window[1].0,
+                            window[1].1,
+                            color,
+                        );
                     }
                     current_segment.clear();
                     current_segment.push(point);
@@ -374,13 +423,20 @@ pub fn render_gnomonic_sky_overlay(
         }
         // Draw remaining segment
         for window in current_segment.windows(2) {
-            draw_line_on_grid_colored(grid, window[0].0, window[0].1, window[1].0, window[1].1, color);
+            draw_line_on_grid_colored(
+                grid,
+                window[0].0,
+                window[0].1,
+                window[1].0,
+                window[1].1,
+                color,
+            );
         }
     }
 }
 
 /// Project a 3D unit vector to gnomonic local coordinates
-/// 
+///
 /// Takes a 3D unit vector in the view frame and projects it to the gnomonic tangent plane.
 fn project_to_gnomonic_local(
     v: [f64; 3],
@@ -412,13 +468,20 @@ fn project_to_gnomonic_local(
 }
 
 /// Draw a line segment on the raster grid using Bresenham's algorithm
-fn draw_line_on_grid_colored(grid: &mut RasterGrid, x0: f64, y0: f64, x1: f64, y1: f64, color: Rgba<u8>) {
+fn draw_line_on_grid_colored(
+    grid: &mut RasterGrid,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    color: Rgba<u8>,
+) {
     // Input coordinates are already in pixel space (not normalized)
     let px0 = x0 as i32;
     let py0 = y0 as i32;
     let px1 = x1 as i32;
     let py1 = y1 as i32;
-    
+
     bresenham_line(grid, px0, py0, px1, py1, color);
 }
 
@@ -429,19 +492,19 @@ fn bresenham_line(grid: &mut RasterGrid, x0: i32, y0: i32, x1: i32, y1: i32, col
     let sx = if x0 < x1 { 1 } else { -1 };
     let sy = if y0 < y1 { 1 } else { -1 };
     let mut err = (dx as f64 - dy as f64) / 2.0;
-    
+
     let mut x = x0;
     let mut y = y0;
-    
+
     loop {
         if x >= 0 && x < grid.width as i32 && y >= 0 && y < grid.height as i32 {
             grid.set_pixel(x as u32, y as u32, color);
         }
-        
+
         if x == x1 && y == y1 {
             break;
         }
-        
+
         let e2 = err;
         if e2 > -dx as f64 {
             err -= dy as f64;
@@ -462,7 +525,7 @@ mod tests {
     fn local_grid_generation() {
         let lons = generate_graticule_degrees(30.0, false);
         let lats = generate_graticule_degrees(30.0, true);
-        
+
         // Function generates lines within ±60° to avoid horizon distortion in gnomonic projection
         // Meridians within that range
         assert!(lons.contains(&0.0));
@@ -470,7 +533,7 @@ mod tests {
         assert!(lons.contains(&-30.0));
         assert!(lons.contains(&60.0));
         assert!(lons.contains(&-60.0));
-        
+
         // Should include equator and parallels within range
         assert!(lats.contains(&0.0));
         assert!(lats.contains(&30.0));
@@ -482,16 +545,26 @@ mod tests {
     #[test]
     fn gnomonic_center_projects_to_center() {
         let proj = GnomonicProjection::new(0.0, 0.0, 1.0);
-        
+
         // Center of tangent plane (0°, 0°) should project close to center
         // With resolution 1.0 arcmin/pixel, the center should be at (center_x, center_y)
         let delta = proj.resolution_arcmin * PI / (180.0 * 60.0);
-        let center = 1248.0 / 2.0;  // Assuming 1248 pixel width
-        
+        let center = 1248.0 / 2.0; // Assuming 1248 pixel width
+
         if let Some((px, py)) = gnomonic_local_to_pixel_abs(0.0, 0.0, delta, center, center) {
             // At (0, 0), tangent plane coords are (0, 0), so pixel coords should be at center
-            assert!((px - center).abs() < 10.0, "px should be near center {}, got {}", center, px);
-            assert!((py - center).abs() < 10.0, "py should be near center {}, got {}", center, py);
+            assert!(
+                (px - center).abs() < 10.0,
+                "px should be near center {}, got {}",
+                center,
+                px
+            );
+            assert!(
+                (py - center).abs() < 10.0,
+                "py should be near center {}, got {}",
+                center,
+                py
+            );
         }
     }
 }

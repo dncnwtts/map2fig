@@ -4,11 +4,11 @@
 //! into logical, reusable structs. This improves code readability, maintainability,
 //! and makes it easier to extend functionality without modifying function signatures.
 
+use crate::NegMode;
 use crate::colormap::Colormap;
 use crate::healpix::HealpixMeta;
 use crate::rotation::CoordSystem;
 use crate::scale::Scale;
-use crate::NegMode;
 use image::Rgba;
 
 /// Core plot data: map, dimensions, and output location.
@@ -148,7 +148,7 @@ pub struct ColorbarParams<'a> {
     pub units: Option<&'a str>,
     pub extend: &'a crate::cli::Extend,
     pub units_font_size: Option<f32>,
-    pub map_width: Option<f64>,  // For scaling units label with map size (gnomonic projections)
+    pub map_width: Option<f64>, // For scaling units label with map size (gnomonic projections)
 }
 
 /// Graticule rendering parameters.

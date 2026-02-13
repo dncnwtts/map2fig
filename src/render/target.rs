@@ -1,11 +1,6 @@
 pub trait RenderTarget {
     /// Draw a fully-rendered raster image at absolute coordinates
-    fn blit_raster(
-        &mut self,
-        raster: &dyn PixelSource,
-        x: f64,
-        y: f64,
-    );
+    fn blit_raster(&mut self, raster: &dyn PixelSource, x: f64, y: f64);
 }
 
 pub trait PixelSource {
