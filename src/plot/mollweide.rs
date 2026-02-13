@@ -858,7 +858,7 @@ where
 }
 
 pub fn plot_mollweide_auto(params: MollweideParams) {
-    let ext = Path::new(params.plot.filename)
+    let ext = Path::new(params.plot.filename.as_str())
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")

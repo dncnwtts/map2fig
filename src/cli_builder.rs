@@ -149,7 +149,7 @@ pub fn build_mollweide_params<'a>(
         plot: PlotData {
             map: &data.map,
             width: args.width,
-            filename: &args.out,
+            filename: args.get_output_filename(),
         },
         scale: ScaleParams {
             minv: args.min,
@@ -215,7 +215,7 @@ pub fn build_gnomonic_params<'a>(
         plot: PlotData {
             map: &data.map,
             width: args.width,
-            filename: &args.out,
+            filename: args.get_output_filename(),
         },
         scale: ScaleParams {
             minv: args.min,
@@ -284,7 +284,7 @@ pub fn build_hammer_params<'a>(
         plot: PlotData {
             map: &data.map,
             width: args.width,
-            filename: &args.out,
+            filename: args.get_output_filename(),
         },
         scale: ScaleParams {
             minv: args.min,

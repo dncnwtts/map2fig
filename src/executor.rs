@@ -64,7 +64,11 @@ pub struct ExecutionConfig<'a> {
 /// ```
 pub fn execute_plot(config: &ExecutionConfig, verbose: bool) -> Result<(), String> {
     if verbose {
-        println!("Starting plot generation...");
+        let input_file = config.args.fits.as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("<no input>");
+        let output_file = config.args.get_output_filename();
+        println!("\n{} -> {}", input_file, output_file);
     }
 
     let projection = config.args.projection.to_lowercase();
@@ -79,10 +83,6 @@ pub fn execute_plot(config: &ExecutionConfig, verbose: bool) -> Result<(), Strin
                 proj
             ));
         }
-    }
-
-    if verbose {
-        println!("Plot generation completed successfully");
     }
 
     Ok(())

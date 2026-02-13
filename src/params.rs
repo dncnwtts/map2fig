@@ -15,7 +15,7 @@ use image::Rgba;
 pub struct PlotData<'a> {
     pub map: &'a [f64],
     pub width: u32,
-    pub filename: &'a str,
+    pub filename: String,
 }
 
 /// Scale and color transformation parameters.

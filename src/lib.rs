@@ -441,7 +441,7 @@ mod tests {
     
         // Should not panic
         let params = MollweideParams {
-            plot: PlotData { map: &map, width: 100, filename: "test.png" },
+            plot: PlotData { map: &map, width: 100, filename: "test.png".to_string() },
             scale: ScaleParams { minv: None, maxv: None, gamma: 1.0, scale, neg_mode },
             color: ColorParams { cmap, bad_color, bg_color: bad_color },
             display: DisplayParams { 
@@ -622,7 +622,7 @@ mod tests {
         let view = ViewTransform::new(input,output,rot);
     
         let params = MollweideParams {
-            plot: PlotData { map: &map, width: 64, filename: "test_extreme.png" },
+            plot: PlotData { map: &map, width: 64, filename: "test_extreme.png".to_string() },
             scale: ScaleParams { minv: Some(-100.0), maxv: Some(100.0), gamma: 2.2, scale, neg_mode: NegMode::Unseen },
             color: ColorParams { cmap, bad_color, bg_color: bad_color },
             display: DisplayParams { 

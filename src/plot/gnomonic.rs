@@ -830,7 +830,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
     // Compute image width from field of view and resolution
     let width = (fov_arcmin / resolution_arcmin).ceil() as u32;
 
-    let ext = Path::new(filename)
+    let ext = Path::new(filename.as_str())
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")

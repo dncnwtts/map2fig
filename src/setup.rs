@@ -10,7 +10,6 @@
 use crate::cli::Args;
 use crate::pipeline::load_and_process_data;
 use crate::rotation::ViewTransform;
-use std::time::Instant;
 
 /// Result of successful setup containing all initialized data.
 pub struct SetupResult {
@@ -53,12 +52,6 @@ pub struct SetupResult {
 /// // setup.view contains rotation information
 /// ```
 pub fn setup_initialization(args: &Args, verbose: bool) -> Result<SetupResult, String> {
-    if verbose {
-        println!("Setting up configuration and view transform...");
-    }
-
-    let start = Instant::now();
-
     // Resolve plot configuration
     let config = args
         .resolve_config()
@@ -70,7 +63,10 @@ pub fn setup_initialization(args: &Args, verbose: bool) -> Result<SetupResult, S
         .map_err(|e| format!("Failed to resolve rotation: {}", e))?;
 
     if verbose {
-        println!("Setup completed in {:.2}s", start.elapsed().as_secs_f64());
+        // Show coordinate transformation if applicable
+        if let Some(transform) = args.describe_coord_transform() {
+            println!("{}", transform);
+        }
     }
 
     Ok(SetupResult { config, view })
@@ -101,13 +97,7 @@ pub fn setup_initialization(args: &Args, verbose: bool) -> Result<SetupResult, S
 /// let data = load_data(&args, true)?;
 /// println!("Loaded {} pixels", data.map.len());
 /// ```
-pub fn load_data(args: &Args, verbose: bool) -> Result<crate::pipeline::ProcessedData, String> {
-    if verbose {
-        println!("Reading HEALPix metadata...");
-    }
-
-    let start = Instant::now();
-
+pub fn load_data(args: &Args, _verbose: bool) -> Result<crate::pipeline::ProcessedData, String> {
     // For gnomonic projections, use a larger effective width to avoid map degradation
     // since we're sampling at full resolution in a small field of view
     let effective_width = match args.projection.to_lowercase().as_str() {
@@ -123,10 +113,6 @@ pub fn load_data(args: &Args, verbose: bool) -> Result<crate::pipeline::Processe
         args.verbose,
     )
     .map_err(|e| format!("Failed to load and process data: {}", e))?;
-
-    if verbose {
-        println!("Data processing completed in {:.2}s", start.elapsed().as_secs_f64());
-    }
 
     Ok(data)
 }

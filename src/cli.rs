@@ -25,8 +25,8 @@ pub struct Args {
     pub width: u32,
 
     /// Output filename
-    #[arg(short, long, default_value = "output.pdf")]
-    pub out: String,
+    #[arg(short, long)]
+    pub out: Option<String>,
 
     /// Disable map border
     #[arg(long)]
@@ -497,6 +497,50 @@ impl Args {
         })
     }
 
+    /// Determine output filename from --out flag or input FITS filename.
+    ///
+    /// # Logic
+    /// 1. If --out is explicitly provided, use it
+    /// 2. If input FITS file is provided, use it with .fits → .pdf extension
+    /// 3. If neither, use "map2fig_test.pdf" as fallback
+    pub fn get_output_filename(&self) -> String {
+        if let Some(ref out) = self.out {
+            out.clone()
+        } else if let Some(ref fits) = self.fits {
+            let path = std::path::Path::new(fits);
+            if let Some(stem) = path.file_stem() {
+                format!("{}.pdf", stem.to_string_lossy())
+            } else {
+                "map2fig_test.pdf".to_string()
+            }
+        } else {
+            "map2fig_test.pdf".to_string()
+        }
+    }
+
+    /// Check if coordinate transformation is needed.
+    ///
+    /// Returns Some(from_to_string) if input_coord != output_coord
+    pub fn describe_coord_transform(&self) -> Option<String> {
+        if self.input_coord != self.output_coord {
+            Some(format!("Rotating from {} to {} coordinates",
+                self.describe_coord(&self.input_coord),
+                self.describe_coord(&self.output_coord)))
+        } else {
+            None
+        }
+    }
+
+    /// Get human-readable coordinate system name
+    fn describe_coord(&self, coord: &str) -> String {
+        match coord.to_lowercase().as_str() {
+            "gal" | "galactic" => "Galactic".to_string(),
+            "eq" | "equatorial" => "Equatorial".to_string(),
+            "ecl" | "ecliptic" => "Ecliptic".to_string(),
+            _ => coord.to_string(),
+        }
+    }
+
     pub fn resolve_view_transform(&self) -> Result<ViewTransform, String> {
         let input = CoordSystem::from_str(&self.input_coord)?;
         let output = CoordSystem::from_str(&self.output_coord)?;
@@ -520,4 +564,5 @@ impl Args {
         Ok(ViewTransform::new(input, output, view))
     }
 }
+
 

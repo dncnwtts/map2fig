@@ -32,6 +32,10 @@ fn run() -> Result<(), String> {
 
     executor::execute_plot(&exec_config, args.verbose)?;
 
+    if args.verbose {
+        println!("Plot generation completed successfully\n");
+    }
+
     Ok(())
 }
 

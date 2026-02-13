@@ -77,8 +77,7 @@ pub fn plot_hammer_pdf(params: HammerParams) {
 
 /// Automatically choose PNG or PDF based on file extension for Hammer projection.
 pub fn plot_hammer_auto(params: HammerParams) {
-    let filename = params.plot.filename;
-    let ext = Path::new(filename)
+    let ext = Path::new(params.plot.filename.as_str())
         .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
