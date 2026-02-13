@@ -1,4 +1,4 @@
-.PHONY: build test test-fuzz clean distclean help
+.PHONY: build test test-fuzz clean help
 
 help:
 	@echo "HEALPix Plotter - Available targets:"
@@ -6,7 +6,6 @@ help:
 	@echo "  make test           - Run tests and clean artifacts"
 	@echo "  make test-fuzz      - Run fuzzing tests (requires cargo +nightly)"
 	@echo "  make clean          - Remove build artifacts (binaries, etc.)"
-	@echo "  make distclean       - Remove everything including test outputs"
 	@echo "  make help           - Show this message"
 
 build:
@@ -23,8 +22,3 @@ test-fuzz:
 clean:
 	cargo clean
 	@echo "Cleaned build artifacts"
-
-distclean: clean
-	rm -f *.png *.pdf *.txt /tmp/colorbar*.png
-	rm -f examples/output/*.png examples/output/*.pdf examples/output/*.txt
-	@echo "Also removed test outputs and /tmp artifacts"
