@@ -640,7 +640,7 @@ pub fn render_graticule_cairo_with_color(
     let _ = cr.stroke();
 }
 
-/// Draw a line between two normalized [0,1] points in the grid
+/// Draw a line between two normalized `[0,1]` points in the grid
 fn draw_line_on_grid(
     grid: &mut crate::render::raster::RasterGrid,
     u0: f64,

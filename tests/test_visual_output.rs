@@ -33,13 +33,13 @@ fn test_visual_output() {
             let mut start = pixels[0];
             let mut end = pixels[0];
 
-            for i in 1..pixels.len() {
-                if pixels[i] == end + 1 {
-                    end = pixels[i];
+            for &v in pixels.iter().skip(1) {
+                if v == end + 1 {
+                    end = v;
                 } else {
                     ranges.push((start, end));
-                    start = pixels[i];
-                    end = pixels[i];
+                    start = v;
+                    end = v;
                 }
             }
             ranges.push((start, end));
@@ -95,11 +95,7 @@ fn test_tick_bottom_alignment() {
 
     // The bottommost colored pixel should not exceed the colorbar bounds
     // (allowing for small floating point errors in rasterization, maybe 1-2 pixels)
-    let overhang = if max_colored_y > cbar_y_end {
-        max_colored_y - cbar_y_end
-    } else {
-        0
-    };
+    let overhang = max_colored_y.saturating_sub(cbar_y_end);
 
     println!("Tick overhang: {} pixels", overhang);
 

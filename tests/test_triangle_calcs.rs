@@ -13,7 +13,7 @@ fn test_triangle_vertex_calculation() {
 
     let image_center_x = (width as f64) / 2.0; // 200.0
     let mut cbar_width_f64 = width as f64 - 2.0 * padding as f64; // 300.0
-    if cbar_width_f64 as u32 % 2 == 0 {
+    if (cbar_width_f64 as u32).is_multiple_of(2) {
         cbar_width_f64 -= 1.0; // 299.0
     }
     let cbar_width = cbar_width_f64 as u32; // 299
@@ -93,7 +93,7 @@ fn test_triangle_vertex_calculation() {
     // Now test edge calculation at y=76 and y=77
     eprintln!("\n=== EDGE CALCULATIONS ===");
 
-    for y_test in vec![76, 77, 78] {
+    for y_test in [76, 77, 78] {
         eprintln!("\ny = {}:", y_test);
 
         // LEFT triangle edges

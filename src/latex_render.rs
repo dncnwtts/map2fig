@@ -635,7 +635,7 @@ mod tests {
         if let Some(svg) = render_latex_to_svg("$K$", 10) {
             assert!(svg.width > 0.0, "SVG width should be > 0");
             assert!(svg.height > 0.0, "SVG height should be > 0");
-            assert!(svg.svg_data.len() > 0, "SVG data should not be empty");
+            assert!(!svg.svg_data.is_empty(), "SVG data should not be empty");
             eprintln!(
                 "SVG render test: {}x{} with {} bytes",
                 svg.width,

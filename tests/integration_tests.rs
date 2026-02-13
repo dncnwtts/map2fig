@@ -15,8 +15,8 @@ mod integration_tests {
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
 
-        for i in 0..npix {
-            map[i] = (i as f64 / npix as f64) * 100.0;
+        for (i, v) in map.iter_mut().enumerate().take(npix) {
+            *v = (i as f64 / npix as f64) * 100.0;
         }
 
         let plot_data = PlotData {
@@ -37,14 +37,14 @@ mod integration_tests {
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
 
-        for i in 0..npix {
-            if i % 3 == 0 {
-                map[i] = 1e-6;
+        for (i, v) in map.iter_mut().enumerate().take(npix) {
+            *v = if i % 3 == 0 {
+                1e-6
             } else if i % 3 == 1 {
-                map[i] = 1e6;
+                1e6
             } else {
-                map[i] = 0.0;
-            }
+                0.0
+            };
         }
 
         let plot_data = PlotData {
@@ -60,7 +60,7 @@ mod integration_tests {
     /// Test coordinate systems
     #[test]
     fn test_coordinate_systems() {
-        let systems = vec![
+        let systems = [
             CoordSystem::G, // Galactic
             CoordSystem::E, // Equatorial
             CoordSystem::C, // Ecliptic
@@ -76,11 +76,11 @@ mod integration_tests {
         let npix = 12 * nside * nside;
         let mut map = vec![0.0f64; npix];
 
-        for i in 0..npix {
+        for (i, v) in map.iter_mut().enumerate().take(npix) {
             if i % 10 == 0 {
-                map[i] = f64::NAN;
+                *v = f64::NAN;
             } else {
-                map[i] = i as f64;
+                *v = i as f64;
             }
         }
 
@@ -104,7 +104,7 @@ mod integration_tests {
     /// Test scale types
     #[test]
     fn test_scale_enum() {
-        let _scales = vec![
+        let _scales = [
             Scale::Linear,
             Scale::Log,
             Scale::Asinh { scale: 1.0 },

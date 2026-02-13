@@ -52,15 +52,13 @@ fn test_colorbar_geometry() {
         // Extend pixels might be slightly different from gradient
         let is_dark = pix[0] < 254;
 
-        if is_dark {
-            if let (Some(gl), Some(gr)) = (grad_left, grad_right) {
-                if (x as i32) < gl as i32 {
-                    left_extent.0 = left_extent.0.min(x);
-                    left_extent.1 = left_extent.1.max(x);
-                } else if (x as i32) > gr as i32 {
-                    right_extent.0 = right_extent.0.min(x);
-                    right_extent.1 = right_extent.1.max(x);
-                }
+        if is_dark && let (Some(gl), Some(gr)) = (grad_left, grad_right) {
+            if (x as i32) < gl as i32 {
+                left_extent.0 = left_extent.0.min(x);
+                left_extent.1 = left_extent.1.max(x);
+            } else if (x as i32) > gr as i32 {
+                right_extent.0 = right_extent.0.min(x);
+                right_extent.1 = right_extent.1.max(x);
             }
         }
     }

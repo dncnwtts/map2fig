@@ -652,6 +652,65 @@ fn edge_x_at_y(p1: (i32, i32), p2: (i32, i32), y: i32) -> Option<i32> {
     Some(x)
 }
 
+/// Render a standalone colorbar to a PNG image with optional extend triangles
+/// This is useful for testing the colorbar rendering independently of the full map
+pub fn render_colorbar_standalone(
+    width: u32,
+    height: u32,
+    cmap: &Colormap,
+    gamma: f64,
+    extend: crate::cli::Extend,
+    padding: u32,
+) -> image::RgbaImage {
+    // Create white background image
+    let mut img = image::ImageBuffer::from_pixel(width, height, image::Rgba([255, 255, 255, 255]));
+
+    // Calculate colorbar dimensions with proper centering for symmetry
+    let cbar_height = (height as i32 - 2 * padding as i32).max(1) as u32;
+    let cbar_y = padding;
+
+    // Calculate center of image
+    let image_center_x = (width as f64) / 2.0;
+
+    // Calculate colorbar width: make sure it's odd so it centers perfectly
+    let mut cbar_width_f64 = width as f64 - 2.0 * padding as f64;
+    if (cbar_width_f64 as u32).is_multiple_of(2) {
+        cbar_width_f64 -= 1.0; // Make odd width for perfect centering
+    }
+    let cbar_width = cbar_width_f64 as u32;
+
+    // Center the colorbar
+    let cbar_x_f64 = image_center_x - cbar_width_f64 / 2.0;
+    let cbar_x = cbar_x_f64.round() as u32;
+
+    // Draw gradient using pixels directly
+    for py in 0..cbar_height {
+        for px in 0..cbar_width {
+            let t_linear = px as f64 / (cbar_width - 1) as f64;
+            let t = apply_gamma(t_linear, gamma);
+            let color_rgb = cmap.sample(t);
+            // Convert RGB to RGBA
+            let color = Rgba([color_rgb.0[0], color_rgb.0[1], color_rgb.0[2], 255]);
+            img.put_pixel(cbar_x + px, cbar_y + py, color);
+        }
+    }
+
+    // Draw extend triangles if requested
+    if extend != crate::cli::Extend::None {
+        draw_colorbar_extends(
+            &extend,
+            cbar_x as f64,
+            cbar_y as f64,
+            cbar_width as f64,
+            cbar_height as f64,
+            cmap,
+            &mut img,
+        );
+    }
+
+    img
+}
+
 #[cfg(test)]
 mod tests {
     /// Test that colorbar extend triangle base coordinates align correctly with colorbar bounds
@@ -1329,63 +1388,4 @@ mod tests {
             angle_to_tip_top
         );
     }
-}
-
-/// Render a standalone colorbar to a PNG image with optional extend triangles
-/// This is useful for testing the colorbar rendering independently of the full map
-pub fn render_colorbar_standalone(
-    width: u32,
-    height: u32,
-    cmap: &Colormap,
-    gamma: f64,
-    extend: crate::cli::Extend,
-    padding: u32,
-) -> image::RgbaImage {
-    // Create white background image
-    let mut img = image::ImageBuffer::from_pixel(width, height, image::Rgba([255, 255, 255, 255]));
-
-    // Calculate colorbar dimensions with proper centering for symmetry
-    let cbar_height = (height as i32 - 2 * padding as i32).max(1) as u32;
-    let cbar_y = padding;
-
-    // Calculate center of image
-    let image_center_x = (width as f64) / 2.0;
-
-    // Calculate colorbar width: make sure it's odd so it centers perfectly
-    let mut cbar_width_f64 = width as f64 - 2.0 * padding as f64;
-    if (cbar_width_f64 as u32).is_multiple_of(2) {
-        cbar_width_f64 -= 1.0; // Make odd width for perfect centering
-    }
-    let cbar_width = cbar_width_f64 as u32;
-
-    // Center the colorbar
-    let cbar_x_f64 = image_center_x - cbar_width_f64 / 2.0;
-    let cbar_x = cbar_x_f64.round() as u32;
-
-    // Draw gradient using pixels directly
-    for py in 0..cbar_height {
-        for px in 0..cbar_width {
-            let t_linear = px as f64 / (cbar_width - 1) as f64;
-            let t = apply_gamma(t_linear, gamma);
-            let color_rgb = cmap.sample(t);
-            // Convert RGB to RGBA
-            let color = Rgba([color_rgb.0[0], color_rgb.0[1], color_rgb.0[2], 255]);
-            img.put_pixel(cbar_x + px, cbar_y + py, color);
-        }
-    }
-
-    // Draw extend triangles if requested
-    if extend != crate::cli::Extend::None {
-        draw_colorbar_extends(
-            &extend,
-            cbar_x as f64,
-            cbar_y as f64,
-            cbar_width as f64,
-            cbar_height as f64,
-            cmap,
-            &mut img,
-        );
-    }
-
-    img
 }

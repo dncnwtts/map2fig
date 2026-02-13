@@ -492,8 +492,8 @@ mod tests {
 
         let id = r.compose(&rt).matrix;
 
-        for i in 0..3 {
-            for j in 0..3 {
+        for (i, row) in id.iter().enumerate() {
+            for (j, _) in row.iter().enumerate() {
                 let expected = if i == j { 1.0 } else { 0.0 };
                 assert!((id[i][j] - expected).abs() < 1e-12);
             }

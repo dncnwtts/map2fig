@@ -609,7 +609,7 @@ mod tests {
 
         for _ in 0..10_000 {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-            let pix = seed % npix as i64;
+            let pix = seed % npix;
 
             let (ix, iy, face) = nest2xyf(nside, pix);
             let pix2 = xyf2nest(nside, ix, iy, face);
@@ -643,12 +643,12 @@ fn test_nest_ring_roundtrip() {
     let npix = 12 * nside * nside;
 
     for pix in (0..npix).step_by(97) {
-        let (ix, iy, face) = nest2xyf(nside as i64, pix as i64);
-        let ring = xyf2ring(nside, ix as i64, iy as i64, face);
+        let (ix, iy, face) = nest2xyf(nside, pix);
+        let ring = xyf2ring(nside, ix, iy, face);
         let (ix2, iy2, face2) = ring2xyf(nside, ring);
 
         let pix2 = xyf2nest(nside, ix2, iy2, face2);
-        assert_eq!(pix as i64, pix2);
+        assert_eq!(pix, pix2);
     }
 }
 #[test]
@@ -657,9 +657,9 @@ fn test_nest_ring_roundtrip_simple() {
     let npix = 12 * nside * nside;
 
     for pix in 0..npix {
-        let ring = nest2ring(nside, pix as i64);
+        let ring = nest2ring(nside, pix);
         let nest = ring2nest(nside, ring);
-        assert_eq!(pix as i64, nest, "pix={} failed roundtrip", pix);
+        assert_eq!(pix, nest);
     }
 }
 

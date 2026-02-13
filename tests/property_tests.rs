@@ -24,7 +24,7 @@ fn prop_linear_scaling_bounded() {
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
-                t >= 0.0 && t <= 1.0,
+                (0.0..=1.0).contains(&t),
                 "Linear scale produced out-of-bounds value: {} (value={}, min={}, max={})",
                 t, value, min, max
             );
@@ -91,7 +91,7 @@ fn prop_log_scaling_bounded() {
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
-                t >= 0.0 && t <= 1.0,
+                (0.0..=1.0).contains(&t),
                 "Log scale produced out-of-bounds value: {} (value={}, min={}, max={})",
                 t, value, min, max
             );
@@ -119,7 +119,7 @@ fn prop_symlog_scaling_bounded() {
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
-                t >= 0.0 && t <= 1.0,
+                (0.0..=1.0).contains(&t),
                 "SymLog scale produced out-of-bounds value: {} (value={}, min={}, max={})",
                 t, value, min, max
             );
@@ -147,7 +147,7 @@ fn prop_asinh_scaling_bounded() {
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
-                t >= 0.0 && t <= 1.0,
+                (0.0..=1.0).contains(&t),
                 "Asinh scale produced out-of-bounds value: {} (value={}, min={}, max={})",
                 t, value, min, max
             );
@@ -285,7 +285,7 @@ fn prop_negative_range() {
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
-                t >= 0.0 && t <= 1.0,
+                (0.0..=1.0).contains(&t),
                 "Negative range scaling should still produce normalized output"
             );
         }

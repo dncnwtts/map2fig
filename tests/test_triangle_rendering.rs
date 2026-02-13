@@ -90,8 +90,8 @@ fn compare_left_right_triangles() -> (Vec<i32>, Vec<i32>) {
     // At y=0 or y=200: width = 101
     // Width should follow linear progression: w(y) = 1 + 2*|y-100|/100
 
-    for y in 0..=200 {
-        let dist_from_center = (y as i32 - 100).abs();
+    for y in 0..=200i32 {
+        let dist_from_center = (y - 100).abs();
         let expected_width = 1 + 2 * dist_from_center;
 
         // Left triangle
@@ -169,7 +169,7 @@ fn test_left_right_symmetry_exact_match() {
     println!("PNG-specific test: Testing fill_triangle() symmetry");
     println!("Requirement: For every scanline y:");
     println!("  left_triangle.width(y) == right_triangle.width(y)");
-    println!("");
+    println!();
     println!("This is especially critical at:");
     println!("  1. Bottom vertices (y = base_bottom)");
     println!("  2. Top vertices (y = base_top)");
@@ -200,7 +200,7 @@ fn test_top_bottom_symmetry_within_triangle() {
     println!("\n=== TOP-BOTTOM SYMMETRY TEST ===");
     println!("Requirement: For a triangle with height H:");
     println!("  width[i] == width[H - i] for all rows i");
-    println!("");
+    println!();
     println!("This ensures triangles are perfect isosceles, not skewed");
 
     // Simulate checking this for different heights
@@ -226,7 +226,7 @@ fn test_no_cliffs_at_triangle_bottom() {
 
     println!("\n=== NO CLIFFS TEST ===");
     println!("Definition: Cliff = width change > 2 pixels between consecutive rows");
-    println!("");
+    println!();
     println!("Allowed width changes:");
     println!("  0 pixels: plateau (acceptable for 2-3 consecutive rows)");
     println!("  1 pixel:  ideal (smooth convergence)");
@@ -251,12 +251,12 @@ fn test_no_plateaus_in_convergence() {
 
     println!("\n=== NO EXCESSIVE PLATEAUS TEST ===");
     println!("Definition: Plateau = consecutive rows with same width");
-    println!("");
+    println!();
     println!("Allowed:");
     println!("  - 0-1 plateaus (smooth convergence, ideal)");
     println!("  - 2-3 plateaus (acceptable rounding)");
     println!("  - ~1-2% of total scanlines as plateaus");
-    println!("");
+    println!();
     println!("Forbidden:");
     println!("  - >5 consecutive plateaus");
     println!("  - >20% of total scanlines as plateaus");
@@ -278,7 +278,7 @@ fn test_bottom_vertex_pixel_accuracy() {
 
     println!("\n=== BOTTOM VERTEX ACCURACY TEST ===");
     println!("Base vertex: y=648, x=[16, 16] (single column)");
-    println!("");
+    println!();
     println!("Expected scanline filling:");
     for dy in 0..=10 {
         let y = 648 - dy;
@@ -304,7 +304,7 @@ fn test_symmetry_matrix_left_vs_right() {
 
     println!("\n=== SYMMETRY MATRIX TEST ===");
     println!("Build a matrix of (left_width - right_width) for each row");
-    println!("");
+    println!();
     println!("Perfect result: all differences = 0");
     println!("Current issues: differences ~+15 pixels everywhere");
     println!("  - Indicates systematic bias, not random error");
@@ -329,6 +329,7 @@ fn test_height_constraint_sweep() {
             "mod_2"
         };
 
+        #[allow(clippy::unwrap_or_default)]
         results.entry(modulo).or_insert_with(Vec::new).push(status);
 
         if height <= 25 || height >= 45 {
@@ -355,23 +356,23 @@ fn test_top_left_top_right_symmetry() {
 
     println!("\n=== TOP-LEFT AND TOP-RIGHT SYMMETRY TEST ===");
     println!("Requirement: Left and right triangles must have symmetric top positioning");
-    println!("");
+    println!();
     println!("For a 1200px wide colorbar:");
     println!("  Left triangle:");
     println!("    Tip: x ≈ 0 (extends left), y = center");
     println!("    Base: x = 0 (colorbar left edge)");
     println!("    Top vertex: at y_base_top");
-    println!("");
+    println!();
     println!("  Right triangle:");
     println!("    Tip: x ≈ 1200 (extends right), y = center");
     println!("    Base: x = 1199 (colorbar right edge)");
     println!("    Top vertex: at y_base_top (same as left)");
-    println!("");
+    println!();
     println!("Both triangles should:");
     println!("  1. Have identical base_top_y positioning");
     println!("  2. Converge from top symmetrically");
     println!("  3. Have identical top edge angles");
-    println!("");
+    println!();
 
     // Simulate the vertex positions from draw_colorbar_extends()
     let cbar_y: f64 = 100.0;
@@ -416,7 +417,7 @@ fn test_top_left_top_right_symmetry() {
         "  Right tip vertex: ({}, {})",
         right_tip_vertex.0, right_tip_vertex.1
     );
-    println!("");
+    println!();
 
     // Verify symmetry
     assert_eq!(
@@ -451,13 +452,13 @@ fn test_bottom_left_bottom_right_symmetry() {
 
     println!("\n=== BOTTOM-LEFT AND BOTTOM-RIGHT SYMMETRY TEST ===");
     println!("Requirement: Left and right triangles must have symmetric bottom positioning");
-    println!("");
+    println!();
     println!("Both triangles should:");
     println!("  1. Have identical base_bottom_y positioning");
     println!("  2. Converge from bottom symmetrically");
     println!("  3. Have identical bottom edge angles");
     println!("  4. Width decrease rate: same at all heights");
-    println!("");
+    println!();
 
     let cbar_y: f64 = 100.0;
     let cbar_h: f64 = 30.0; // Must be multiple of 3
@@ -500,7 +501,7 @@ fn test_bottom_left_bottom_right_symmetry() {
         "  Right tip vertex:    ({}, {})",
         right_tip_vertex.0, right_tip_vertex.1
     );
-    println!("");
+    println!();
 
     // Calculate slopes
     let left_slope = (left_bottom_vertex.0 - left_tip_vertex.0) as f64
@@ -535,7 +536,7 @@ fn test_triangle_vertex_symmetry_comprehensive() {
 
     println!("\n=== TRIANGLE VERTEX SYMMETRY COMPREHENSIVE TEST ===");
     println!("Testing complete vertex geometry for PNG rendering");
-    println!("");
+    println!();
 
     // Test multiple heights to ensure constraint is working
     let test_heights = vec![27, 30, 33, 36]; // All divisible by 3
@@ -557,7 +558,7 @@ fn test_triangle_vertex_symmetry_comprehensive() {
         let cbar_x_px = cbar_x.round() as i32;
         let cbar_w_px = cbar_w.round() as i32;
         let base_top_y = cbar_y as i32;
-        let base_bottom_y = base_top_y + height as i32 - 1;
+        let base_bottom_y = base_top_y + height - 1;
         let tip_y = (cbar_y + cbar_h / 2.0).round() as i32;
 
         // Left triangle
@@ -579,7 +580,7 @@ fn test_triangle_vertex_symmetry_comprehensive() {
         let expected_tip_y = (left_top_y + left_bottom_y) / 2;
         let tip_y_offset = (tip_y - expected_tip_y).abs();
         let constraint3 = tip_y_offset <= 1;
-        let constraint4 = (right_base_x - left_base_x) as i32 == cbar_w_px - 1;
+        let constraint4 = (right_base_x - left_base_x) == cbar_w_px - 1;
 
         println!(
             "  ✓ Top alignment: {} == {} → {}",
@@ -625,7 +626,7 @@ fn test_edge_positioning_matches_colorbar() {
 
     println!("\n=== EDGE POSITIONING TEST ===");
     println!("Verifying triangle edges align with colorbar boundaries");
-    println!("");
+    println!();
 
     let test_cases: Vec<(f64, f64, f64, f64)> = vec![
         (0.0, 1200.0, 100.0, 30.0),  // Standard 1200px
@@ -692,7 +693,7 @@ fn test_actual_pixel_rendering_symmetry() {
 
     println!("\n=== ACTUAL PIXEL RENDERING SYMMETRY TEST ===");
     println!("This tests the ACTUAL pixels rendered, not just vertex coordinates");
-    println!("");
+    println!();
 
     // Create a small image to render test triangles
     let mut img = image::RgbaImage::new(200, 100);
@@ -844,7 +845,7 @@ fn test_isosceles_rasterization_simple() {
 
         if let (Some(left), Some(right)) = (left_most, right_most) {
             // Check if symmetric around x=100
-            let dist_from_center_left = (100 as i32 - left as i32).abs();
+            let dist_from_center_left = (100 - left as i32).abs();
             let dist_from_center_right = (right as i32 - 100).abs();
 
             if dist_from_center_left != dist_from_center_right {
@@ -871,7 +872,7 @@ fn test_isosceles_rasterization_simple() {
                 right,
                 dist_l,
                 dist_r,
-                (*dist_l as i32 - *dist_r as i32).abs()
+                (*dist_l - *dist_r).abs()
             );
         }
         if asymmetries > 10 {
@@ -894,7 +895,7 @@ fn test_triangle_base_to_tip_convergence() {
 
     println!("\n=== BASE-TO-TIP CONVERGENCE TEST ===");
     println!("Checking that triangle edges converge symmetrically from base to tip");
-    println!("");
+    println!();
 
     // Create a simple isosceles triangle pointing upward
     // Base at y=60-80, tip at y=20
@@ -998,14 +999,14 @@ fn test_triangle_base_to_tip_convergence() {
     }
 
     // Check final convergence: should reach a point (width=1)
-    if let Some((_, _, _, final_width, _)) = converge_data.last() {
-        if *final_width != 1 {
-            println!(
-                "\n⚠️  Warning: Triangle tip is {}, expected 1 pixel",
-                final_width
-            );
-            // This might be OK if the tip is very close
-        }
+    if let Some((_, _, _, final_width, _)) = converge_data.last()
+        && *final_width != 1
+    {
+        println!(
+            "\n⚠️  Warning: Triangle tip is {}, expected 1 pixel",
+            final_width
+        );
+        // This might be OK if the tip is very close
     }
 
     println!("\n✓ Triangle converges cleanly from base to tip");
@@ -1021,7 +1022,7 @@ fn test_left_right_edge_step_symmetry() {
 
     println!("\n=== LEFT-RIGHT EDGE STEP SYMMETRY TEST ===");
     println!("Checking that both edges step equally at each scanline");
-    println!("");
+    println!();
 
     // Create a simple isosceles triangle pointing upward
     // Base at y=60-80, tip at y=20
@@ -1179,7 +1180,7 @@ fn test_triangle_pixel_extent_symmetry() {
     for (i, &step) in step_sizes.iter().enumerate() {
         if i > 0 && i < step_sizes.len() - 1 {
             // Most steps should be 0 or 1 for a smooth linear triangle
-            if step < 0 || step > 1 {
+            if !(0..=1).contains(&step) {
                 irregular_steps += 1;
             } else {
                 uniform_steps += 1;
@@ -1309,7 +1310,7 @@ fn test_triangle_pixel_extent_symmetry() {
     println!("If truly rotationally symmetric, the patterns should match when reversed.");
     let mut rotational_asymmetries = 0;
 
-    for (_i, (y_orig, _left_orig, _right_orig, w_orig)) in extents.iter().enumerate() {
+    for (y_orig, _left_orig, _right_orig, w_orig) in extents.iter() {
         // The flipped triangle should have reversed y-positions
         // y_orig=20 corresponds to tip, which is furthest from base
         // In flipped image, tip is at y=180, so y_flip=180 should match
@@ -1322,16 +1323,15 @@ fn test_triangle_pixel_extent_symmetry() {
         if let Some((_, _left_flip, _right_flip, w_flip)) = flipped_extents
             .iter()
             .find(|(y, _, _, _)| *y == y_flip as u32)
+            && w_orig != w_flip
         {
-            if w_orig != w_flip {
-                if rotational_asymmetries < 5 {
-                    println!(
-                        "  ❌ y_orig={} (distance {}): width={}, y_flip={}: width={}",
-                        y_orig, dist_from_orig_tip, w_orig, y_flip, w_flip
-                    );
-                }
-                rotational_asymmetries += 1;
+            if rotational_asymmetries < 5 {
+                println!(
+                    "  ❌ y_orig={} (distance {}): width={}, y_flip={}: width={}",
+                    y_orig, dist_from_orig_tip, w_orig, y_flip, w_flip
+                );
             }
+            rotational_asymmetries += 1;
         }
     }
 

@@ -198,14 +198,14 @@ mod tests {
         // North pole (lat=π/2) should have specific x,y coordinates
         if let Some((u, v)) = proj.forward(0.0, PI / 2.0) {
             println!("North pole: u={}, v={}", u, v);
-            assert!(u >= 0.0 && u <= 1.0);
-            assert!(v >= 0.0 && v <= 1.0);
+            assert!((0.0..=1.0).contains(&u));
+            assert!((0.0..=1.0).contains(&v));
         }
         // South pole (lat=-π/2)
         if let Some((u, v)) = proj.forward(0.0, -PI / 2.0) {
             println!("South pole: u={}, v={}", u, v);
-            assert!(u >= 0.0 && u <= 1.0);
-            assert!(v >= 0.0 && v <= 1.0);
+            assert!((0.0..=1.0).contains(&u));
+            assert!((0.0..=1.0).contains(&v));
         }
     }
 
@@ -231,13 +231,13 @@ mod tests {
                     lon, lat, u, v, desc
                 );
                 assert!(
-                    (u >= 0.0 && u <= 1.0) || (u - 0.0).abs() < 1e-10 || (u - 1.0).abs() < 1e-10,
+                    (0.0..=1.0).contains(&u) || (u - 0.0).abs() < 1e-10 || (u - 1.0).abs() < 1e-10,
                     "u out of bounds for {}: {}",
                     desc,
                     u
                 );
                 assert!(
-                    (v >= 0.0 && v <= 1.0) || (v - 0.0).abs() < 1e-10 || (v - 1.0).abs() < 1e-10,
+                    (0.0..=1.0).contains(&v) || (v - 0.0).abs() < 1e-10 || (v - 1.0).abs() < 1e-10,
                     "v out of bounds for {}: {}",
                     desc,
                     v
@@ -339,32 +339,32 @@ mod tests {
 
         for &lon in &lons {
             for &lat in &lats {
-                if let Some((u, v)) = proj.forward(lon, lat) {
-                    if let Some((lon2, lat2)) = proj.inverse(u, v) {
-                        // Normalize longitude difference to [-π, π] to handle wraparound
-                        // Note: -π and π are equivalent longitudes
-                        let mut dlon = ((lon - lon2 + PI) % (2.0 * PI) - PI).abs();
-                        // Check if we're crossing the ±π boundary
-                        if dlon > PI {
-                            dlon = 2.0 * PI - dlon;
-                        }
-                        let dlat = (lat - lat2).abs();
-
-                        assert!(
-                            dlon < 1e-5,
-                            "Lon mismatch: {} vs {} (diff: {})",
-                            lon,
-                            lon2,
-                            dlon
-                        );
-                        assert!(
-                            dlat < 1e-6,
-                            "Lat mismatch: {} vs {} (diff: {})",
-                            lat,
-                            lat2,
-                            dlat
-                        );
+                if let Some((u, v)) = proj.forward(lon, lat)
+                    && let Some((lon2, lat2)) = proj.inverse(u, v)
+                {
+                    // Normalize longitude difference to [-π, π] to handle wraparound
+                    // Note: -π and π are equivalent longitudes
+                    let mut dlon = ((lon - lon2 + PI) % (2.0 * PI) - PI).abs();
+                    // Check if we're crossing the ±π boundary
+                    if dlon > PI {
+                        dlon = 2.0 * PI - dlon;
                     }
+                    let dlat = (lat - lat2).abs();
+
+                    assert!(
+                        dlon < 1e-5,
+                        "Lon mismatch: {} vs {} (diff: {})",
+                        lon,
+                        lon2,
+                        dlon
+                    );
+                    assert!(
+                        dlat < 1e-6,
+                        "Lat mismatch: {} vs {} (diff: {})",
+                        lat,
+                        lat2,
+                        dlat
+                    );
                 }
             }
         }
@@ -451,16 +451,14 @@ mod tests {
                 }
             } else {
                 outside_count += 1;
-                if is_valid {
-                    if let Some((lon, lat)) = result {
-                        // Check if the returned coordinates make sense (finite, in reasonable range)
-                        if !lon.is_finite()
-                            || !lat.is_finite()
-                            || lon.abs() > PI * 2.0
-                            || lat.abs() > PI
-                        {
-                            invalid_coords.push((px, py, lon, lat, ellipse_val));
-                        }
+                if is_valid && let Some((lon, lat)) = result {
+                    // Check if the returned coordinates make sense (finite, in reasonable range)
+                    if !lon.is_finite()
+                        || !lat.is_finite()
+                        || lon.abs() > PI * 2.0
+                        || lat.abs() > PI
+                    {
+                        invalid_coords.push((px, py, lon, lat, ellipse_val));
                     }
                 }
             }
