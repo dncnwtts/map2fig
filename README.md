@@ -86,6 +86,8 @@ This creates a default Mollweide projection with:
 
 **Output**: Generates `map.pdf`—full-sky map with professional formatting, colorbar, and axis labels. The Mollweide projection displays the entire sky in an oval format suitable for astronomical publications.
 
+![Example 1: Mollweide projection](examples/outputs/example1_mollweide.pdf)
+
 ---
 
 ### 2. Log-Scale Map with Custom Color Limits
@@ -101,6 +103,8 @@ This creates a default Mollweide projection with:
 ```
 
 The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color scale limits. The Plasma colormap is good for perceptually uniform maps.
+
+![Example 2: Log-scale with Plasma colormap](examples/outputs/example2_log_scale.pdf)
 
 **Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels.
 
@@ -130,6 +134,8 @@ The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color 
 - Default field of view: 300 arcmin (5 degrees)
 - Default resolution: 1 arcmin/pixel = 300×300 pixel map area
 - Adjust `--fov` (arcmin) and `--res` (arcmin/pixel) to change zoom level
+
+[![Example 3: Gnomonic view with local graticule](examples/outputs/example3_gnomonic_graticule_preview.png)](examples/outputs/example3_gnomonic_graticule.png)
 
 **Output**: Generates `galactic_center.png`—zoomed 300×300 pixel PNG centered on the Galactic center region with visible 2° coordinate grid. Black lines show local tangent-plane coordinates.
 
@@ -173,6 +179,8 @@ This renders:
 
 The overlay graticule shows how different coordinate systems relate on the same sky patch. The overlay lines may curve or appear distorted due to the projection, which is physically correct—it shows the true relationship between the coordinate systems on the curved sky.
 
+![Example 4: Overlay graticule](examples/outputs/example4_overlay_graticule.pdf)
+
 **Output**: Generates `gal_with_eq_overlay.pdf`—600×600 pixel PDF with black local graticule and yellow equatorial overlay at 30° spacing, showing coordinate system relationships.
 
 ---
@@ -193,6 +201,8 @@ The overlay graticule shows how different coordinate systems relate on the same 
 **Parameters**:
 - `--roll 45`: Rotate the image 45° counterclockwise around the projection center
 - Works with both graticule modes (local and overlay)
+
+[![Example 4b: Gnomonic with 45° roll](examples/outputs/example4b_roll_preview.png)](examples/outputs/example4b_roll.png)
 
 **Output**: Generates `rotated_view.png`—600×600 pixel PNG of the gnomonic projection rotated 45° counterclockwise. The projection center remains fixed while the map rotates around it.
 
@@ -229,6 +239,8 @@ The overlay graticule shows how different coordinate systems relate on the same 
   - Default: 1 pixel (thin lines)
   - Increase for high-resolution plots: 2-4 pixels recommended
   - Example: `--grat-line-width 3` for 3-pixel thick lines
+[![Example 4c: Customized graticule with thick red lines](examples/outputs/example4c_graticule_customization_preview.png)](examples/outputs/example4c_graticule_customization.png)
+
   - Applies to both local graticule and overlay coordinates
 
 **Output**: Generates `detailed_graticule.png`—high-resolution 120×120 arcmin PNG with black local graticule and red equatorial overlay, both with 2-pixel line thickness.
@@ -842,7 +854,9 @@ Contributions welcome! Common areas:
 
 ## License
 
-[Your license here]
+This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
+
+MIT License © 2026 Duncan Watts
 
 ## Citation & Acknowledgments
 

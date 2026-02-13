@@ -8,6 +8,7 @@
 *.png
 *.pdf
 *.txt
+!LICENSE.txt
 perf.data*
 
 # Test artifacts and debug directories
