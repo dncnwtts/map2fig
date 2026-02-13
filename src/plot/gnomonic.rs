@@ -447,24 +447,22 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         units_label,
                     );
                 }
-            } else {
-                if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
-                    let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
-                        28.0 / 1.5 * (width as f32 / 300.0)
-                    });
-                    let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
-                    let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
+            } else if let Some(units_label) = crate::colorbar::format_units_label(false, Some(units_str)) {
+                let units_font_size = params.display.units_font_size.unwrap_or_else(|| {
+                    28.0 / 1.5 * (width as f32 / 300.0)
+                });
+                let text_width_est = (units_label.len() as f32 * units_font_size * 0.6) as i32;
+                let center_x = (layout.cbar_x + layout.cbar_w / 2.0 - text_width_est as f64 / 2.0) as i32;
 
-                    draw_text_mut(
-                        &mut img,
-                        Rgba([0, 0, 0, 255]),
-                        center_x,
-                        units_y,
-                        FontScale::uniform(units_font_size),
-                        &font,
-                        &units_label,
-                    );
-                }
+                draw_text_mut(
+                    &mut img,
+                    Rgba([0, 0, 0, 255]),
+                    center_x,
+                    units_y,
+                    FontScale::uniform(units_font_size),
+                    &font,
+                    &units_label,
+                );
             }
         }
     }
