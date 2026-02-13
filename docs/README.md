@@ -32,8 +32,8 @@ Session notes, completed work, and development archives:
 ## Quick Navigation
 
 - **Getting Started**: See [README.md](../README.md) in project root
-- **Quick Reference**: [QUICK_REFERENCE.md](../QUICK_REFERENCE.md)
-- **Project Overview**: [SPECIFICATION.md](../SPECIFICATION.md)
+- **Quick Reference**: [QUICK_REFERENCE.md](history/QUICK_REFERENCE.md)
+- **Project Overview**: [SPECIFICATION.md](history/SPECIFICATION.md)
 
 ## Finding Information
 
@@ -43,5 +43,5 @@ Session notes, completed work, and development archives:
 | How projections work | [architecture/](architecture/) |
 | Test coverage & results | [reports/](reports/) |
 | Past work or session notes | [history/](history/) |
-| Basic usage | [QUICK_REFERENCE.md](../QUICK_REFERENCE.md) or [README.md](../README.md) |
+| Basic usage | [QUICK_REFERENCE.md](history/QUICK_REFERENCE.md) or [README.md](../README.md) |
 

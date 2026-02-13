@@ -26,8 +26,8 @@ A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollwe
 
 ### Quick Install (Recommended)
 ```bash
-git clone <repository>
-cd healpix_plotter
+git clone https://github.com/dncnwtts/map2fig
+cd map2fig
 ./install.sh
 ```
 
@@ -39,8 +39,8 @@ The `install.sh` script will:
 
 ### Manual Build
 ```bash
-git clone <repository>
-cd healpix_plotter
+git clone https://github.com/dncnwtts/map2fig
+cd map2fig
 cargo build --release
 ```
 
@@ -56,7 +56,7 @@ Once installed, tectonic will be automatically used for all LaTeX rendering. If 
 
 **Note**: Tectonic provides more reliable PDF generation with self-contained compilation. The build script (`build.rs`) checks for tectonic availability and provides guidance during the build process.
 
-**⚠️ Build Issues?** See [TECTONIC_INSTALL.md](TECTONIC_INSTALL.md) for detailed troubleshooting, including:
+**⚠️ Build Issues?** See [TECTONIC_INSTALL.md](docs/development/TECTONIC_INSTALL.md) for detailed troubleshooting, including:
 - Missing harfbuzz development headers (common on Linux)
 - Platform-specific dependency installation
 - Fallback behavior if tectonic doesn't work
@@ -84,9 +84,7 @@ This creates a default Mollweide projection with:
 - 1200×600 pixel output
 - Colorbar showing data range
 
-**Output**: Generates `map.pdf`—full-sky map with professional formatting, colorbar, and axis labels. The Mollweide projection displays the entire sky in an oval format suitable for astronomical publications.
-
-![Example 1: Mollweide projection](examples/outputs/example1_mollweide.pdf)
+**Output**: Generates `map.pdf`—full-sky map with professional formatting, colorbar, and axis labels. The Mollweide projection displays the entire sky in an oval format suitable for astronomical publications. [View full resolution PDF](examples/outputs/example1_mollweide.pdf)
 
 ---
 
@@ -104,9 +102,7 @@ This creates a default Mollweide projection with:
 
 The `--log` flag applies logarithmic scaling; `--min` and `--max` set the color scale limits. The Plasma colormap is good for perceptually uniform maps.
 
-![Example 2: Log-scale with Plasma colormap](examples/outputs/example2_log_scale.pdf)
-
-**Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels.
+**Output**: Generates `sensitivity.pdf`—full-sky map with logarithmic intensity scaling and Plasma colormap. Colorbar shows the 1e-6 to 1e-3 range with log scale labels. [View full resolution PDF](examples/outputs/example2_log_scale.pdf)
 
 ---
 
@@ -179,9 +175,7 @@ This renders:
 
 The overlay graticule shows how different coordinate systems relate on the same sky patch. The overlay lines may curve or appear distorted due to the projection, which is physically correct—it shows the true relationship between the coordinate systems on the curved sky.
 
-![Example 4: Overlay graticule](examples/outputs/example4_overlay_graticule.pdf)
-
-**Output**: Generates `gal_with_eq_overlay.pdf`—600×600 pixel PDF with black local graticule and yellow equatorial overlay at 30° spacing, showing coordinate system relationships.
+**Output**: Generates `gal_with_eq_overlay.pdf`—600×600 pixel PDF with black local graticule and yellow equatorial overlay at 30° spacing, showing coordinate system relationships. [View PDF](examples/outputs/example4_overlay_graticule.pdf)
 
 ---
 
@@ -301,7 +295,7 @@ This creates:
 - LaTeX-formatted colorbar with units
 - Publication-ready PDF output
 
-**Output**: Generates `publication_figure.pdf`—high-resolution 2400×1200 pixel PDF with Coolwarm colormap, black Galactic graticule, cyan Equatorial overlay, and LaTeX-formatted colorbar showing temperature in µK.
+**Output**: Generates `publication_figure.pdf`—high-resolution 2400×1200 pixel PDF with Coolwarm colormap, black Galactic graticule, cyan Equatorial overlay, and LaTeX-formatted colorbar showing temperature in µK. [View PDF](examples/outputs/example5_dual_graticules.pdf)
 
 
 ---
@@ -324,7 +318,7 @@ This creates:
 - `--bg-color "26,26,26,255"`: Dark background (RGB + alpha) for astronomy publication style (note: format is RGBA values, not hex)
 - Optional: `--min/--max`: Explicit data range limits for histogram; omit to auto-detect full dynamic range
 
-**Output**: Generates `survey_equalized.pdf`—1600×800 pixel PDF with histogram-equalized Inferno colormap and dark charcoal background, revealing subtle features across the full dynamic range.
+**Output**: Generates `survey_equalized.pdf`—1600×800 pixel PDF with histogram-equalized Inferno colormap and dark charcoal background, revealing subtle features across the full dynamic range. [View PDF](examples/outputs/example6_histogram_equalization.pdf)
 
 
 ---
@@ -350,7 +344,7 @@ This creates:
 
 Arcsinh scaling is ideal for data where you need to see both small and large deviations from zero without artificial discontinuities. It's mathematically defined as `sinh⁻¹(x) = ln(x + √(1 + x²))`.
 
-**Output**: Generates `cmb_asinh.pdf`—full-sky map with arcsinh-scaled Red-Blue colormap, ideal for publication-quality CMB or other symmetric data visualizations.
+**Output**: Generates `cmb_asinh.pdf`—full-sky map with arcsinh-scaled Red-Blue colormap, ideal for publication-quality CMB or other symmetric data visualizations. [View PDF](examples/outputs/example7_asinh_scaling.pdf)
 
 
 ---
@@ -378,7 +372,7 @@ Arcsinh scaling is ideal for data where you need to see both small and large dev
 
 Symlog creates a linear region in the middle (±linthresh) and logarithmic scaling beyond, allowing visualization of both tiny residuals near zero and extreme outliers. Perfect for differential maps showing deviations from a reference.
 
-**Output**: Generates `cmb_symlog.pdf`—full-sky map with symlog-scaled Red-Blue colormap showing both small-scale structure and extreme features.
+**Output**: Generates `cmb_symlog.pdf`—full-sky map with symlog-scaled Red-Blue colormap showing both small-scale structure and extreme features. [View PDF](examples/outputs/example8_symlog_scaling.pdf)
 
 
 ---
@@ -410,7 +404,7 @@ Symlog creates a linear region in the middle (±linthresh) and logarithmic scali
 - Text formatting: `\mathrm{...}`, `\mathbf{...}`, `\text{...}`
 - Mathematical operators: `\pm`, `\times`, `\leq`, `\infty`, etc.
 
-**Output**: Generates `cmb_with_units.pdf`—full-sky map with colorbar showing properly formatted units μK_{CMB} using Unicode mathematical symbols.
+**Output**: Generates `cmb_with_units.pdf`—full-sky map with colorbar showing properly formatted units μK_{CMB} using Unicode mathematical symbols. [View PDF](examples/outputs/example9_latex_units.pdf)
 
 
 ---
@@ -863,7 +857,7 @@ MIT License © 2026 Duncan Watts
 **map2fig** builds on the excellent work of the HEALPix, HEALPy, and Cosmoglobe communities, as well as the broader astronomical software ecosystem.
 
 For detailed citations, references, and attribution, see:
-- [**ACKNOWLEDGMENTS.md**](ACKNOWLEDGMENTS.md) – Comprehensive credits and scientific references
+- [**ACKNOWLEDGMENTS.md**](docs/history/ACKNOWLEDGMENTS.md) – Comprehensive credits and scientific references
 - [**CITATION.cff**](CITATION.cff) – Machine-readable citation metadata
 
 ### Quick Citation
