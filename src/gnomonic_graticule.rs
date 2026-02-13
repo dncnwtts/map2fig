@@ -257,26 +257,24 @@ pub fn render_gnomonic_sky_overlay(
     grid: &mut RasterGrid,
     proj: &GnomonicProjection,
     view: &ViewTransform,
-    dlon_deg: f64,
-    dlat_deg: f64,
-    grat_coord: CoordSystem,
-    input_coord: CoordSystem,
+    spacing: crate::params::GraticuleSpacing,
+    coords: crate::params::GraticuleCoordinates,
     color: Rgba<u8>,
 ) {
     // Generate graticule lines in the overlay coordinate system
     // Sample the full range to ensure all lines are attempted
-    let parallel_degrees = generate_sky_graticule_degrees(dlat_deg, true);
+    let parallel_degrees = generate_sky_graticule_degrees(spacing.dlat_deg, true);
 
     // For meridians, generate lines at regular spacing around the full circle
     let mut meridian_degrees: Vec<f64> = Vec::new();
     let mut lon_deg = 0.0;
     while lon_deg < 360.0 {
         meridian_degrees.push(lon_deg);
-        lon_deg += dlon_deg;
+        lon_deg += spacing.dlon_deg;
     }
 
     // Transform path: grat_coord → input_coord (what the view expects)
-    let grat_to_input = coord_rotation(grat_coord, input_coord);
+    let grat_to_input = coord_rotation(coords.grat_coord, coords.input_coord);
 
     // Precompute projection parameters
     let delta = proj.resolution_arcmin * PI / (180.0 * 60.0);

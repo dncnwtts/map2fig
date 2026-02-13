@@ -7,7 +7,7 @@ use crate::plot::rasterize_to_surface;
 use crate::render::RenderBackend;
 use crate::render::target::{PixelSource, RenderTarget};
 use crate::scale::generate_colorbar_ticks;
-use crate::{CairoImageSink, Colormap, Scale};
+use crate::{CairoImageSink, Colormap};
 use cairo::{Context, Format, ImageSurface};
 use std::f64::consts::PI;
 
@@ -166,11 +166,7 @@ fn draw_colorbar_pdf_labels(
     cr: &Context,
     layout: &ColorbarLayout,
     ticks: &ColorbarTicks,
-    scale: Scale,
-    latex_rendering: bool,
-    units: Option<&str>,
-    units_font_size: Option<f32>,
-    map_width: Option<f64>,
+    config: crate::params::ColorbarPdfLabelConfig,
 ) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
 
@@ -183,7 +179,7 @@ fn draw_colorbar_pdf_labels(
 
     // Tick font size scales with FOV like resolution label
     // Resolution label at FOV 300 is 11pt, tick labels at 3/4 of 1.5x = 12.375pt
-    let adjusted_tick_font_size = if let Some(w) = map_width {
+    let adjusted_tick_font_size = if let Some(w) = config.map_width {
         // Scale by (w/300): FOV 300 = 12.375pt, FOV 600 = 24.75pt, etc.
         (16.5 * 0.75) * (w / 300.0)
     } else {
@@ -204,10 +200,17 @@ fn draw_colorbar_pdf_labels(
 
     // Draw tick labels at the computed position
     for (&t, &val) in ticks.major_positions.iter().zip(ticks.major_values.iter()) {
-        let label = format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, true);
+        let label = format_tick_label_with_units(
+            val,
+            config.scale,
+            Some(t),
+            config.latex_rendering,
+            config.units.as_deref(),
+            true,
+        );
         let x = t * layout.w + layout.x;
 
-        if latex_rendering {
+        if config.latex_rendering {
             // Try to render LaTeX label as PNG
             // Wrap in math mode for proper LaTeX rendering
             let math_label = format!("${}", label);
@@ -233,7 +236,7 @@ fn draw_colorbar_pdf_labels(
     }
 
     // Draw units label below colorbar if specified
-    if let Some(units_str) = units {
+    if let Some(units_str) = config.units.as_deref() {
         // Account for tick direction: when ticks are outward, push units text down by the tick height
         let tick_offset = match layout.tick_direction {
             crate::cli::TickDirection::Outward => layout.major_tick_height,
@@ -242,15 +245,15 @@ fn draw_colorbar_pdf_labels(
 
         // Add significant vertical spacing to keep units well clear of tick labels
         // Use map_width-based scale for consistent spacing across FOV sizes
-        let spacing_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
+        let spacing_scale = config.map_width.map(|w| w / 300.0).unwrap_or(1.0);
         let vertical_gap = 12.0 * spacing_scale; // Extra spacing grows with FOV
         let units_y_pos = label_y + tick_offset + vertical_gap; // Position well below tick labels
 
         // Use a reasonable LaTeX font size for units text
         // Scale both font size and DPI with map width for proper scaling
-        let dpi_scale = map_width.map(|w| w / 300.0).unwrap_or(1.0);
+        let dpi_scale = config.map_width.map(|w| w / 300.0).unwrap_or(1.0);
         // units_font_size already includes the (width/300) scaling, multiply by 1.25 for desired size
-        let latex_font_size = ((units_font_size.unwrap_or(28.0) * 1.25) as u32).max(12);
+        let latex_font_size = ((config.units_font_size.unwrap_or(28.0) * 1.25) as u32).max(12);
         let latex_dpi = ((300.0 * dpi_scale) as u32).max(100); // Scale DPI with map width
 
         // Try LaTeX rendering at scaled DPI for crisp embedding
@@ -268,22 +271,7 @@ fn draw_colorbar_pdf_labels(
                 cairo::FontWeight::Bold,
             );
             // Use provided font size or default 14pt
-            let font_size = units_font_size.unwrap_or(14.0) as f64;
-            cr.set_font_size(font_size);
-            let ext = cr.text_extents(&units_label).unwrap();
-            let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
-            cr.move_to(center_x, units_y_pos);
-            cr.show_text(&units_label).unwrap();
-        } else if let Some(units_label) = format_units_label(false, Some(units_str)) {
-            // Final fallback to non-LaTeX plain text
-            // Use serif font to match TeX fonts used in astronomy publications
-            cr.select_font_face(
-                "Liberation Serif",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-            );
-            // Use provided font size or default 14pt
-            let font_size = units_font_size.unwrap_or(14.0) as f64;
+            let font_size = config.units_font_size.unwrap_or(14.0) as f64;
             cr.set_font_size(font_size);
             let ext = cr.text_extents(&units_label).unwrap();
             let center_x = layout.x + layout.w / 2.0 - ext.width() / 2.0;
@@ -460,11 +448,13 @@ pub fn draw_colorbar_pdf(
         cr,
         &cb_layout,
         &ticks,
-        params.scale_type,
-        params.latex_rendering,
-        params.units,
-        params.units_font_size,
-        params.map_width, // Pass map_width for DPI scaling
+        crate::params::ColorbarPdfLabelConfig {
+            scale: params.scale_type,
+            latex_rendering: params.latex_rendering,
+            units: params.units.map(|s| s.to_string()),
+            units_font_size: params.units_font_size,
+            map_width: params.map_width,
+        },
     );
 
     draw_colorbar_pdf_extends(cr, &cb_layout, params.extend, params.cmap);

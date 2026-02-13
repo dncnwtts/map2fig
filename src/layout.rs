@@ -116,53 +116,50 @@ pub fn compute_mollweide_layout_with_fonts(
             border_width_px,
         },
         compute_cbar_layout(
-            outer_pad,
-            cbar_y,
-            width - 2.0 * outer_pad,
-            cbar_h,
-            label_pad,
-            width,
-            tick_direction,
-            custom_tick_font_size,
-            1.0,
+            crate::params::GeometryRect {
+                x: outer_pad,
+                y: cbar_y,
+                w: width - 2.0 * outer_pad,
+                h: cbar_h,
+            },
+            crate::params::ColorbarLayoutConfig {
+                label_pad,
+                image_width: width,
+                tick_direction,
+                custom_tick_font_size,
+                width_scale: 1.0,
+            },
         ),
     )
 }
 
 fn compute_cbar_layout(
-    cbar_x: f64,
-    cbar_y: f64,
-    cbar_w: f64,
-    cbar_h: f64,
-    label_pad: f64,
-    width: f64,
-    tick_direction: crate::cli::TickDirection,
-    custom_tick_font_size: Option<f32>,
-    width_scale: f64,
+    geom: crate::params::GeometryRect,
+    config: crate::params::ColorbarLayoutConfig,
 ) -> ColorbarLayout {
     // Scale tick font size using actual image width
     // Default: 12pt at width=800px, so scale is (width / 800.0)
-    let tick_font_size = if let Some(custom) = custom_tick_font_size {
+    let tick_font_size = if let Some(custom) = config.custom_tick_font_size {
         custom as f64
     } else {
-        (12.0 * (width / 800.0)).clamp(7.0, 24.0)
+        (12.0 * (config.image_width / 800.0)).clamp(7.0, 24.0)
     };
 
     ColorbarLayout {
-        x: cbar_x,
-        y: cbar_y,
-        w: cbar_w,
-        h: cbar_h,
+        x: geom.x,
+        y: geom.y,
+        w: geom.w,
+        h: geom.h,
 
-        tick_bottom: cbar_y + cbar_h,
-        major_tick_height: (cbar_h * 0.5).round().max(1.0),
-        minor_tick_height: (cbar_h * 0.3).round().max(1.0),
-        major_tick_width: ((cbar_w * 0.002) * width_scale).round().max(1.0),
-        minor_tick_width: ((cbar_w * 0.001) * width_scale).round().max(1.0),
+        tick_bottom: geom.y + geom.h,
+        major_tick_height: (geom.h * 0.5).round().max(1.0),
+        minor_tick_height: (geom.h * 0.3).round().max(1.0),
+        major_tick_width: ((geom.w * 0.002) * config.width_scale).round().max(1.0),
+        minor_tick_width: ((geom.w * 0.001) * config.width_scale).round().max(1.0),
 
         tick_font_size,
-        tick_label_pad: cbar_h + cbar_y + label_pad,
-        tick_direction,
+        tick_label_pad: geom.h + geom.y + config.label_pad,
+        tick_direction: config.tick_direction,
     }
 }
 
@@ -280,15 +277,19 @@ pub fn compute_gnomonic_layout_with_fonts(
             border_width_px,
         },
         compute_cbar_layout(
-            map_x,
-            cbar_y,
-            map_w,
-            cbar_h,
-            label_pad,
-            width,
-            tick_direction,
-            custom_tick_font_size,
-            width_scale,
+            crate::params::GeometryRect {
+                x: map_x,
+                y: cbar_y,
+                w: map_w,
+                h: cbar_h,
+            },
+            crate::params::ColorbarLayoutConfig {
+                label_pad,
+                image_width: width,
+                tick_direction,
+                custom_tick_font_size,
+                width_scale,
+            },
         ),
     )
 }

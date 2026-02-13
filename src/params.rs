@@ -158,3 +158,47 @@ pub struct GraticuleRenderParams {
     pub color_b: f64,
     pub line_width: f64,
 }
+
+/// Layout geometry for rendering regions.
+pub struct GeometryRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// Associated coordinate systems for graticule rendering.
+pub struct GraticuleCoordinates {
+    pub grat_coord: CoordSystem,
+    pub input_coord: CoordSystem,
+}
+
+/// Graticule line spacing configuration.
+pub struct GraticuleSpacing {
+    pub dlon_deg: f64,
+    pub dlat_deg: f64,
+}
+
+/// Colorbar geometry and configuration.
+pub struct ColorbarGeometry {
+    pub rect: GeometryRect,
+    pub label_pad: f64,
+}
+
+/// Colorbar label configuration for rendering.
+pub struct ColorbarPdfLabelConfig {
+    pub scale: Scale,
+    pub latex_rendering: bool,
+    pub units: Option<String>,
+    pub units_font_size: Option<f32>,
+    pub map_width: Option<f64>,
+}
+
+/// Colorbar layout configuration parameters.
+pub struct ColorbarLayoutConfig {
+    pub label_pad: f64,
+    pub image_width: f64,
+    pub tick_direction: crate::cli::TickDirection,
+    pub custom_tick_font_size: Option<f32>,
+    pub width_scale: f64,
+}

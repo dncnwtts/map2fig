@@ -594,7 +594,15 @@ pub fn render_graticule_cairo(
     height: f64,
 ) {
     render_graticule_cairo_with_color(
-        graticule, cr, x_offset, y_offset, width, height, 0.0, 0.0, 0.0,
+        graticule,
+        cr,
+        crate::params::GeometryRect {
+            x: x_offset,
+            y: y_offset,
+            w: width,
+            h: height,
+        },
+        (0.0, 0.0, 0.0),
     );
 }
 
@@ -602,16 +610,11 @@ pub fn render_graticule_cairo(
 pub fn render_graticule_cairo_with_color(
     graticule: &GraticuleLineSegments,
     cr: &cairo::Context,
-    x_offset: f64,
-    y_offset: f64,
-    width: f64,
-    height: f64,
-    r: f64,
-    g: f64,
-    b: f64,
+    layout: crate::params::GeometryRect,
+    color: (f64, f64, f64),
 ) {
     // Set line properties for graticule
-    cr.set_source_rgb(r, g, b);
+    cr.set_source_rgb(color.0, color.1, color.2);
     cr.set_line_width(0.5); // Thin lines
 
     for polyline in &graticule.polylines {
@@ -621,14 +624,14 @@ pub fn render_graticule_cairo_with_color(
 
         // Start the path at the first point
         let first = polyline.points[0];
-        let x = x_offset + first.0 * width;
-        let y = y_offset + first.1 * height;
+        let x = layout.x + first.0 * layout.w;
+        let y = layout.y + first.1 * layout.h;
         cr.move_to(x, y);
 
         // Draw line segments to remaining points
         for &(u, v) in &polyline.points[1..] {
-            let x = x_offset + u * width;
-            let y = y_offset + v * height;
+            let x = layout.x + u * layout.w;
+            let y = layout.y + v * layout.h;
             cr.line_to(x, y);
         }
     }

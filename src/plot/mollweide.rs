@@ -281,13 +281,13 @@ where
             render_graticule_cairo_with_color(
                 &overlay_graticule,
                 &cr_pdf,
-                layout.map_x,
-                layout.map_y,
-                layout.map_w,
-                layout.map_h,
-                r,
-                g,
-                b,
+                crate::params::GeometryRect {
+                    x: layout.map_x,
+                    y: layout.map_y,
+                    w: layout.map_w,
+                    h: layout.map_h,
+                },
+                (r, g, b),
             );
         }
     }
@@ -540,13 +540,13 @@ pub fn _plot_mollweide_png_impl_projected<F>(
                     render_graticule_cairo_with_color(
                         &overlay_graticule,
                         &border_cr,
-                        pad as f64,
-                        pad as f64,
-                        layout.map_w,
-                        layout.map_h,
-                        r,
-                        g,
-                        b,
+                        crate::params::GeometryRect {
+                            x: pad as f64,
+                            y: pad as f64,
+                            w: layout.map_w,
+                            h: layout.map_h,
+                        },
+                        (r, g, b),
                     );
                 }
             }

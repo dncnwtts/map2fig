@@ -145,8 +145,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, width);
 
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params =
-        compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
+    let scale_params = compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
 
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
@@ -192,10 +191,14 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 &mut grid,
                 &proj,
                 view,
-                grat_dlon,
-                grat_dlat,
-                overlay_sys,
-                view.input_coord,
+                crate::params::GraticuleSpacing {
+                    dlon_deg: grat_dlon,
+                    dlat_deg: grat_dlat,
+                },
+                crate::params::GraticuleCoordinates {
+                    grat_coord: overlay_sys,
+                    input_coord: view.input_coord,
+                },
                 overlay_color,
             );
         }
@@ -634,8 +637,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
     let mut grid = RasterGrid::new(width, img_height);
 
     // For gnomonic projections, compute scale limits using only FOV-contained pixels
-    let scale_params =
-        compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
+    let scale_params = compute_gnomonic_scale(map, &params.scale, &proj, width, meta, view);
 
     let hist_scale = if scale == Scale::Histogram {
         let range = match (minv, maxv) {
@@ -681,10 +683,14 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
                 &mut grid,
                 &proj,
                 view,
-                grat_dlon,
-                grat_dlat,
-                overlay_sys,
-                CoordSystem::G, // Map input is Galactic by default
+                crate::params::GraticuleSpacing {
+                    dlon_deg: grat_dlon,
+                    dlat_deg: grat_dlat,
+                },
+                crate::params::GraticuleCoordinates {
+                    grat_coord: overlay_sys,
+                    input_coord: CoordSystem::G, // Map input is Galactic by default
+                },
                 overlay_color,
             );
         }
