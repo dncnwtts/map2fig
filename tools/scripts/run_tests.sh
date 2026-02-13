@@ -10,6 +10,9 @@ cargo test "$@"
 
 echo ""
 echo "Cleaning up test artifacts..."
-rm -f examples/output/*.png examples/output/*.pdf examples/output/*.txt
+# Remove PNG/PDF files from root and examples/output
+rm -f *.png *.pdf examples/output/*.png examples/output/*.pdf examples/output/*.txt
+# Also clean up /tmp test files
+rm -f /tmp/colorbar*.png
 
 echo "✓ Tests complete, artifacts cleaned"

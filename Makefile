@@ -25,5 +25,6 @@ clean:
 	@echo "Cleaned build artifacts"
 
 distclean: clean
+	rm -f *.png *.pdf *.txt /tmp/colorbar*.png
 	rm -f examples/output/*.png examples/output/*.pdf examples/output/*.txt
-	@echo "Also removed test outputs"
+	@echo "Also removed test outputs and /tmp artifacts"
