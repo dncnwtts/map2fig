@@ -89,7 +89,7 @@ pub mod simd;
 pub use cli::{Args, PlotConfig};
 pub use colormap::{Colormap, available_colormaps, get_colormap};
 pub use constants::*;
-pub use fits::read_healpix_column;
+pub use fits::{read_healpix_column, read_healpix_column_cached};
 pub use mask::PixelMask;
 pub use plot::{
     plot_gnomonic_auto, plot_gnomonic_pdf, plot_gnomonic_png, plot_hammer_auto, plot_hammer_pdf,
