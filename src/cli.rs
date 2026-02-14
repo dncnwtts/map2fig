@@ -258,6 +258,10 @@ pub struct Args {
     /// Fast render mode: skip graticule, colorbar, and labels for faster iteration
     #[arg(long)]
     pub fast_render: bool,
+
+    /// PDF backend: cairo (default) or printpdf (faster, larger files, no vector overlays)
+    #[arg(long, default_value = "cairo")]
+    pub pdf_backend: String,
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends

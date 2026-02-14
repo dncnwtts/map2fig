@@ -42,6 +42,8 @@ printpdf = "0.9.0"
 [features]
 debug_overlay = []
 simd = []
+uncompressed-pdf = []
+printpdf-backend = []
 
 [dev-dependencies]
 proptest = "1.4"

@@ -509,6 +509,7 @@ mod tests {
                 map: &map,
                 width: 100,
                 filename: "test.png".to_string(),
+                pdf_backend: "cairo".to_string(),
             },
             scale: ScaleParams {
                 minv: None,
@@ -707,6 +708,7 @@ mod tests {
                 map: &map,
                 width: 64,
                 filename: "test_extreme.png".to_string(),
+                pdf_backend: "cairo".to_string(),
             },
             scale: ScaleParams {
                 minv: Some(-100.0),

@@ -870,6 +870,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
 pub fn plot_gnomonic_auto(params: GnomonicParams) {
     let map = params.plot.map;
     let filename = params.plot.filename;
+    let pdf_backend = params.plot.pdf_backend.clone();
     let minv = params.scale.minv;
     let maxv = params.scale.maxv;
     let cmap = params.color.cmap;
@@ -911,6 +912,7 @@ pub fn plot_gnomonic_auto(params: GnomonicParams) {
             map,
             width,
             filename,
+            pdf_backend,
         },
         scale: crate::params::ScaleParams {
             minv,

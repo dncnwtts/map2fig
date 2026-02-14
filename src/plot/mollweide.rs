@@ -13,6 +13,7 @@ use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
 use crate::{PixelSink, PngSink};
+use crate::plot::mollweide_printpdf::plot_mollweide_pdf_printpdf;
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
@@ -916,7 +917,13 @@ pub fn plot_mollweide_auto(params: MollweideParams) {
 
     match ext.as_str() {
         "png" => plot_mollweide_png(params),
-        "pdf" => plot_mollweide_pdf(params),
+        "pdf" => {
+            let backend = params.plot.pdf_backend.to_lowercase();
+            match backend.as_str() {
+                "printpdf" => plot_mollweide_pdf_printpdf(params),
+                _ => plot_mollweide_pdf(params), // Default to Cairo
+            }
+        }
         _ => {
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",

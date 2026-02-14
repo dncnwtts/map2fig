@@ -16,6 +16,7 @@ pub struct PlotData<'a> {
     pub map: &'a [f64],
     pub width: u32,
     pub filename: String,
+    pub pdf_backend: String,
 }
 
 /// Scale and color transformation parameters.

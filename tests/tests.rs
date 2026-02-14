@@ -123,6 +123,7 @@ fn test_plot_smoke() {
             map: &map,
             width: 32,
             filename: "smoke.png".to_string(),
+            pdf_backend: "cairo".to_string(),
         },
         scale: ScaleParams {
             minv: None,

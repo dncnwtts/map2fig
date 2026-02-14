@@ -163,6 +163,7 @@ pub fn build_mollweide_params<'a>(
             map: &data.map,
             width: args.width,
             filename: args.get_output_filename(),
+            pdf_backend: args.pdf_backend.clone(),
         },
         scale: ScaleParams {
             minv: args.min,
@@ -238,6 +239,7 @@ pub fn build_gnomonic_params<'a>(
             map: &data.map,
             width: args.width,
             filename: args.get_output_filename(),
+            pdf_backend: args.pdf_backend.clone(),
         },
         scale: ScaleParams {
             minv: args.min,
@@ -316,6 +318,7 @@ pub fn build_hammer_params<'a>(
             map: &data.map,
             width: args.width,
             filename: args.get_output_filename(),
+            pdf_backend: args.pdf_backend.clone(),
         },
         scale: ScaleParams {
             minv: args.min,
