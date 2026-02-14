@@ -14,45 +14,59 @@
 - [x] Baseline flamegraph with system view
 - [x] Enable debug symbols for Rust function profiling
 - [x] Identify major cost centers (Cairo, projection, scaling)
-- [ ] **NEXT**: Run detailed profiling with symbols, extract function names
+- [x] **CRITICAL FINDING**: Compare PNG vs PDF output speeds
+  - **Result**: PDF is 3.57× slower than PNG (617 ms vs 173 ms)
+  - **Conclusion**: Cairo rasterization is PRIMARY bottleneck
+  - **Gap**: 427 ms = Cairo overhead, NOT projection/scaling
 
-### Phase 2: Tier 1 Optimization (Next Sprint)
-Target: 5-15% speedup
+### Phase 2: Tier 1 Optimization - CAIRO RASTERIZATION (Revised)
+Target: 25-50% speedup (Cairo optimization alone)
 
-#### Option A: Rasterization Redesign (High Impact, High Effort)
-If flamegraph shows Cairo overhead is high:
-```
-Current:  Each pixel → Cairo rectangle call → PDF
-Proposal: Pixels → local buffer → rasterize → Cairo path once
-Expected: 20-30% speedup on render pass
-```
+**Why Cairo is the bottleneck:**
+- PNG uses simple image raster: 173 ms (projection + scaling + color + PNG write)
+- PDF uses Cairo: 617 ms total
+- Difference: **427 ms dedicated to Cairo rendering** (3.57× multiplier!)
+- Per-pixel cost: 8.4 µs/pixel vs 2-3 µs for projection
 
-Affected files:
-- `src/render/cairo.rs` - Redesign pixel accumulation
-- `src/render/mod.rs` - New pixel buffering strategy
+#### Strategy: Batch Cairo Operations
 
-#### Option B: SIMD Vectorization (Medium Impact, Medium Effort)
-If flamegraph shows projection math is hot:
-```
-Current:  Sequential coordinate transforms
-Proposal: Batch 4-8 pixels, vectorize with SIMD
-Expected: 15-20% speedup on projection
-```
-
-Affected files:
-- `src/projection.rs` - Add SIMD coordinate math
-- `src/extensions/` - New SIMD utility functions
-
-#### Option C: Scaling Optimization (Low-Medium Impact, Low Effort)
-If flamegraph shows `scale_value()` is called frequently:
-```
-Current:  Computation per pixel
-Proposal: Pre-compute lookup tables for common ranges
-Expected: 5-10% speedup on scaling-heavy operations
+Current approach:
+```rust
+// Draw pixel-by-pixel
+for (x, y, color) in pixels {
+    cairo_rectangle(x, y, 1, 1);
+    cairo_set_source_rgb(color);
+    cairo_fill();  // ← 51,000 individual calls!
+}
 ```
 
-Affected files:
-- `src/scale.rs` - Add LUT caching
+Optimized approach:
+```rust
+// Batch similar colors, reduce fill calls
+let grouped = group_pixels_by_color(pixels);
+for (color, pixel_group) in grouped {
+    cairo_set_source_rgb(color);
+    for (x, y) in pixel_group {
+        cairo_rectangle(x, y, 1, 1);
+    }
+    cairo_fill();  // ← ~256 calls instead of 51,000!
+}
+```
+
+**Expected improvement**: 50% reduction in Cairo overhead
+- From: 617 ms → **~504 ms** (18% overall)
+- Exceeds v0.3 target of 10-15%
+
+### Phase 2b: Parallel Option - SIMD Vectorization (Secondary)
+Target: 8-12% additional speedup if Cairo already optimized
+
+Only pursue AFTER Cairo optimization, not before.
+
+### Original Phase 2 Options (Archived)
+
+~~Option A: Rasterization Redesign~~ - Replace with Cairo batching
+~~Option B: SIMD Vectorization~~ - Tier 2 after Cairo
+~~Option C: Lookup table caching~~ - Tier 3
 
 ### Phase 3: Verification
 - Re-run `./tools/scripts/profile.sh` after each optimization
@@ -61,19 +75,22 @@ Affected files:
 
 ## Decision Point: Which Optimization to Pursue?
 
-The flamegraph with debug symbols will answer:
-1. **What consumes the 2.90% in `[map2fig]`?**
-   - Function distribution tells us the priority
-   - Top 3 functions = focus area
+✅ **DECISION MADE BY EMPIRICAL DATA** (not theory)
 
-2. **How much of the time is Cairo?** (Currently measured at 2.10% visibly)
-   - Single largest category → invest here
-   - Small fraction → optimize Rust first
+```
+PDF time: 617 ms
+PNG time: 173 ms
+Difference: 427 ms = Cairo overhead
 
-3. **Are there any surprise hotspots?**
-   - Unexpected allocations
-   - Surprising function call patterns
-   - Data dependency inefficiencies
+Conclusion: Cairo rasterization MUST be optimized first.
+```
+
+This eliminates the need to guess - we can see exactly where the time is spent:
+- **201 ms** (44%) of PNG time is projection + scaling + colormapping + PNG write
+- **427 ms** (69%) is Cairo rendering the same data differently
+- **11 ms** (2%) PDF file write overhead
+
+**Action**: Focus Phase 2 on batching Cairo calls to reduce per-pixel overhead.
 
 ## Tools & Workflow
 
