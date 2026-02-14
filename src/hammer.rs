@@ -168,9 +168,9 @@ impl Projection for HammerProjection {
     }
 
     fn pixel_to_ang(&self, x: u32, y: u32, grid: &RasterGrid) -> Option<(f64, f64)> {
-        // Use proper normalization to [0,1] inclusive
-        let u = grid.norm_x(x);
-        let v = grid.norm_y(y);
+        // Inline normalization to avoid function calls in hot path
+        let u = x as f64 / ((grid.width - 1) as f64);
+        let v = y as f64 / ((grid.height - 1) as f64);
 
         // Delegate to inverse() which handles the projection mathematics
         self.inverse(u, v)

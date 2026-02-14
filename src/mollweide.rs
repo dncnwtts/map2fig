@@ -61,18 +61,23 @@ impl Projection for MollweideProjection {
         Some((u, v))
     }
     fn pixel_to_ang(&self, x: u32, y: u32, grid: &RasterGrid) -> Option<(f64, f64)> {
-        let nx = grid.norm_x(x);
-        let ny = grid.norm_y(y);
+        // Inline normalization to avoid function calls in hot path
+        let nx = x as f64 / ((grid.width - 1) as f64);
+        let ny = y as f64 / ((grid.height - 1) as f64);
 
         let px = 2.0 - 4.0 * nx;
         let py = 1.0 - 2.0 * ny;
 
-        if px * px / 4.0 + py * py > 1.0 {
+        // Early rejection: check if point is outside the Mollweide oval
+        // This is the main computation: px²/4 + py² > 1
+        // Optimized: multiply through to avoid division
+        if px * px + 4.0 * py * py > 4.0 {
             return None;
         }
 
         let theta_aux = py.asin();
-        let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
+        let sin_theta = 2.0 * theta_aux;
+        let sin_lat = (sin_theta + sin_theta.sin()) * (1.0 / PI);
 
         if sin_lat.abs() > 1.0 {
             return None;
@@ -83,7 +88,7 @@ impl Projection for MollweideProjection {
         if c.abs() < 1e-12 {
             return None;
         }
-        let lon = PI * px / (2.0 * c);
+        let lon = PI * px * (0.5 / c);  // Precompute PI/2 as constant multiplication
 
         Some((lon, lat))
     }
