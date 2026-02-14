@@ -86,11 +86,11 @@ pub struct ScaleCache {
     /// Cached log(min) for Log scale
     pub log_min: f64,
     /// Cached log(max) for Log scale  
-    pub log_range: f64,  // log_max - log_min
+    pub log_range: f64, // log_max - log_min
     /// Cached asinh(min) for Asinh scale
     pub asinh_min: f64,
     /// Cached range for Asinh
-    pub asinh_range: f64,  // asinh_max - asinh_min
+    pub asinh_range: f64, // asinh_max - asinh_min
 }
 
 impl ScaleCache {
@@ -384,8 +384,7 @@ fn uniform_quantiles(n: usize) -> Vec<f64> {
     (0..n).map(|i| i as f64 / (n - 1) as f64).collect()
 }
 
-#[derive(Clone, Copy, PartialEq)]
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Scale {
     Linear,
     Log,

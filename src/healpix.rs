@@ -578,7 +578,7 @@ pub fn sample_healpix_index(
 }
 
 /// Batch sample HEALPix: process 8 pixels in parallel
-/// 
+///
 /// Input:
 ///   - map: HEALPix data array
 ///   - meta: HEALPix metadata
@@ -835,7 +835,7 @@ fn test_pix_ang_pix_roundtrip_ring() {
 
 #[test]
 fn test_sample_healpix_batch_matches_scalar() {
-    use crate::rotation::{ViewTransform, CoordSystem};
+    use crate::rotation::{CoordSystem, ViewTransform};
 
     // Create a simple test map
     let nside = 16;
@@ -868,7 +868,10 @@ fn test_sample_healpix_batch_matches_scalar() {
                 assert!(
                     (batch_samples[i] - scalar).abs() < 1e-14,
                     "Sample mismatch at ({}, {}): batch={}, scalar={}",
-                    thetas[i], lons[i], batch_samples[i], scalar
+                    thetas[i],
+                    lons[i],
+                    batch_samples[i],
+                    scalar
                 );
             }
             (None, false) => {
@@ -877,8 +880,10 @@ fn test_sample_healpix_batch_matches_scalar() {
             _ => {
                 panic!(
                     "Validity mismatch at ({}, {}): scalar_some={}, batch_valid={}",
-                    thetas[i], lons[i],
-                    scalar_result.is_some(), batch_mask[i]
+                    thetas[i],
+                    lons[i],
+                    scalar_result.is_some(),
+                    batch_mask[i]
                 );
             }
         }

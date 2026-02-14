@@ -183,8 +183,8 @@ impl Projection for HammerProjection {
         py_coords: &[u32; 8],
         grid: &RasterGrid,
     ) -> (
-        [f64; 8], // longitudes
-        [f64; 8], // latitudes
+        [f64; 8],  // longitudes
+        [f64; 8],  // latitudes
         [bool; 8], // validity mask
     ) {
         let w_inv = 1.0 / ((grid.width - 1) as f64);

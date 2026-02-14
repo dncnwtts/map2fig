@@ -42,8 +42,8 @@ pub trait Projection {
         py: &[u32; 8],
         grid: &RasterGrid,
     ) -> (
-        [f64; 8], // longitudes
-        [f64; 8], // latitudes
+        [f64; 8],  // longitudes
+        [f64; 8],  // latitudes
         [bool; 8], // validity mask
     ) {
         // Default implementation: just call scalar version 8 times

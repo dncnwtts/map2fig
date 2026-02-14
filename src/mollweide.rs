@@ -93,7 +93,7 @@ impl Projection for MollweideProjection {
     }
 
     /// Batch projection: process up to 8 pixels in parallel with loop unrolling
-    /// 
+    ///
     /// This is optimized for instruction-level parallelism by processing
     /// 8 pixels with independent computations that can be executed concurrently.
     fn pixel_to_ang_batch(
@@ -102,8 +102,8 @@ impl Projection for MollweideProjection {
         py_coords: &[u32; 8],
         grid: &RasterGrid,
     ) -> (
-        [f64; 8], // longitudes
-        [f64; 8], // latitudes
+        [f64; 8],  // longitudes
+        [f64; 8],  // latitudes
         [bool; 8], // validity mask
     ) {
         let w_inv = 1.0 / ((grid.width - 1) as f64);
@@ -364,7 +364,7 @@ fn test_mollweide_all_pixels_inside_ellipse() {
 #[test]
 fn batch_projection_matches_scalar() {
     use crate::projection::Projection;
-    
+
     let proj = MollweideProjection;
     let grid = RasterGrid::new(512, 256);
 
@@ -376,20 +376,26 @@ fn batch_projection_matches_scalar() {
     let (batch_lons, batch_lats, batch_mask) = proj.pixel_to_ang_batch(&px_array, &py_array, &grid);
 
     for i in 0..8 {
-        let scalar_result = proj.pixel_to_ang(px_array[i],py_array[i], &grid);
-        
+        let scalar_result = proj.pixel_to_ang(px_array[i], py_array[i], &grid);
+
         match (scalar_result, batch_mask[i]) {
             (Some((scalar_lon, scalar_lat)), true) => {
                 // Both should be valid - check values match
                 assert!(
                     (batch_lons[i] - scalar_lon).abs() < 1e-14,
                     "Longitude mismatch at ({}, {}): batch={}, scalar={}",
-                    px_array[i], py_array[i], batch_lons[i], scalar_lon
+                    px_array[i],
+                    py_array[i],
+                    batch_lons[i],
+                    scalar_lon
                 );
                 assert!(
                     (batch_lats[i] - scalar_lat).abs() < 1e-14,
                     "Latitude mismatch at ({}, {}): batch={}, scalar={}",
-                    px_array[i], py_array[i], batch_lats[i], scalar_lat
+                    px_array[i],
+                    py_array[i],
+                    batch_lats[i],
+                    scalar_lat
                 );
             }
             (None, false) => {
@@ -398,8 +404,10 @@ fn batch_projection_matches_scalar() {
             _ => {
                 panic!(
                     "Mismatch at ({}, {}): scalar valid={}, batch valid={}",
-                    px_array[i], py_array[i],
-                    scalar_result.is_some(), batch_mask[i]
+                    px_array[i],
+                    py_array[i],
+                    scalar_result.is_some(),
+                    batch_mask[i]
                 );
             }
         }
