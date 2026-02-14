@@ -288,24 +288,156 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                 &lons,
             );
 
+            // Combine projection and HEALPix masks for validity
+            let validity_mask: [bool; 8] = [
+                proj_mask[0] && healpix_mask[0],
+                proj_mask[1] && healpix_mask[1],
+                proj_mask[2] && healpix_mask[2],
+                proj_mask[3] && healpix_mask[3],
+                proj_mask[4] && healpix_mask[4],
+                proj_mask[5] && healpix_mask[5],
+                proj_mask[6] && healpix_mask[6],
+                proj_mask[7] && healpix_mask[7],
+            ];
+
+            // Phase 5.2: Try SIMD scaling path for Linear and Log scales
+            let pixel_values: [PixelValue; 8] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
+                // Use SIMD batch scaling for linear and log
+                let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
+                let log_cache = if use_log && params.scale_cache.is_some() {
+                    let cache = params.scale_cache.as_ref().unwrap();
+                    Some((cache.log_min, cache.log_range))
+                } else {
+                    None
+                };
+
+                // SIMD batch scaling: processes all 8 values at once
+                let (scaled_values, out_mask) = crate::simd::simd_batch_scale_8(
+                    healpix_values,
+                    params.scale.minv,
+                    params.scale.maxv,
+                    use_log,
+                    log_cache,
+                    validity_mask,
+                );
+
+                // Convert SIMD results to PixelValue enum
+                crate::simd::simd_to_pixel_values(scaled_values, out_mask)
+            } else {
+                // Fallback to scalar path for Asinh, Symlog, Histogram, etc.
+                [
+                    if validity_mask[0] {
+                        crate::scale::scale_value(
+                            healpix_values[0],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[1] {
+                        crate::scale::scale_value(
+                            healpix_values[1],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[2] {
+                        crate::scale::scale_value(
+                            healpix_values[2],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[3] {
+                        crate::scale::scale_value(
+                            healpix_values[3],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[4] {
+                        crate::scale::scale_value(
+                            healpix_values[4],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[5] {
+                        crate::scale::scale_value(
+                            healpix_values[5],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[6] {
+                        crate::scale::scale_value(
+                            healpix_values[6],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                    if validity_mask[7] {
+                        crate::scale::scale_value(
+                            healpix_values[7],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    },
+                ]
+            };
+
             // Process 8 pixels in parallel
             for i in 0..8 {
                 let pixel_x = px + i as u32;
-                let pixel_valid = proj_mask[i] && healpix_mask[i];
-
-                let pixel_val = if pixel_valid {
-                    crate::scale::scale_value(
-                        healpix_values[i],
-                        params.scale.minv,
-                        params.scale.maxv,
-                        params.scale_type,
-                        params.neg_mode,
-                        params.hist_scale,
-                        params.scale_cache,
-                    )
-                } else {
-                    PixelValue::Bad
-                };
+                let pixel_valid = validity_mask[i];
+                let pixel_val = pixel_values[i];
 
                 // Convert to RGBA
                 let mut rgba = match pixel_val {
