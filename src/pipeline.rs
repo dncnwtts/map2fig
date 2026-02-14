@@ -39,9 +39,19 @@ pub fn load_and_process_data(
     })?;
 
     // Load and scale data (Tier 5.2.1: Column caching)
+    // Note: Zero-valued pixels are treated as masked/unseen pixels.
+    // This is important for files with explicit masking where 0.0 represents bad/masked data.
+    // We check for zero values BEFORE scaling, and also preserve existing HPX_UNSEEN values.
     let mut map = read_healpix_column_cached(new_fits_path, col);
     for v in &mut map {
-        if *v == 0.0 {
+        // Skip already-unseen pixels (from FITS file with explicit HPX_UNSEEN values)
+        if !is_seen(*v) {
+            continue;
+        }
+        
+        // Convert zero-valued pixels to HPX_UNSEEN (mask indicator for this file)
+        // Use a small threshold (1e-20) instead of exact comparison to handle floating-point precision
+        if v.abs() < 1e-20 {
             *v = HPX_UNSEEN;
         } else {
             *v *= scale_factor;
