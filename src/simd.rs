@@ -964,3 +964,87 @@ mod scaling_tests {
         assert!(!out_mask[5]);
     }
 }
+
+//─────────────────────────────────────────────────────────────────────────────
+// Batch Scaling Wrapper for Integration with Main Render Loop
+//─────────────────────────────────────────────────────────────────────────────
+
+/// Batch process 8 raw values through scaling operation with caching
+///
+/// This wrapper function encapsulates the scaling step for 8 HEALPix values,
+/// dispatching to the appropriate SIMD function based on scale type.
+/// Designed to integrate with main render loop for efficient batch processing.
+///
+/// Input:
+/// - values: 8 raw data values from HEALPix sampling
+/// - min, max: scaling bounds
+/// - log_cache: pre-computed (log_min, log_range) for log scale
+/// - mask: validity mask from HEALPix sampling
+///
+/// Output:
+/// - scaled: 8 normalized values in [0, 1]
+/// - out_mask: updated validity mask
+///
+/// Note: Currently handles Linear and Log scales. Other scales (Asinh, Symlog, etc.)
+/// require scalar path or additional transcendental implementations.
+#[inline]
+pub fn simd_batch_scale_8(
+    values: [f64; 8],
+    min: f64,
+    max: f64,
+    use_log: bool,
+    log_cache: Option<(f64, f64)>,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    if use_log {
+        // Logarithmic scale: requires pre-computed cache
+        if let Some((log_min, log_range)) = log_cache {
+            return simd_log_scale_8(values, log_min, log_range, mask);
+        } else {
+            // Fallback: use linear scale if cache not available
+            return simd_linear_scale_8(values, min, max, mask);
+        }
+    } else {
+        // Linear scale: no cache needed
+        simd_linear_scale_8(values, min, max, mask)
+    }
+}
+
+#[cfg(test)]
+mod batch_integration_tests {
+    use super::*;
+
+    #[test]
+    fn test_batch_scale_linear() {
+        let values = [0.0, 2.5, 5.0, 7.5, 10.0, 1.0, 3.0, 9.0];
+        let mask = [true; 8];
+        let (result, _) = simd_batch_scale_8(values, 0.0, 10.0, false, None, mask);
+
+        // Should match linear scaling
+        let expected = [0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.3, 0.9];
+        for i in 0..8 {
+            assert!((result[i] - expected[i]).abs() < 1e-14);
+        }
+    }
+
+    #[test]
+    fn test_batch_scale_log() {
+        let values = [1.0, 10.0, 100.0, 1000.0, 5.0, 50.0, 10.0, 100.0];
+        let log_min = 1.0_f64.ln();
+        let log_range = 100.0_f64.ln() - log_min;
+        let mask = [true; 8];
+
+        let (result, _) = simd_batch_scale_8(
+            values,
+            1.0,
+            100.0,
+            true,
+            Some((log_min, log_range)),
+            mask,
+        );
+
+        // Should match log scaling
+        assert!((result[0] - 0.0).abs() < 1e-14); // log(1) at min
+        assert!((result[2] - 1.0).abs() < 1e-14); // log(100) at max
+    }
+}
