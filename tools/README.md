@@ -13,6 +13,7 @@ Shell scripts for common tasks:
 | `install.sh` | Installation and setup helper |
 | `run_benchmarks.sh` | Run comprehensive performance benchmarks |
 | `benchmark_quick.sh` | Run quick performance benchmarks |
+| `profile.sh` | Performance profiling and baseline measurements |
 | `run_tests.sh` | Run test suite |
 | `plot_rotation.sh` | Plotting utility for coordinate rotation |
 | `verify_fixes.sh` | Verification test suite |
@@ -64,6 +65,14 @@ python tools/quick_bench.py
 ./tools/scripts/verify_fixes.sh
 python tools/python/analyze_heights.py
 ```
+
+### Performance Profiling
+```bash
+./tools/scripts/profile.sh
+# Generates perf_report_v*.txt with baseline timings and flamegraph_v*.svg (Linux)
+```
+
+For detailed profiling methodology, see [PROFILING.md](PROFILING.md).
 
 ## Adding New Tools
 
