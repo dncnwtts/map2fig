@@ -5,8 +5,6 @@
 //!
 //! All functions process 8 f64 values in parallel, matching Tier 2 batch size.
 
-use std::f64::consts::PI;
-
 /// Vectorized sine for 8 f64 values
 ///
 /// Computes sin(x) for 8 angles simultaneously.
@@ -308,6 +306,7 @@ pub fn simd_cross_8(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f64::consts::PI;
 
     const EPSILON: f64 = 1e-14;
 
@@ -531,6 +530,7 @@ pub fn simd_matvec3_8(
 #[cfg(test)]
 mod healpix_tests {
     use super::*;
+    use std::f64::consts::PI;
 
     #[test]
     fn test_simd_sph_to_vec_8() {
