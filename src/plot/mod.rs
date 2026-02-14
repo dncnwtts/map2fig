@@ -279,7 +279,8 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             }
 
             // Batch HEALPix sampling: get 8 values
-            let (healpix_values, healpix_mask) = crate::healpix::sample_healpix_batch(
+            // Use SIMD-accelerated version for better performance on supported platforms
+            let (healpix_values, healpix_mask) = crate::healpix::sample_healpix_batch_simd(
                 params.map,
                 params.meta,
                 params.view,
