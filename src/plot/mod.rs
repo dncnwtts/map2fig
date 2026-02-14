@@ -261,7 +261,7 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
         while px + 8 <= width {
             // Prepare batch input arrays
             let mut px_array = [0u32; 8];
-            let mut py_array = [py; 8];
+            let py_array = [py; 8];
             for i in 0..8 {
                 px_array[i] = px + i as u32;
             }
