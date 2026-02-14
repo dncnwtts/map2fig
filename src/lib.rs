@@ -56,6 +56,7 @@
 //! - [healpix::downgrade_healpix_map] - Resample HEALPix map to different resolution
 //! - [scale::validate_scale_config] - Validate scaling parameters
 
+pub mod benchmark;
 pub mod cli;
 pub mod cli_builder;
 pub mod colorbar;

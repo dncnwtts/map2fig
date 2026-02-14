@@ -13,6 +13,7 @@ pub trait RenderBackend {
 
 pub mod pdf;
 pub mod png;
+pub mod printpdf_backend;
 pub mod raster;
 pub mod target;
 
