@@ -245,13 +245,27 @@ fn save_cache(filepath: &str, nside: i64, ordering: &str, indxschm: &str) {
 
 /// Read FITS metadata with caching support
 /// This function attempts to use cached metadata to avoid expensive header parsing
+/// When MAP2FIG_PROFILE environment variable is set, outputs diagnostic timing info
 pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)> {
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+    
     // Try cache first
+    let cache_start = std::time::Instant::now();
     if let Some((nside, order, indxschm)) = try_load_cache(filename) {
+        if enable_profile {
+            let elapsed = cache_start.elapsed();
+            eprintln!("[I/O DIAG] Cache HIT: {} ({:.3}µs)", filename, elapsed.as_micros());
+        }
         return Some((nside, order, indxschm));
     }
 
     // Cache miss: parse FITS file
+    if enable_profile {
+        let elapsed = cache_start.elapsed();
+        eprintln!("[I/O DIAG] Cache MISS: {} (lookup took {:.3}µs)", filename, elapsed.as_micros());
+    }
+    
+    let parse_start = std::time::Instant::now();
     let f = File::open(filename).ok()?;
     let reader = BufReader::new(f);
     let mut fits = Fits::from_reader(reader);
@@ -292,6 +306,11 @@ pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)>
         }
     }
 
+    let parse_elapsed = parse_start.elapsed();
+    if enable_profile {
+        eprintln!("[I/O DIAG] FITS parse took {:.2}ms", parse_elapsed.as_secs_f64() * 1000.0);
+    }
+
     if nside > 0 {
         // Cache for next time
         save_cache(filename, nside, &ordering, &indxschm);
@@ -300,3 +319,4 @@ pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)>
         None
     }
 }
+

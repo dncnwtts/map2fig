@@ -58,6 +58,7 @@
 
 pub mod cli;
 pub mod cli_builder;
+pub mod diagnostics;
 pub mod colorbar;
 pub mod colormap;
 pub mod constants;
