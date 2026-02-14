@@ -21,7 +21,7 @@
 //! use map2fig::scale::{scale_value, Scale};
 //! use map2fig::NegMode;
 //!
-//! let scaled = scale_value(5.0, 0.0, 10.0, Scale::Linear, NegMode::Zero, None);
+//! let scaled = scale_value(5.0, 0.0, 10.0, Scale::Linear, NegMode::Zero, None, None);
 //! // Result: PixelValue::Color(0.5)
 //! ```
 
@@ -72,6 +72,61 @@ pub fn validate_scale_config(scale: &Scale, min: Option<f64>, max: Option<f64>) 
         && min >= max
     {
         panic!("Invalid scale range: min ({}) must be < max ({})", min, max);
+    }
+}
+
+/// Pre-computed scale transformation constants to avoid per-pixel recomputation.
+///
+/// For log and asinh scales, we compute expensive constants once at the start
+/// and reuse them for every pixel, avoiding redundant log() and asinh() calls.
+#[derive(Clone, Debug)]
+pub struct ScaleCache {
+    /// Scale type this cache is for
+    pub scale_type: Scale,
+    /// Cached log(min) for Log scale
+    pub log_min: f64,
+    /// Cached log(max) for Log scale  
+    pub log_range: f64,  // log_max - log_min
+    /// Cached asinh(min) for Asinh scale
+    pub asinh_min: f64,
+    /// Cached range for Asinh
+    pub asinh_range: f64,  // asinh_max - asinh_min
+}
+
+impl ScaleCache {
+    /// Create a new scale cache, pre-computing expensive transformations.
+    pub fn new(min: f64, max: f64, scale: Scale) -> Self {
+        match scale {
+            Scale::Log => {
+                let log_min = min.ln();
+                let log_max = max.ln();
+                Self {
+                    scale_type: scale,
+                    log_min,
+                    log_range: log_max - log_min,
+                    asinh_min: 0.0,
+                    asinh_range: 0.0,
+                }
+            }
+            Scale::Asinh { scale: s } => {
+                let asinh_min = (min / s).asinh();
+                let asinh_max = (max / s).asinh();
+                Self {
+                    scale_type: scale,
+                    log_min: 0.0,
+                    log_range: 0.0,
+                    asinh_min,
+                    asinh_range: asinh_max - asinh_min,
+                }
+            }
+            _ => Self {
+                scale_type: scale,
+                log_min: 0.0,
+                log_range: 0.0,
+                asinh_min: 0.0,
+                asinh_range: 0.0,
+            },
+        }
     }
 }
 
@@ -330,6 +385,7 @@ fn uniform_quantiles(n: usize) -> Vec<f64> {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[derive(Debug)]
 pub enum Scale {
     Linear,
     Log,
@@ -624,6 +680,7 @@ pub fn scale_value(
     scale: Scale,
     neg_mode: NegMode,
     hist: Option<&HistogramScale>,
+    cache: Option<&ScaleCache>,
 ) -> PixelValue {
     if min > max {
         if std::env::var("FUZZ_SILENT").is_err() {
@@ -677,15 +734,25 @@ pub fn scale_value(
             } else if value >= max {
                 1.0
             } else {
-                (value.ln() - min.ln()) / (max.ln() - min.ln())
+                // Use pre-computed log constants if available, avoiding 2× ln() calls per pixel
+                if let Some(c) = cache {
+                    (value.ln() - c.log_min) / c.log_range
+                } else {
+                    (value.ln() - min.ln()) / (max.ln() - min.ln())
+                }
             }
         }
 
         Scale::Asinh { scale } => {
             let val = (value / scale).asinh();
-            let min_val = (min / scale).asinh();
-            let max_val = (max / scale).asinh();
-            (val - min_val) / (max_val - min_val)
+            // Use pre-computed asinh constants if available, avoiding 2× asinh() calls per pixel
+            if let Some(c) = cache {
+                (val - c.asinh_min) / c.asinh_range
+            } else {
+                let min_val = (min / scale).asinh();
+                let max_val = (max / scale).asinh();
+                (val - min_val) / (max_val - min_val)
+            }
         }
 
         // ✅ Symlog explicitly supports negative values
@@ -721,18 +788,32 @@ pub fn scale_value(
                 return PixelValue::Color(1.0);
             }
 
+            // Binary search with linear interpolation for smooth CDF lookup
             match hist
                 .values
                 .binary_search_by(|v| v.partial_cmp(&value).unwrap())
             {
-                Ok(i) => hist.cdf[i],
+                Ok(i) => {
+                    // Exact match: return CDF value directly
+                    hist.cdf[i]
+                }
                 Err(i) => {
+                    // Value falls between hist.values[i-1] and hist.values[i]
+                    // Linear interpolation in CDF space
                     if i == 0 {
                         0.0
-                    } else if i >= hist.cdf.len() {
+                    } else if i >= hist.values.len() {
                         1.0
                     } else {
-                        hist.cdf[i]
+                        // Interpolate between CDF[i-1] and CDF[i] based on value position
+                        let v0 = hist.values[i - 1];
+                        let v1 = hist.values[i];
+                        let cdf0 = hist.cdf[i - 1];
+                        let cdf1 = hist.cdf[i];
+
+                        // Weight: where does value fall between v0 and v1?
+                        let w = (value - v0) / (v1 - v0);
+                        cdf0 + w * (cdf1 - cdf0)
                     }
                 }
             }
@@ -744,7 +825,7 @@ pub fn scale_value(
 
 #[test]
 fn linear_underflow_always_saturates() {
-    let t = scale_value(-5.0, 0.0, 10.0, Scale::Linear, NegMode::Unseen, None);
+    let t = scale_value(-5.0, 0.0, 10.0, Scale::Linear, NegMode::Unseen, None, None);
     match t {
         PixelValue::Color(c) => assert_eq!(c, 0.0),
         _ => panic!("Linear underflow should saturate, not go Bad"),

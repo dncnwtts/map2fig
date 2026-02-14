@@ -37,6 +37,7 @@ fn render_hammer_pixels(
             hist_scale: params.hist_scale,
             view: params.view,
             mask: params.mask,
+            scale_cache: params.scale_cache,
         },
         &mut grid,
     );

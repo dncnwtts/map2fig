@@ -9,6 +9,23 @@ use image::Rgba;
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale as FontScale};
 
+/// Apply gamma correction with fast-paths for common values
+/// 
+/// Uses lookup table (LUT) for frequently-used gamma values to avoid expensive powf() calls.
+/// Falls back to general powf() for arbitrary gamma values.
+#[inline]
+fn apply_gamma(t: f64, gamma: f64) -> f64 {
+    // Common values that appear in astronomy and image processing
+    match gamma {
+        g if (g - 1.0).abs() < 1e-10 => t,              // gamma=1.0: no-op (identity)
+        g if (g - 2.0).abs() < 1e-10 => t * t,          // gamma=2.0: square (brightens)
+        g if (g - 0.5).abs() < 1e-10 => t.sqrt(),       // gamma=0.5: square root (darkens)
+        g if (g - 3.0).abs() < 1e-10 => t * t * t,      // gamma=3.0: cube
+        g if (g - 0.333).abs() < 1e-6 => t.powf(1.0 / 3.0),  // gamma≈0.333: cube root
+        _ => t.powf(gamma),                              // General fallback
+    }
+}
+
 // Re-export public APIs from projection modules
 pub use gnomonic::{plot_gnomonic_auto, plot_gnomonic_pdf, plot_gnomonic_png};
 pub use hammer::{plot_hammer_auto, plot_hammer_pdf, plot_hammer_png};
@@ -257,6 +274,7 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                         params.scale_type,
                         params.neg_mode,
                         params.hist_scale,
+                        params.scale_cache,
                     ),
                     None => PixelValue::Bad,
                 };
@@ -264,11 +282,7 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                 // Check if pixel is masked
                 let mut rgba = match pixel_val {
                     PixelValue::Color(t) => {
-                        let t = if gamma_inv == 1.0 {
-                            t
-                        } else {
-                            t.powf(gamma_inv)
-                        };
+                        let t = apply_gamma(t, gamma_inv);
                         let c = params.cmap.sample(t);
                         Rgba([c[0], c[1], c[2], 255])
                     }

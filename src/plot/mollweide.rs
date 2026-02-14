@@ -93,6 +93,7 @@ fn render_mollweide_pixels(
             hist_scale: params.hist_scale,
             view: params.view,
             mask: params.mask,
+            scale_cache: params.scale_cache,
         },
         &mut grid,
     );
@@ -204,6 +205,9 @@ where
         None
     };
 
+    // Pre-compute scale cache for fast pixel rendering
+    let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
+
     let mut sink = CairoImageSink { cr: &cr_img };
     let debug_overlay = if cfg!(feature = "debug_overlay") {
         Some(DebugOverlay::grid_only())
@@ -224,6 +228,7 @@ where
             hist_scale: hist_scale_opt.as_ref(),
             view,
             mask,
+            scale_cache: Some(&scale_cache),
         },
         layout,
         &mut sink,
@@ -430,6 +435,9 @@ pub fn _plot_mollweide_png_impl_projected<F>(
         None
     };
 
+    // Pre-compute scale cache for fast pixel rendering
+    let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
+
     let mut sink = PngSink {
         img: &mut img,
         x0: layout.map_x as u32,
@@ -455,6 +463,7 @@ pub fn _plot_mollweide_png_impl_projected<F>(
             hist_scale: hist_scale.as_ref(),
             view,
             mask,
+            scale_cache: Some(&scale_cache),
         },
         layout,
         &mut sink,

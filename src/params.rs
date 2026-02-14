@@ -118,6 +118,7 @@ pub struct RenderMollweideParams<'a> {
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub view: &'a crate::rotation::ViewTransform,
     pub mask: Option<&'a crate::mask::PixelMask>,
+    pub scale_cache: Option<&'a crate::scale::ScaleCache>,
 }
 
 /// Grid rendering parameters for projection sampling.
@@ -134,6 +135,7 @@ pub struct RenderGridParams<'a> {
     pub hist_scale: Option<&'a crate::scale::HistogramScale>,
     pub view: &'a crate::rotation::ViewTransform,
     pub mask: Option<&'a crate::mask::PixelMask>,
+    pub scale_cache: Option<&'a crate::scale::ScaleCache>,
 }
 
 /// Colorbar rendering parameters for PDF output.

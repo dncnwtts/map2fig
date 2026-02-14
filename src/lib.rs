@@ -352,14 +352,14 @@ mod tests {
         let max = 100.0;
 
         // Linear scale
-        let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero, None);
+        let t = scale_value(50.0, min, max, Scale::Linear, NegMode::Zero, None, None);
         match t {
             PixelValue::Color(c) => assert!((c - 0.4949).abs() < 1e-3),
             _ => panic!(),
         }
 
         // Log scale
-        let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero, None);
+        let t = scale_value(10.0, min, max, Scale::Log, NegMode::Zero, None, None);
         match t {
             PixelValue::Color(c) => assert!((c - 0.5).abs() < 1e-3),
             _ => panic!(),
@@ -372,6 +372,7 @@ mod tests {
             max,
             Scale::Asinh { scale: 10.0 },
             NegMode::Zero,
+            None,
             None,
         );
         match t {
@@ -390,14 +391,14 @@ mod tests {
         let max = 10.0;
 
         // Linear scale with Zero mode
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, None);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, None, None);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
 
         // Check overflow still maps to 1.0
-        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, None);
+        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, None, None);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 1.0),
             _ => panic!(),
@@ -506,14 +507,14 @@ mod tests {
         let max = 10.0;
 
         // Linear + NegMode::Zero → clamp to 0.0
-        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, None);
+        let t = scale_value(-5.0, min, max, Scale::Linear, NegMode::Zero, None, None);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Linear + NegMode::Zero should return Color(0.0)"),
         }
 
         // Above max clamps to 1.0 (never Bad)
-        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, None);
+        let t = scale_value(20.0, min, max, Scale::Linear, NegMode::Unseen, None, None);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 1.0),
             _ => panic!("Values above max should clamp, not mark Bad"),
@@ -527,14 +528,14 @@ mod tests {
         let max = 100.0;
 
         // NegMode::Zero → maps to Color(0.0)
-        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Zero, None);
+        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Zero, None, None);
         match t {
             PixelValue::Color(c) => assert_eq!(c, 0.0),
             _ => panic!("Log + NegMode::Zero should return Color(0.0)"),
         }
 
         // NegMode::Unseen → Bad
-        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Unseen, None);
+        let t = scale_value(-5.0, min, max, Scale::Log, NegMode::Unseen, None, None);
         assert!(matches!(t, PixelValue::Bad));
     }
 
@@ -552,6 +553,7 @@ mod tests {
             Scale::Symlog { linthresh },
             NegMode::Unseen,
             None,
+            None,
         );
 
         let neg = scale_value(
@@ -560,6 +562,7 @@ mod tests {
             max,
             Scale::Symlog { linthresh },
             NegMode::Unseen,
+            None,
             None,
         );
 
@@ -584,6 +587,7 @@ mod tests {
             Scale::Asinh { scale: 10.0 },
             NegMode::Unseen,
             None,
+            None,
         );
 
         let t2 = scale_value(
@@ -592,6 +596,7 @@ mod tests {
             max,
             Scale::Asinh { scale: 10.0 },
             NegMode::Unseen,
+            None,
             None,
         );
 

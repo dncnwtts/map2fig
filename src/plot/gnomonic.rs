@@ -160,6 +160,9 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
         None
     };
 
+    // Pre-compute scale cache for fast pixel rendering
+    let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
+
     render_projection_to_grid(
         crate::params::RenderGridParams {
             map,
@@ -174,6 +177,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             hist_scale: hist_scale.as_ref(),
             view,
             mask,
+            scale_cache: Some(&scale_cache),
         },
         &mut grid,
     );
@@ -652,6 +656,9 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
         None
     };
 
+    // Pre-compute scale cache for fast pixel rendering
+    let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
+
     render_projection_to_grid(
         crate::params::RenderGridParams {
             map,
@@ -666,6 +673,7 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             hist_scale: hist_scale.as_ref(),
             view,
             mask,
+            scale_cache: Some(&scale_cache),
         },
         &mut grid,
     );

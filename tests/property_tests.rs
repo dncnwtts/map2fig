@@ -20,7 +20,7 @@ fn prop_linear_scaling_bounded() {
         min in -1e6f64..0f64,
         max in 0f64..1e6f64,
     )| {
-        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -42,7 +42,7 @@ fn prop_linear_min_value_scales_to_zero() {
         let min = min.min(max);
         let max = max.max(min + 1e-6); // Ensure min < max
 
-        let result = scale_value(min, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(min, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -64,7 +64,7 @@ fn prop_linear_max_value_scales_to_one() {
         let min = min.min(max);
         let max = max.max(min + 1e-6); // Ensure min < max
 
-        let result = scale_value(max, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(max, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -87,7 +87,7 @@ fn prop_log_scaling_bounded() {
         let min = min.min(max);
         let max = max.max(min * 1.0001); // Ensure min < max
 
-        let result = scale_value(value, min, max, Scale::Log, NegMode::Zero, None);
+        let result = scale_value(value, min, max, Scale::Log, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -114,6 +114,7 @@ fn prop_symlog_scaling_bounded() {
             value, min, max,
             Scale::Symlog { linthresh: 1.0 },
             NegMode::Zero,
+            None,
             None
         );
 
@@ -142,6 +143,7 @@ fn prop_asinh_scaling_bounded() {
             value, min, max,
             Scale::Asinh { scale: 1.0 },
             NegMode::Zero,
+            None,
             None
         );
 
@@ -165,7 +167,7 @@ fn prop_nan_always_bad() {
         let min = min.min(max);
         let max = max.max(min + 1e-6);
 
-        let result = scale_value(f64::NAN, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(f64::NAN, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         match result {
             PixelValue::Bad => {/* OK */},
@@ -184,8 +186,8 @@ fn prop_infinity_always_bad() {
         let min = min.min(max);
         let max = max.max(min + 1e-6);
 
-        let pos_inf = scale_value(f64::INFINITY, min, max, Scale::Linear, NegMode::Zero, None);
-        let neg_inf = scale_value(f64::NEG_INFINITY, min, max, Scale::Linear, NegMode::Zero, None);
+        let pos_inf = scale_value(f64::INFINITY, min, max, Scale::Linear, NegMode::Zero, None, None);
+        let neg_inf = scale_value(f64::NEG_INFINITY, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         match pos_inf {
             PixelValue::Bad => {/* OK */},
@@ -210,8 +212,8 @@ fn prop_linear_monotonic() {
     )| {
         let (v1, v2) = if v1 < v2 { (v1, v2) } else { (v2, v1) };
 
-        let r1 = scale_value(v1, min, max, Scale::Linear, NegMode::Zero, None);
-        let r2 = scale_value(v2, min, max, Scale::Linear, NegMode::Zero, None);
+        let r1 = scale_value(v1, min, max, Scale::Linear, NegMode::Zero, None, None);
+        let r2 = scale_value(v2, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let (PixelValue::Color(t1), PixelValue::Color(t2)) = (r1, r2) {
             prop_assert!(
@@ -233,14 +235,14 @@ fn prop_clamping() {
     )| {
         // Test value below min
         let below_min = min - offset;
-        let result_below = scale_value(below_min, min, max, Scale::Linear, NegMode::Zero, None);
+        let result_below = scale_value(below_min, min, max, Scale::Linear, NegMode::Zero, None, None);
         if let PixelValue::Color(t) = result_below {
             prop_assert!((t - 0.0).abs() < 1e-10, "Values below min should clamp to 0.0, got {}", t);
         }
 
         // Test value above max
         let above_max = max + offset;
-        let result_above = scale_value(above_max, min, max, Scale::Linear, NegMode::Zero, None);
+        let result_above = scale_value(above_max, min, max, Scale::Linear, NegMode::Zero, None, None);
         if let PixelValue::Color(t) = result_above {
             prop_assert!((t - 1.0).abs() < 1e-10, "Values above max should clamp to 1.0, got {}", t);
         }
@@ -261,7 +263,7 @@ fn prop_min_equals_max_scales_to_half() {
         // Ensure same_val is not NaN/Inf
         prop_assume!(same_val.is_finite());
 
-        let result = scale_value(val, same_val, same_val, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(val, same_val, same_val, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -281,7 +283,7 @@ fn prop_negative_range() {
         min in -100f64..-50f64,
         max in -50f64..-1f64,
     )| {
-        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
@@ -301,7 +303,7 @@ fn prop_tiny_range_safe() {
         let max = min + 1e-12; // Extremely small range
         let value = (min + max) / 2.0;
 
-        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None);
+        let result = scale_value(value, min, max, Scale::Linear, NegMode::Zero, None, None);
 
         if let PixelValue::Color(t) = result {
             prop_assert!(
