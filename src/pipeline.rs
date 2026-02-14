@@ -48,7 +48,7 @@ pub fn load_and_process_data(
         if !is_seen(*v) {
             continue;
         }
-        
+
         // Convert zero-valued pixels to HPX_UNSEEN (mask indicator for this file)
         // Use a small threshold (1e-20) instead of exact comparison to handle floating-point precision
         if v.abs() < 1e-20 {

@@ -384,9 +384,11 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                 crate::scale::Scale::Linear | crate::scale::Scale::Log
             ) {
                 let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
-                let log_cache = if use_log && params.scale_cache.is_some() {
-                    let cache = params.scale_cache.as_ref().unwrap();
-                    Some((cache.log_min, cache.log_range))
+                let log_cache = if use_log {
+                    params
+                        .scale_cache
+                        .as_ref()
+                        .map(|cache| (cache.log_min, cache.log_range))
                 } else {
                     None
                 };
@@ -555,9 +557,11 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                 crate::scale::Scale::Linear | crate::scale::Scale::Log
             ) {
                 let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
-                let log_cache = if use_log && params.scale_cache.is_some() {
-                    let cache = params.scale_cache.as_ref().unwrap();
-                    Some((cache.log_min, cache.log_range))
+                let log_cache = if use_log {
+                    params
+                        .scale_cache
+                        .as_ref()
+                        .map(|cache| (cache.log_min, cache.log_range))
                 } else {
                     None
                 };
