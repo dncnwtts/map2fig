@@ -791,7 +791,10 @@ Typical performance on a modern CPU:
 - Gnomonic zoom (1248×1248): ~200ms
 - Full pipeline with graticules: <1s
 
-For batch processing, use shell loops (embarrassingly parallel).
+**Performance Optimization Tips**:
+- The binary includes automatic downgrading of high-NSIDE maps for better performance at standard resolutions (1200-2400px)
+- For benchmarking or ultra-high-resolution output (4000px+), disable downgrading with `--no-downgrade`
+- Batch processing is embarrassingly parallel—use shell loops to process multiple files
 
 ## Troubleshooting
 
