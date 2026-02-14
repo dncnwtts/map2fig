@@ -12,7 +12,7 @@ use crate::rotation::CoordSystem;
 use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
-use crate::{CairoImageSink, PixelSink, PngSink};
+use crate::{BatchedCairoImageSink, PixelSink, PngSink};
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
@@ -208,7 +208,7 @@ where
     // Pre-compute scale cache for fast pixel rendering
     let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
 
-    let mut sink = CairoImageSink { cr: &cr_img };
+    let mut sink = BatchedCairoImageSink::new(&cr_img);
     let debug_overlay = if cfg!(feature = "debug_overlay") {
         Some(DebugOverlay::grid_only())
     } else {
@@ -234,6 +234,9 @@ where
         &mut sink,
         debug_overlay,
     );
+
+    // Critical: flush all batched pixels to Cairo surface
+    sink.flush();
 
     surface_img.flush();
 

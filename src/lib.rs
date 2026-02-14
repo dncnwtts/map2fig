@@ -219,6 +219,54 @@ impl<'a> PixelSink for CairoImageSink<'a> {
     }
 }
 
+/// Batched Cairo pixel sink - groups pixels by color to reduce fill() calls.
+/// 
+/// Instead of calling cairo_fill() for every pixel, this sink batches pixels
+/// of the same color together, reducing the number of fill() calls from 51k to ~256.
+pub struct BatchedCairoImageSink<'a> {
+    cr: &'a Context,
+    color_batches: std::collections::HashMap<[u8; 4], Vec<(u32, u32)>>,
+}
+
+impl<'a> BatchedCairoImageSink<'a> {
+    pub fn new(cr: &'a Context) -> Self {
+        Self {
+            cr,
+            color_batches: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Flush all batched pixels to the Cairo surface.
+    /// Must be called after all pixels are added via draw_pixel().
+    pub fn flush(&mut self) {
+        // Process each color group
+        for (rgba, pixels) in self.color_batches.drain() {
+            // Set color once for the entire group
+            self.cr.set_source_rgba(
+                rgba[0] as f64 / 255.0,
+                rgba[1] as f64 / 255.0,
+                rgba[2] as f64 / 255.0,
+                rgba[3] as f64 / 255.0,
+            );
+
+            // Add all rectangles of this color to the path
+            for (x, y) in pixels {
+                self.cr.rectangle(x as f64, y as f64, 1.0, 1.0);
+            }
+
+            // Fill the entire path at once (not per-pixel!)
+            self.cr.fill().unwrap();
+        }
+    }
+}
+
+impl<'a> PixelSink for BatchedCairoImageSink<'a> {
+    fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
+        let color = [rgba[0], rgba[1], rgba[2], rgba[3]];
+        self.color_batches.entry(color).or_insert_with(Vec::new).push((x, y));
+    }
+}
+
 /// RGBA color specified as comma-separated integers 0–255.
 ///
 /// # Format

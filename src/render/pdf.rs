@@ -7,7 +7,7 @@ use crate::plot::rasterize_to_surface;
 use crate::render::RenderBackend;
 use crate::render::target::{PixelSource, RenderTarget};
 use crate::scale::generate_colorbar_ticks;
-use crate::{CairoImageSink, Colormap};
+use crate::{BatchedCairoImageSink, Colormap};
 use cairo::{Context, Format, ImageSurface};
 use std::f64::consts::PI;
 
@@ -475,7 +475,7 @@ impl RenderTarget for PdfRenderTarget<'_> {
 
         {
             let cr = cairo::Context::new(&surface).unwrap();
-            let mut sink = CairoImageSink { cr: &cr };
+            let mut sink = BatchedCairoImageSink::new(&cr);
 
             for py in 0..raster.height() {
                 for px in 0..raster.width() {
@@ -483,6 +483,9 @@ impl RenderTarget for PdfRenderTarget<'_> {
                     sink.draw_pixel(px, py, image::Rgba([r, g, b, a]));
                 }
             }
+
+            // Critical: flush all batched pixels to Cairo surface
+            sink.flush();
         }
 
         surface.flush();
