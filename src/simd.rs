@@ -1010,6 +1010,105 @@ pub fn simd_batch_scale_8(
     }
 }
 
+//─────────────────────────────────────────────────────────────────────────────
+// PixelValue Wrapper Functions (Phase 5.2: Main Loop Integration)
+//─────────────────────────────────────────────────────────────────────────────
+// These functions wrap SIMD scaling results into the PixelValue enum format
+// used by the render loop, handling underflow/overflow classification.
+
+use crate::PixelValue;
+
+/// Convert SIMD linear scale results to PixelValue enum array
+///
+/// Maps normalized [0, 1] values to the PixelValue enum used in the render loop:
+/// - 0.0 → PixelValue::Underflow
+/// - 0.0 < t < 1.0 → PixelValue::Color(t)
+/// - 1.0 → PixelValue::Overflow
+/// - Invalid mask → PixelValue::Bad
+///
+/// This is the integration point between SIMD batch operations and the
+/// per-pixel enum-based rendering pipeline.
+#[inline]
+pub fn simd_to_pixel_values(
+    scaled: [f64; 8],
+    mask: [bool; 8],
+) -> [PixelValue; 8] {
+    [
+        if !mask[0] {
+            PixelValue::Bad
+        } else if scaled[0] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[0] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[0])
+        },
+        if !mask[1] {
+            PixelValue::Bad
+        } else if scaled[1] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[1] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[1])
+        },
+        if !mask[2] {
+            PixelValue::Bad
+        } else if scaled[2] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[2] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[2])
+        },
+        if !mask[3] {
+            PixelValue::Bad
+        } else if scaled[3] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[3] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[3])
+        },
+        if !mask[4] {
+            PixelValue::Bad
+        } else if scaled[4] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[4] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[4])
+        },
+        if !mask[5] {
+            PixelValue::Bad
+        } else if scaled[5] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[5] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[5])
+        },
+        if !mask[6] {
+            PixelValue::Bad
+        } else if scaled[6] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[6] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[6])
+        },
+        if !mask[7] {
+            PixelValue::Bad
+        } else if scaled[7] <= 0.0 {
+            PixelValue::Underflow
+        } else if scaled[7] >= 1.0 {
+            PixelValue::Overflow
+        } else {
+            PixelValue::Color(scaled[7])
+        },
+    ]
+}
+
 #[cfg(test)]
 mod batch_integration_tests {
     use super::*;
@@ -1046,6 +1145,56 @@ mod batch_integration_tests {
         // Should match log scaling
         assert!((result[0] - 0.0).abs() < 1e-14); // log(1) at min
         assert!((result[2] - 1.0).abs() < 1e-14); // log(100) at max
+    }
+
+    #[test]
+    fn test_simd_to_pixel_values() {
+        // Test conversion of SIMD results to PixelValue enum
+        let scaled = [0.0, 0.5, 1.0, 0.25, 0.75, -0.1, 1.1, 0.5];
+        let mask = [true, true, true, true, true, false, false, true];
+
+        let pixel_values = simd_to_pixel_values(scaled, mask);
+
+        // Check each value
+        match pixel_values[0] {
+            PixelValue::Underflow => {}, // 0.0
+            _ => panic!("Expected Underflow for value 0.0"),
+        }
+
+        match pixel_values[1] {
+            PixelValue::Color(c) => assert_eq!(c, 0.5),
+            _ => panic!("Expected Color(0.5)"),
+        }
+
+        match pixel_values[2] {
+            PixelValue::Overflow => {}, // 1.0
+            _ => panic!("Expected Overflow for value 1.0"),
+        }
+
+        match pixel_values[3] {
+            PixelValue::Color(c) => assert_eq!(c, 0.25),
+            _ => panic!("Expected Color(0.25)"),
+        }
+
+        match pixel_values[4] {
+            PixelValue::Color(c) => assert_eq!(c, 0.75),
+            _ => panic!("Expected Color(0.75)"),
+        }
+
+        match pixel_values[5] {
+            PixelValue::Bad => {}, // mask[5] = false
+            _ => panic!("Expected Bad for masked value"),
+        }
+
+        match pixel_values[6] {
+            PixelValue::Bad => {}, // mask[6] = false
+            _ => panic!("Expected Bad for masked value"),
+        }
+
+        match pixel_values[7] {
+            PixelValue::Color(c) => assert_eq!(c, 0.5),
+            _ => panic!("Expected Color(0.5)"),
+        }
     }
 }
 
