@@ -175,6 +175,39 @@ impl Projection for HammerProjection {
         // Delegate to inverse() which handles the projection mathematics
         self.inverse(u, v)
     }
+
+    /// Batch projection for Hammer: process 8 pixels in parallel
+    fn pixel_to_ang_batch(
+        &self,
+        px_coords: &[u32; 8],
+        py_coords: &[u32; 8],
+        grid: &RasterGrid,
+    ) -> (
+        [f64; 8], // longitudes
+        [f64; 8], // latitudes
+        [bool; 8], // validity mask
+    ) {
+        let w_inv = 1.0 / ((grid.width - 1) as f64);
+        let h_inv = 1.0 / ((grid.height - 1) as f64);
+
+        let mut lons = [0.0_f64; 8];
+        let mut lats = [0.0_f64; 8];
+        let mut mask = [false; 8];
+
+        // Process all 8 pixels with unrolled loop
+        for i in 0..8 {
+            let u = px_coords[i] as f64 * w_inv;
+            let v = py_coords[i] as f64 * h_inv;
+
+            if let Some((lon, lat)) = self.inverse(u, v) {
+                lons[i] = lon;
+                lats[i] = lat;
+                mask[i] = true;
+            }
+        }
+
+        (lons, lats, mask)
+    }
 }
 
 #[cfg(test)]

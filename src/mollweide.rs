@@ -91,6 +91,64 @@ impl Projection for MollweideProjection {
 
         Some((lon, lat))
     }
+
+    /// Batch projection: process up to 8 pixels in parallel with loop unrolling
+    /// 
+    /// This is optimized for instruction-level parallelism by processing
+    /// 8 pixels with independent computations that can be executed concurrently.
+    fn pixel_to_ang_batch(
+        &self,
+        px_coords: &[u32; 8],
+        py_coords: &[u32; 8],
+        grid: &RasterGrid,
+    ) -> (
+        [f64; 8], // longitudes
+        [f64; 8], // latitudes
+        [bool; 8], // validity mask
+    ) {
+        let w_inv = 1.0 / ((grid.width - 1) as f64);
+        let h_inv = 1.0 / ((grid.height - 1) as f64);
+
+        // Initialize output arrays
+        let mut lons = [0.0_f64; 8];
+        let mut lats = [0.0_f64; 8];
+        let mut mask = [false; 8];
+
+        // Process all 8 pixels with unrolled loop for ILP (Instruction-Level Parallelism)
+        // Each iteration is independent, allowing CPU to execute multiple in parallel
+        for i in 0..8 {
+            let nx = px_coords[i] as f64 * w_inv;
+            let ny = py_coords[i] as f64 * h_inv;
+
+            let px = 2.0 - 4.0 * nx;
+            let py = 1.0 - 2.0 * ny;
+
+            // Early rejection: check if point is outside the Mollweide oval
+            if px * px + 4.0 * py * py > 4.0 {
+                continue;
+            }
+
+            let theta_aux = py.asin();
+            let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
+
+            if sin_lat.abs() > 1.0 {
+                continue;
+            }
+
+            let lat = sin_lat.asin();
+            let c = theta_aux.cos();
+            if c.abs() < 1e-12 {
+                continue;
+            }
+            let lon = PI * px / (2.0 * c);
+
+            lons[i] = lon;
+            lats[i] = lat;
+            mask[i] = true;
+        }
+
+        (lons, lats, mask)
+    }
 }
 
 #[test]
@@ -299,6 +357,51 @@ fn test_mollweide_all_pixels_inside_ellipse() {
                 "  ({:4}, {:3}): ellipse_val={:.16}, should_be_inside={}",
                 px, py, val, inside
             );
+        }
+    }
+}
+
+#[test]
+fn batch_projection_matches_scalar() {
+    use crate::projection::Projection;
+    
+    let proj = MollweideProjection;
+    let grid = RasterGrid::new(512, 256);
+
+    // Test batch projection against scalar version
+    // Use a variety of pixel coordinates including edge cases
+    let px_array = [10u32, 50, 100, 200, 300, 400, 450, 500];
+    let py_array = [10u32, 50, 100, 128, 150, 200, 240, 250];
+
+    let (batch_lons, batch_lats, batch_mask) = proj.pixel_to_ang_batch(&px_array, &py_array, &grid);
+
+    for i in 0..8 {
+        let scalar_result = proj.pixel_to_ang(px_array[i],py_array[i], &grid);
+        
+        match (scalar_result, batch_mask[i]) {
+            (Some((scalar_lon, scalar_lat)), true) => {
+                // Both should be valid - check values match
+                assert!(
+                    (batch_lons[i] - scalar_lon).abs() < 1e-14,
+                    "Longitude mismatch at ({}, {}): batch={}, scalar={}",
+                    px_array[i], py_array[i], batch_lons[i], scalar_lon
+                );
+                assert!(
+                    (batch_lats[i] - scalar_lat).abs() < 1e-14,
+                    "Latitude mismatch at ({}, {}): batch={}, scalar={}",
+                    px_array[i], py_array[i], batch_lats[i], scalar_lat
+                );
+            }
+            (None, false) => {
+                // Both should be invalid - OK
+            }
+            _ => {
+                panic!(
+                    "Mismatch at ({}, {}): scalar valid={}, batch valid={}",
+                    px_array[i], py_array[i],
+                    scalar_result.is_some(), batch_mask[i]
+                );
+            }
         }
     }
 }
