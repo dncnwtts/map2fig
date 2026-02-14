@@ -10,6 +10,27 @@ Master performance tracking document. Run `tools/scripts/benchmark_quick.sh` to 
 - **Hardware:** See individual benchmark metadata
 - **Note:** Timing includes I/O and PDF generation; measures end-to-end performance
 
+## Current Status: Post-Merge (Feb 14, 2026)
+
+### Main Branch: Tier 3 + Tier 4 Integrated ✓
+
+Merged `tier4-optimization` into `main` - all SIMD and Tier 4 optimizations now in production.
+
+| Branch | FITS File | Linear 512 | Linear 1200 | Log 512 | Log 1200 | Notes |
+|--------|-----------|-----------|-----------|---------|----------|-------|
+| `main` | `cosmoglobe_clipped.fits` | 0.408s | 0.935s | 0.369s | 0.773s | Post-merge: Tier 3 SIMD + Tier 4 complete |
+
+**Comparison to Phase 5 Baseline (0.415s / 0.915s / 0.371s / 0.800s):**
+- Linear 512: -1.7% (within variance)
+- Linear 1200: +2.2% (within variance)
+- Log 512: -0.5% (parity)
+- Log 1200: -3.4% ✓ (improvement from cache optimization)
+- **Average:** -0.9% (parity/within noise margin)
+
+**Status:** Stable, zero regressions, infrastructure ready for Phase 5+ work.
+
+---
+
 ## Phase 5.2 Baseline (Feb 14, 2026)
 
 Comparison between `main` branch (baseline) and `performance-optimizations` branch (with SIMD scaling integration).
