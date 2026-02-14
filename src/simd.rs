@@ -1199,6 +1199,232 @@ mod batch_integration_tests {
 }
 
 //─────────────────────────────────────────────────────────────────────────────
+// Tier 5: Extended Batch Sizes (16-element Functions)
+//─────────────────────────────────────────────────────────────────────────────
+// Optimized batch processing for improved throughput on modern CPUs.
+// These functions process 16 elements by chaining two 8-element operations.
+// Future: Can be replaced with true AVX2 or AVX-512 implementations.
+
+/// Vectorized sin_cos for 16 f64 values
+///
+/// Processes 16 angles by splitting into two 8-element batches
+#[inline]
+pub fn simd_sin_cos_16(angles: [f64; 16]) -> ([f64; 16], [f64; 16]) {
+    let (sin_lo, cos_lo) = simd_sin_cos_8([
+        angles[0], angles[1], angles[2], angles[3],
+        angles[4], angles[5], angles[6], angles[7],
+    ]);
+    let (sin_hi, cos_hi) = simd_sin_cos_8([
+        angles[8], angles[9], angles[10], angles[11],
+        angles[12], angles[13], angles[14], angles[15],
+    ]);
+
+    let mut sin_result = [0.0; 16];
+    let mut cos_result = [0.0; 16];
+
+    for i in 0..8 {
+        sin_result[i] = sin_lo[i];
+        cos_result[i] = cos_lo[i];
+        sin_result[i + 8] = sin_hi[i];
+        cos_result[i + 8] = cos_hi[i];
+    }
+
+    (sin_result, cos_result)
+}
+
+/// Batch scale 16 values with validity masking (for 16-pixel rendering)
+///
+/// Processes 16 raw values through scaling operation, handling linear and log scales.
+/// Internally processes as two 8-element batches for optimal CPU cache utilization.
+#[inline]
+pub fn simd_batch_scale_16(
+    values: [f64; 16],
+    min: f64,
+    max: f64,
+    use_log: bool,
+    log_cache: Option<(f64, f64)>,
+    mask: [bool; 16],
+) -> ([f64; 16], [bool; 16]) {
+    let (scaled_lo, mask_lo) = simd_batch_scale_8(
+        [
+            values[0], values[1], values[2], values[3],
+            values[4], values[5], values[6], values[7],
+        ],
+        min,
+        max,
+        use_log,
+        log_cache,
+        [
+            mask[0], mask[1], mask[2], mask[3],
+            mask[4], mask[5], mask[6], mask[7],
+        ],
+    );
+
+    let (scaled_hi, mask_hi) = simd_batch_scale_8(
+        [
+            values[8], values[9], values[10], values[11],
+            values[12], values[13], values[14], values[15],
+        ],
+        min,
+        max,
+        use_log,
+        log_cache,
+        [
+            mask[8], mask[9], mask[10], mask[11],
+            mask[12], mask[13], mask[14], mask[15],
+        ],
+    );
+
+    let mut result = [0.0; 16];
+    let mut out_mask = [false; 16];
+
+    for i in 0..8 {
+        result[i] = scaled_lo[i];
+        out_mask[i] = mask_lo[i];
+        result[i + 8] = scaled_hi[i];
+        out_mask[i + 8] = mask_hi[i];
+    }
+
+    (result, out_mask)
+}
+
+/// Convert 16 SIMD scaling results to PixelValue array
+///
+/// Processes 16 scaled values, converting to PixelValue enum format
+/// by processing two 8-element batches.
+#[inline]
+pub fn simd_to_pixel_values_16(
+    scaled: [f64; 16],
+    mask: [bool; 16],
+) -> [PixelValue; 16] {
+    let pixel_lo = simd_to_pixel_values(
+        [
+            scaled[0], scaled[1], scaled[2], scaled[3],
+            scaled[4], scaled[5], scaled[6], scaled[7],
+        ],
+        [
+            mask[0], mask[1], mask[2], mask[3],
+            mask[4], mask[5], mask[6], mask[7],
+        ],
+    );
+
+    let pixel_hi = simd_to_pixel_values(
+        [
+            scaled[8], scaled[9], scaled[10], scaled[11],
+            scaled[12], scaled[13], scaled[14], scaled[15],
+        ],
+        [
+            mask[8], mask[9], mask[10], mask[11],
+            mask[12], mask[13], mask[14], mask[15],
+        ],
+    );
+
+    let mut result = [PixelValue::Bad; 16];
+    for i in 0..8 {
+        result[i] = pixel_lo[i];
+        result[i + 8] = pixel_hi[i];
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod batch_16_tests {
+    use super::*;
+
+    #[test]
+    fn test_simd_sin_cos_16() {
+        // Create test angles
+        let mut angles = [0.0; 16];
+        for i in 0..16 {
+            angles[i] = (i as f64) * std::f64::consts::PI / 8.0;
+        }
+
+        let (sines, cosines) = simd_sin_cos_16(angles);
+
+        // Verify results match individual sin_cos calls
+        for i in 0..16 {
+            let (expected_sin, expected_cos) = angles[i].sin_cos();
+            assert!(
+                (sines[i] - expected_sin).abs() < 1e-14,
+                "sin mismatch at {}",
+                i
+            );
+            assert!(
+                (cosines[i] - expected_cos).abs() < 1e-14,
+                "cos mismatch at {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_simd_batch_scale_16_linear() {
+        let values = [
+            0.0, 2.5, 5.0, 7.5, 10.0, 1.0, 3.0, 9.0,
+            2.0, 4.0, 6.0, 8.0, 1.5, 3.5, 5.5, 7.5,
+        ];
+        let mask = [true; 16];
+
+        let (result, _) = simd_batch_scale_16(values, 0.0, 10.0, false, None, mask);
+
+        // All values should match their individual linear scale results
+        for i in 0..16 {
+            let expected = if values[i] <= 0.0 {
+                0.0
+            } else if values[i] >= 10.0 {
+                1.0
+            } else {
+                values[i] / 10.0
+            };
+
+            assert!(
+                (result[i] - expected).abs() < 1e-14,
+                "scale mismatch at {}: {} vs {}",
+                i,
+                result[i],
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_simd_to_pixel_values_16() {
+        let scaled = [
+            0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5,
+            0.33, 0.67, -0.1, 1.1, 0.2, 0.8, 0.4, 0.6,
+        ];
+        let mask = [
+            true, true, true, true, true, true, true, true,
+            true, true, false, false, true, true, true, true,
+        ];
+
+        let pixel_values = simd_to_pixel_values_16(scaled, mask);
+
+        // Verify first 8 elements match individual conversions
+        match pixel_values[0] {
+            PixelValue::Underflow => {},
+            _ => panic!("Expected Underflow at 0"),
+        }
+
+        match pixel_values[4] {
+            PixelValue::Overflow => {},
+            _ => panic!("Expected Overflow at 4"),
+        }
+
+        match pixel_values[10] {
+            PixelValue::Bad => {},
+            _ => panic!("Expected Bad at 10 (unmasked)"),
+        }
+
+        match pixel_values[15] {
+            PixelValue::Color(c) => assert_eq!(c, 0.6),
+            _ => panic!("Expected Color(0.6) at 15"),
+        }
+    }
+}
+
+//─────────────────────────────────────────────────────────────────────────────
 // Full Pipeline Integration Tests (Phase 5.2 Validation)
 //─────────────────────────────────────────────────────────────────────────────
 // NOTE: Full pipeline tests deferred to Phase 5.2 integration work.

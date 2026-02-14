@@ -254,55 +254,108 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
     };
 
     // Process rows using batch operations for vectorization opportunity
+    // Tier 5: Process 16 pixels at a time for improved cache locality and throughput
     for py in 0..height {
         let mut px: u32 = 0;
 
-        // Batch loop: process 8 pixels at a time
-        while px + 8 <= width {
-            // Prepare batch input arrays
-            let mut px_array = [0u32; 8];
-            let py_array = [py; 8];
+        // Tier 5 16-pixel batch loop: process 16 pixels at a time
+        while px + 16 <= width {
+            // First batch of 8 pixels
+            let mut px_array_lo = [0u32; 8];
+            let py_array_lo = [py; 8];
             for i in 0..8 {
-                px_array[i] = px + i as u32;
+                px_array_lo[i] = px + i as u32;
             }
 
-            // Batch projection: get lon/lat for 8 pixels
-            let (lons, lats, proj_mask) =
-                params.proj.pixel_to_ang_batch(&px_array, &py_array, grid);
+            let (lons_lo, lats_lo, proj_mask_lo) =
+                params.proj.pixel_to_ang_batch(&px_array_lo, &py_array_lo, grid);
 
             // Convert latitudes to theta values
-            let mut thetas = [0.0_f64; 8];
+            let mut thetas_lo = [0.0_f64; 8];
             for i in 0..8 {
-                if proj_mask[i] {
-                    thetas[i] = std::f64::consts::PI / 2.0 - lats[i];
+                if proj_mask_lo[i] {
+                    thetas_lo[i] = std::f64::consts::PI / 2.0 - lats_lo[i];
                 }
             }
 
-            // Batch HEALPix sampling: get 8 values
-            // Use SIMD-accelerated version for better performance on supported platforms
-            let (healpix_values, healpix_mask) = crate::healpix::sample_healpix_batch_simd(
+            // Sample HEALPix for first batch
+            let (healpix_values_lo, healpix_mask_lo) = crate::healpix::sample_healpix_batch_simd(
                 params.map,
                 params.meta,
                 params.view,
-                &thetas,
-                &lons,
+                &thetas_lo,
+                &lons_lo,
             );
 
-            // Combine projection and HEALPix masks for validity
-            let validity_mask: [bool; 8] = [
-                proj_mask[0] && healpix_mask[0],
-                proj_mask[1] && healpix_mask[1],
-                proj_mask[2] && healpix_mask[2],
-                proj_mask[3] && healpix_mask[3],
-                proj_mask[4] && healpix_mask[4],
-                proj_mask[5] && healpix_mask[5],
-                proj_mask[6] && healpix_mask[6],
-                proj_mask[7] && healpix_mask[7],
+            // Combine masks for first batch
+            let validity_mask_lo: [bool; 8] = [
+                proj_mask_lo[0] && healpix_mask_lo[0],
+                proj_mask_lo[1] && healpix_mask_lo[1],
+                proj_mask_lo[2] && healpix_mask_lo[2],
+                proj_mask_lo[3] && healpix_mask_lo[3],
+                proj_mask_lo[4] && healpix_mask_lo[4],
+                proj_mask_lo[5] && healpix_mask_lo[5],
+                proj_mask_lo[6] && healpix_mask_lo[6],
+                proj_mask_lo[7] && healpix_mask_lo[7],
             ];
 
-            // Phase 5.2: Try SIMD scaling path for Linear and Log scales
-            let pixel_values: [PixelValue; 8] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
-                // Use SIMD batch scaling for linear and log
+            // Second batch of 8 pixels
+            let mut px_array_hi = [0u32; 8];
+            let py_array_hi = [py; 8];
+            for i in 0..8 {
+                px_array_hi[i] = px + 8 + i as u32;
+            }
+
+            let (lons_hi, lats_hi, proj_mask_hi) =
+                params.proj.pixel_to_ang_batch(&px_array_hi, &py_array_hi, grid);
+
+            // Convert latitudes to theta values
+            let mut thetas_hi = [0.0_f64; 8];
+            for i in 0..8 {
+                if proj_mask_hi[i] {
+                    thetas_hi[i] = std::f64::consts::PI / 2.0 - lats_hi[i];
+                }
+            }
+
+            // Sample HEALPix for second batch
+            let (healpix_values_hi, healpix_mask_hi) = crate::healpix::sample_healpix_batch_simd(
+                params.map,
+                params.meta,
+                params.view,
+                &thetas_hi,
+                &lons_hi,
+            );
+
+            // Combine masks for second batch
+            let validity_mask_hi: [bool; 8] = [
+                proj_mask_hi[0] && healpix_mask_hi[0],
+                proj_mask_hi[1] && healpix_mask_hi[1],
+                proj_mask_hi[2] && healpix_mask_hi[2],
+                proj_mask_hi[3] && healpix_mask_hi[3],
+                proj_mask_hi[4] && healpix_mask_hi[4],
+                proj_mask_hi[5] && healpix_mask_hi[5],
+                proj_mask_hi[6] && healpix_mask_hi[6],
+                proj_mask_hi[7] && healpix_mask_hi[7],
+            ];
+
+            // Merge 16 elements for scaling
+            let mut healpix_values_16 = [0.0; 16];
+            let mut validity_mask_16 = [false; 16];
+            let mut thetas_16 = [0.0; 16];
+            let mut lons_16 = [0.0; 16];
+            for i in 0..8 {
+                healpix_values_16[i] = healpix_values_lo[i];
+                validity_mask_16[i] = validity_mask_lo[i];
+                thetas_16[i] = thetas_lo[i];
+                lons_16[i] = lons_lo[i];
+                healpix_values_16[i + 8] = healpix_values_hi[i];
+                validity_mask_16[i + 8] = validity_mask_hi[i];
+                thetas_16[i + 8] = thetas_hi[i];
+                lons_16[i + 8] = lons_hi[i];
+            }
+
+            // Tier 5: Use 16-element SIMD scaling for improved throughput
+            let pixel_values: [PixelValue; 16] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
                 let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
                 let log_cache = if use_log && params.scale_cache.is_some() {
                     let cache = params.scale_cache.as_ref().unwrap();
@@ -311,24 +364,25 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                     None
                 };
 
-                // SIMD batch scaling: processes all 8 values at once
-                let (scaled_values, out_mask) = crate::simd::simd_batch_scale_8(
-                    healpix_values,
+                // 16-element batch scaling
+                let (scaled_values, out_mask) = crate::simd::simd_batch_scale_16(
+                    healpix_values_16,
                     params.scale.minv,
                     params.scale.maxv,
                     use_log,
                     log_cache,
-                    validity_mask,
+                    validity_mask_16,
                 );
 
-                // Convert SIMD results to PixelValue enum
-                crate::simd::simd_to_pixel_values(scaled_values, out_mask)
+                // Convert to PixelValue array
+                crate::simd::simd_to_pixel_values_16(scaled_values, out_mask)
             } else {
-                // Fallback to scalar path for Asinh, Symlog, Histogram, etc.
-                [
-                    if validity_mask[0] {
+                // Fallback to scalar path for non-linear/log scales
+                let mut result = [PixelValue::Bad; 16];
+                for i in 0..16 {
+                    result[i] = if validity_mask_16[i] {
                         crate::scale::scale_value(
-                            healpix_values[0],
+                            healpix_values_16[i],
                             params.scale.minv,
                             params.scale.maxv,
                             params.scale_type,
@@ -338,105 +392,15 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                         )
                     } else {
                         PixelValue::Bad
-                    },
-                    if validity_mask[1] {
-                        crate::scale::scale_value(
-                            healpix_values[1],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[2] {
-                        crate::scale::scale_value(
-                            healpix_values[2],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[3] {
-                        crate::scale::scale_value(
-                            healpix_values[3],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[4] {
-                        crate::scale::scale_value(
-                            healpix_values[4],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[5] {
-                        crate::scale::scale_value(
-                            healpix_values[5],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[6] {
-                        crate::scale::scale_value(
-                            healpix_values[6],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                    if validity_mask[7] {
-                        crate::scale::scale_value(
-                            healpix_values[7],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        )
-                    } else {
-                        PixelValue::Bad
-                    },
-                ]
+                    };
+                }
+                result
             };
 
-            // Process 8 pixels in parallel
-            for i in 0..8 {
+            // Process 16 pixels in parallel
+            for i in 0..16 {
                 let pixel_x = px + i as u32;
-                let pixel_valid = validity_mask[i];
+                let pixel_valid = validity_mask_16[i];
                 let pixel_val = pixel_values[i];
 
                 // Convert to RGBA
@@ -463,8 +427,8 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                         params.map,
                         params.meta,
                         params.view,
-                        thetas[i],
-                        lons[i],
+                        thetas_16[i],
+                        lons_16[i],
                     );
                     if let Some(idx) = healpix_idx
                         && !mask.is_valid(idx)
@@ -482,6 +446,140 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                     }
                 } else {
                     grid.set_valid(pixel_x as u32, py, false);
+                }
+            }
+
+            px += 16;
+        }
+
+        // Tier 5: Handle remainder with 8-pixel batch (pixels 16-23 if width > 16)
+        while px + 8 <= width {
+            // Prepare 8-pixel batch
+            let mut px_array = [0u32; 8];
+            let py_array = [py; 8];
+            for i in 0..8 {
+                px_array[i] = px + i as u32;
+            }
+
+            // Batch projection
+            let (lons, lats, proj_mask) =
+                params.proj.pixel_to_ang_batch(&px_array, &py_array, grid);
+
+            // Convert to theta
+            let mut thetas = [0.0_f64; 8];
+            for i in 0..8 {
+                if proj_mask[i] {
+                    thetas[i] = std::f64::consts::PI / 2.0 - lats[i];
+                }
+            }
+
+            // HEALPix sampling
+            let (healpix_values, healpix_mask) = crate::healpix::sample_healpix_batch_simd(
+                params.map,
+                params.meta,
+                params.view,
+                &thetas,
+                &lons,
+            );
+
+            // Combine masks
+            let validity_mask: [bool; 8] = [
+                proj_mask[0] && healpix_mask[0],
+                proj_mask[1] && healpix_mask[1],
+                proj_mask[2] && healpix_mask[2],
+                proj_mask[3] && healpix_mask[3],
+                proj_mask[4] && healpix_mask[4],
+                proj_mask[5] && healpix_mask[5],
+                proj_mask[6] && healpix_mask[6],
+                proj_mask[7] && healpix_mask[7],
+            ];
+
+            // Scaling
+            let pixel_values: [PixelValue; 8] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
+                let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
+                let log_cache = if use_log && params.scale_cache.is_some() {
+                    let cache = params.scale_cache.as_ref().unwrap();
+                    Some((cache.log_min, cache.log_range))
+                } else {
+                    None
+                };
+
+                let (scaled_values, out_mask) = crate::simd::simd_batch_scale_8(
+                    healpix_values,
+                    params.scale.minv,
+                    params.scale.maxv,
+                    use_log,
+                    log_cache,
+                    validity_mask,
+                );
+
+                crate::simd::simd_to_pixel_values(scaled_values, out_mask)
+            } else {
+                let mut result = [PixelValue::Bad; 8];
+                for i in 0..8 {
+                    result[i] = if validity_mask[i] {
+                        crate::scale::scale_value(
+                            healpix_values[i],
+                            params.scale.minv,
+                            params.scale.maxv,
+                            params.scale_type,
+                            params.neg_mode,
+                            params.hist_scale,
+                            params.scale_cache,
+                        )
+                    } else {
+                        PixelValue::Bad
+                    };
+                }
+                result
+            };
+
+            // Process 8 pixels
+            for i in 0..8 {
+                let pixel_x = px + i as u32;
+                let pixel_valid = validity_mask[i];
+                let pixel_val = pixel_values[i];
+
+                let mut rgba = match pixel_val {
+                    PixelValue::Color(t) => {
+                        let t = apply_gamma(t, gamma_inv);
+                        let c = params.cmap.sample(t);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Underflow => {
+                        let c = params.cmap.sample(0.0);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Overflow => {
+                        let c = params.cmap.sample(1.0);
+                        Rgba([c[0], c[1], c[2], 255])
+                    }
+                    PixelValue::Bad => params.bad_color,
+                };
+
+                if let Some(mask) = params.mask {
+                    let healpix_idx = crate::healpix::sample_healpix_index(
+                        params.map,
+                        params.meta,
+                        params.view,
+                        thetas[i],
+                        lons[i],
+                    );
+                    if let Some(idx) = healpix_idx
+                        && !mask.is_valid(idx)
+                    {
+                        if let Some(fill_color) = mask.fill_color {
+                            rgba = fill_color;
+                        }
+                    }
+                }
+
+                if pixel_valid {
+                    unsafe {
+                        grid.set_pixel_unchecked(pixel_x, py, rgba);
+                    }
+                } else {
+                    grid.set_valid(pixel_x, py, false);
                 }
             }
 
