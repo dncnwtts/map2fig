@@ -72,7 +72,21 @@ Infrastructure is solid and zero-overhead when cache hits.
 - 155/155 unit tests passing
 - Clean, maintainable codebase
 
----
+### Tier 4.2b: Parallel FITS Column Reading ✓ IMPLEMENTED
+
+Added rayon-based parallelization for sparse FITS map extraction (EXPLICIT indexing):
+- Parallel extraction of pixel indices and data values via rayon work-stealing
+- Sequential array population to avoid contention
+- Zero impact on dense maps (unchanged code path)
+
+| Branch | FITS File | Linear 512 | Linear 1200 | Log 512 | Log 1200 | Notes |
+|--------|-----------|-----------|-----------|---------|----------|-------|
+| `tier4-optimization` | `cosmoglobe_clipped.fits` | 0.403s | 0.919s | 0.392s | 0.773s | Parallel FITS extraction via rayon |
+
+**Finding:** Minimal benefit on dense maps (-1.1% average). Parallelized code path only activates 
+for sparse maps with EXPLICIT indexing. Estimated 10-20% benefit on sparse catalogs with large 
+row counts. Current bottleneck is I/O (~100-150ms) and PDF generation (~400-500ms), not column 
+extraction.
 
 ## Future Benchmark Results
 
