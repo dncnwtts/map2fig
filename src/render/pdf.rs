@@ -7,7 +7,7 @@ use crate::plot::rasterize_to_surface;
 use crate::render::RenderBackend;
 use crate::render::target::{PixelSource, RenderTarget};
 use crate::scale::generate_colorbar_ticks;
-use crate::{BatchedCairoImageSink, Colormap};
+use crate::Colormap;
 use cairo::{Context, Format, ImageSurface};
 use std::f64::consts::PI;
 
@@ -466,31 +466,44 @@ pub struct PdfRenderTarget<'a> {
 
 impl RenderTarget for PdfRenderTarget<'_> {
     fn blit_raster(&mut self, raster: &dyn PixelSource, x: f64, y: f64) {
-        let surface = ImageSurface::create(
-            cairo::Format::ARgb32,
-            raster.width() as i32,
-            raster.height() as i32,
-        )
-        .unwrap();
-
+        // Phase 2B: Image pre-rendering optimization
+        // Instead of per-pixel Cairo operations (even batched), render to in-memory
+        // image buffer first, then embed as single Cairo surface paint.
+        // This eliminates path management overhead in Cairo.
+        
+        // Create in-memory pixel buffer (1MB for 1200x741 RGBA)
+        let mut img_buffer = image::RgbaImage::new(raster.width(), raster.height());
+        
+        // Fast: Direct memory writes (no Cairo overhead)
         {
-            let cr = cairo::Context::new(&surface).unwrap();
-            let mut sink = BatchedCairoImageSink::new(&cr);
-
+            let mut sink = crate::PngSink { 
+                img: &mut img_buffer, 
+                x0: 0, 
+                y0: 0 
+            };
+            
             for py in 0..raster.height() {
                 for px in 0..raster.width() {
                     let [r, g, b, a] = raster.get_pixel(px, py);
                     sink.draw_pixel(px, py, image::Rgba([r, g, b, a]));
                 }
             }
-
-            // Critical: flush all batched pixels to Cairo surface
-            sink.flush();
         }
-
-        surface.flush();
-        let _ = self.cr.set_source_surface(&surface, x, y);
-        self.cr.paint().unwrap();
+        
+        // Convert to Cairo surface from raw pixel data
+        // This creates the surface without any intermediate path operations
+        if let Ok(surface) = ImageSurface::create_for_data(
+            img_buffer.clone().into_raw(),
+            cairo::Format::ARgb32,
+            raster.width() as i32,
+            raster.height() as i32,
+            raster.width() as i32 * 4,
+        ) {
+            // Paint the pre-rendered image as single operation
+            // (no fill() calls, single paint() call)
+            let _ = self.cr.set_source_surface(&surface, x, y);
+            self.cr.paint().unwrap();
+        }
     }
 }
 

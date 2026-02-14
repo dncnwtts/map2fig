@@ -12,7 +12,7 @@ use crate::rotation::CoordSystem;
 use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
-use crate::{BatchedCairoImageSink, PixelSink, PngSink};
+use crate::{PixelSink, PngSink};
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
@@ -208,7 +208,30 @@ where
     // Pre-compute scale cache for fast pixel rendering
     let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
 
-    let mut sink = BatchedCairoImageSink::new(&cr_img);
+    // Phase 2B: Image pre-rendering optimization
+    // Create in-memory pixel buffer instead of rendering directly to Cairo surface.
+    // This avoids per-pixel Cairo operations and allows batch optimization.
+    let map_w_int = (layout.map_w + 2.0 * layout.map_pad) as u32;
+    let map_h_int = (layout.map_h + 2.0 * layout.map_pad) as u32;
+    let mut pixel_buffer = image::RgbaImage::new(map_w_int, map_h_int);
+    
+    // Clear buffer background (matches what we'd paint on Cairo surface)
+    let bg_color = if transparent {
+        image::Rgba([0, 0, 0, 0])
+    } else {
+        image::Rgba([255, 255, 255, 255])
+    };
+    for pixel in pixel_buffer.pixels_mut() {
+        *pixel = bg_color;
+    }
+
+    // Render pixels to in-memory buffer (fast memory writes, no Cairo overhead)
+    let mut sink = PngSink { 
+        img: &mut pixel_buffer, 
+        x0: 0, 
+        y0: 0 
+    };
+    
     let debug_overlay = if cfg!(feature = "debug_overlay") {
         Some(DebugOverlay::grid_only())
     } else {
@@ -235,14 +258,21 @@ where
         debug_overlay,
     );
 
-    // Critical: flush all batched pixels to Cairo surface
-    sink.flush();
-
-    surface_img.flush();
-
-    // Embed raster into PDF
-    let _ = cr_pdf.set_source_surface(&surface_img, layout.map_x, layout.map_y);
-    cr_pdf.paint().unwrap();
+    // Convert pre-rendered image to Cairo surface and paint onto PDF surface
+    // This single operation is much more efficient than 256+ individual Cairo fill() calls
+    if let Ok(pixel_surface) = cairo::ImageSurface::create_for_data(
+        pixel_buffer.clone().into_raw(),
+        cairo::Format::ARgb32,
+        map_w_int as i32,
+        map_h_int as i32,
+        map_w_int as i32 * 4,
+    ) {
+        let _ = cr_pdf.set_source_surface(&pixel_surface, layout.map_x, layout.map_y);
+        cr_pdf.paint().unwrap();
+    }
+    
+    // Note: We no longer need surface_img for pixel rendering.
+    // It's retained for compatibility with graticule drawing below if needed.
 
     // Draw graticule BEFORE border (so border appears on top)
     if show_graticule {

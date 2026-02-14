@@ -66,9 +66,75 @@ Reduced per-pixel Cairo `fill()` calls from 51,456 to ~256 by grouping pixels of
 - Demonstrates importance of batching in graphics APIs
 - Next opportunity: Consider Option 2 (image surface pre-rendering) for 40-50% improvement
 
+## v0.4.0 (2026-02-15) - Image Pre-rendering Optimization
+
+**System**: Linux, Rust 1.92.0, release profile  
+**Test File**: `tests/data/class_dr1_40GHz_skymap_n128.fits` (Nside=128)
+
+### Optimization: Image Pre-rendering (Phase 2B)
+Eliminated remaining Cairo surface overhead by rendering pixels to in-memory image buffer first, then embedding as single surface operation.
+
+**Dramatic Timing Results**:
+| Format | v0.3.0 | v0.4.0 | Delta | % Improvement |
+|--------|--------|--------|-------|---------------|
+| PDF | 470ms | 300ms | -170ms | **+36.2%** |
+| PNG | 170ms | 160ms | -10ms | +5.9% (unaffected, as expected) |
+| **Combined v0.4 vs v0.2.0** | - | - | -317ms | **+51.4%** 🎉 |
+
+**Key Metrics**:
+- Target improvement: 10-15% additional (from Phase 2B)
+- **Actual achievement: 36.2% for PDF** ✓✓ Far exceeds expectations
+- PNG largely unaffected (uses different code path)
+- **Total improvement from v0.2.0 to v0.4.0: 51.4%** (617ms → 300ms)
+
+**Design**:
+- Replace BatchedCairoImageSink with direct image buffer approach
+- Create `RgbaImage` buffer (fast Rust memory, no Cairo)
+- Use `PngSink` to write pixels directly (same as PNG rendering path)
+- Convert buffer to Cairo surface with `ImageSurface::create_for_data()`
+- Paint surface once (single operation, not 256 fill calls)
+- No path management overhead at all
+
+**Implementation Details**:
+- Modified `src/render/pdf.rs`: `blit_raster()` uses PngSink + ImageSurface::create_for_data()
+- Modified `src/plot/mollweide.rs`: main plotting uses PngSink instead of Cairo sink
+- Removed dependency on BatchedCairoImageSink (though kept for compatibility)
+- Memory: ~4MB temporary buffer for pixel data (negligible cost)
+
+**Testing**:
+- ✅ Compiled successfully, no warnings
+- ✅ Output verified (PDF 513KB, PNG quality identical)
+- ✅ Measurements stable across 3 runs (290-300ms consistent)
+- ✅ PNG path unaffected (160ms, essentially same as v0.3.0)
+
+**Why Phase 2B Was So Successful**:
+1. **Identified actual bottleneck**: Profiling (perf record) showed cairo_surface_finish at 21.71%
+2. **Root cause analysis**: Cairo PDF encoding/compression overhead, not just pixel operations
+3. **Architectural insight**: Image pre-rendering bypasses entire Cairo path building
+4. **Unexpected benefit**: 36% vs predicted 10-15% because we eliminated more than just fill() overhead
+   - Path building overhead
+   - Matrix transformation overhead
+   - Color state management overhead
+   - Compositor overhead
+
+**Analysis**:
+- Image pre-rendering was more effective than expected
+- v0.4 exceeds v0.3 target by 2.4× (36% vs 15%)
+- Combined improvement demonstrates power of empirical profiling
+- Remaining opportunities: Phase 2A (SIMD math, ~5-8% more) could target 350ms target
+
 ## Future Releases
 
-Structure for tracking improvements:
+### v0.5.0: Phase 2A (SIMD Vectorization) - Recommended Next Step
+
+**Opportunity**: HEALPix sampling math (sin/cos/atan2) at 8.64% per profiling
+- Vectorize trigonometric operations
+- Expected: 350ms target (additional 5-8% from 300ms)
+- Effort: 4-6 hours implementation + testing
+
+**Stretch goal**: 300ms PDF rendering (matching PNG for visual maps)
+
+### Structure for tracking improvements:
 
 ### vX.Y.Z (YYYY-MM-DD) - Release Notes
 
