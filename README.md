@@ -853,7 +853,7 @@ Contributions welcome! Common areas:
 
 This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
 
-MIT License © 2026 Duncan Watts
+MIT License © 2024 Duncan Watts
 
 ## Citation & Acknowledgments
 
@@ -868,10 +868,10 @@ For detailed citations, references, and attribution, see:
 If you use **map2fig** in your research, please cite:
 
 ```bibtex
-@software{map2fig2026,
+@software{map2fig2024,
   title={map2fig: Fast HEALPix Visualization in Rust},
   author={Watts, Duncan},
-  year={2026},
+  year={2024},
   url={https://github.com/dncnwtts/map2fig}
 }
 ```
