@@ -260,9 +260,19 @@ where
     );
 
     // Convert pre-rendered image to Cairo surface and paint onto PDF surface
-    // This single operation is much more efficient than 256+ individual Cairo fill() calls
+    // IMPORTANT: image::RgbaImage stores pixels as RGBA, but Cairo::Format::ARgb32 
+    // expects ARGB in memory. We must convert the byte order.
+    let mut argb_buffer = Vec::with_capacity(pixel_buffer.len() * 4);
+    for pixel in pixel_buffer.pixels() {
+        // Convert RGBA to ARGB: swap bytes so alpha moves from last to first
+        argb_buffer.push(pixel[3]); // A
+        argb_buffer.push(pixel[0]); // R
+        argb_buffer.push(pixel[1]); // G
+        argb_buffer.push(pixel[2]); // B
+    }
+
     if let Ok(pixel_surface) = cairo::ImageSurface::create_for_data(
-        pixel_buffer.clone().into_raw(),
+        argb_buffer,
         cairo::Format::ARgb32,
         map_w_int as i32,
         map_h_int as i32,
