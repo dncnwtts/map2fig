@@ -695,7 +695,8 @@ pub fn sample_healpix_batch_simd(
 
     // Apply view transformation: v_map = view.apply_inverse(v_view)
     // This requires applying the inverse rotation matrix to 8 vectors
-    let (x_map, y_map, z_map) = simd::simd_matvec3_8(view.rotation_inv.matrix, x_view, y_view, z_view);
+    let (x_map, y_map, z_map) =
+        simd::simd_matvec3_8(view.rotation_inv.matrix, x_view, y_view, z_view);
 
     // Vectorized: convert Cartesian back to spherical (8 vectors)
     let (theta_m, lon_m) = simd::simd_vec_to_sph_8(x_map, y_map, z_map);
@@ -944,8 +945,8 @@ fn test_sample_healpix_batch_matches_scalar() {
     let view = ViewTransform::new(CoordSystem::G, CoordSystem::G, None);
 
     // Test coordinates
-    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, 3.14];
-    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.28];
+    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, std::f64::consts::PI];
+    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, std::f64::consts::TAU];
 
     // Get batch results
     let (batch_samples, batch_mask) = sample_healpix_batch(&map, meta, &view, &thetas, &lons);
@@ -1001,8 +1002,8 @@ fn test_sample_healpix_batch_simd_matches_scalar() {
     let view = ViewTransform::new(CoordSystem::G, CoordSystem::G, None);
 
     // Test coordinates
-    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, 3.14];
-    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.28];
+    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, std::f64::consts::PI];
+    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, std::f64::consts::TAU];
 
     // Get SIMD batch results
     let (simd_samples, simd_mask) = sample_healpix_batch_simd(&map, meta, &view, &thetas, &lons);

@@ -44,18 +44,25 @@ impl ProfileStats {
 
         eprintln!("\n=== I/O Profiling Summary ===");
         eprintln!("Files processed:      {}", self.files_processed);
-        eprintln!("Cache operations:     {} ({} hits, {} misses)", 
-                  total_cache_ops, 
-                  self.cache_hits, 
-                  self.cache_misses);
+        eprintln!(
+            "Cache operations:     {} ({} hits, {} misses)",
+            total_cache_ops, self.cache_hits, self.cache_misses
+        );
         eprintln!("Cache hit rate:       {:.1}%", hit_rate);
-        eprintln!("FITS parse time:      {:.3}s ({:.1}% of total)",
-                  self.fits_parse_time.as_secs_f64(),
-                  100.0 * self.fits_parse_time.as_secs_f64() / 
-                      (self.fits_parse_time.as_secs_f64() + self.column_extract_time.as_secs_f64()));
-        eprintln!("Column extract time:  {:.3}s", self.column_extract_time.as_secs_f64());
-        eprintln!("Total I/O time:       {:.3}s",
-                  (self.fits_parse_time + self.column_extract_time).as_secs_f64());
+        eprintln!(
+            "FITS parse time:      {:.3}s ({:.1}% of total)",
+            self.fits_parse_time.as_secs_f64(),
+            100.0 * self.fits_parse_time.as_secs_f64()
+                / (self.fits_parse_time.as_secs_f64() + self.column_extract_time.as_secs_f64())
+        );
+        eprintln!(
+            "Column extract time:  {:.3}s",
+            self.column_extract_time.as_secs_f64()
+        );
+        eprintln!(
+            "Total I/O time:       {:.3}s",
+            (self.fits_parse_time + self.column_extract_time).as_secs_f64()
+        );
     }
 }
 
@@ -116,15 +123,17 @@ mod tests {
 
     #[test]
     fn test_profile_stats() {
-        let mut stats = ProfileStats::default();
-        stats.cache_hits = 5;
-        stats.cache_misses = 1;
-        stats.fits_parse_time = Duration::from_millis(100);
-        stats.column_extract_time = Duration::from_millis(200);
-        
+        let stats = ProfileStats {
+            cache_hits: 5,
+            cache_misses: 1,
+            fits_parse_time: Duration::from_millis(100),
+            column_extract_time: Duration::from_millis(200),
+            ..Default::default()
+        };
+
         let total = stats.cache_hits + stats.cache_misses;
         assert_eq!(total, 6);
-        
+
         // Hit rate should be 5/6 ≈ 83.3%
         let hit_rate = 100.0 * stats.cache_hits as f64 / total as f64;
         assert!(hit_rate > 83.0 && hit_rate < 84.0);

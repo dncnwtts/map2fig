@@ -125,8 +125,16 @@ pub fn simd_acos_8(x: [f64; 8]) -> [f64; 8] {
 /// Vectorized square root
 #[inline]
 pub fn simd_sqrt_8(x: [f64; 8]) -> [f64; 8] {
-    [x[0].sqrt(), x[1].sqrt(), x[2].sqrt(), x[3].sqrt(),
-     x[4].sqrt(), x[5].sqrt(), x[6].sqrt(), x[7].sqrt()]
+    [
+        x[0].sqrt(),
+        x[1].sqrt(),
+        x[2].sqrt(),
+        x[3].sqrt(),
+        x[4].sqrt(),
+        x[5].sqrt(),
+        x[6].sqrt(),
+        x[7].sqrt(),
+    ]
 }
 
 /// Vectorized power function (y = x^exp)
@@ -153,8 +161,16 @@ pub fn simd_pow_8(x: [f64; 8], exp: f64) -> [f64; 8] {
 /// Input values must be positive.
 #[inline]
 pub fn simd_ln_8(x: [f64; 8]) -> [f64; 8] {
-    [x[0].ln(), x[1].ln(), x[2].ln(), x[3].ln(),
-     x[4].ln(), x[5].ln(), x[6].ln(), x[7].ln()]
+    [
+        x[0].ln(),
+        x[1].ln(),
+        x[2].ln(),
+        x[3].ln(),
+        x[4].ln(),
+        x[5].ln(),
+        x[6].ln(),
+        x[7].ln(),
+    ]
 }
 
 /// Vectorized reciprocal (1/x)
@@ -163,15 +179,31 @@ pub fn simd_ln_8(x: [f64; 8]) -> [f64; 8] {
 /// More efficient than division for reciprocals.
 #[inline]
 pub fn simd_recip_8(x: [f64; 8]) -> [f64; 8] {
-    [x[0].recip(), x[1].recip(), x[2].recip(), x[3].recip(),
-     x[4].recip(), x[5].recip(), x[6].recip(), x[7].recip()]
+    [
+        x[0].recip(),
+        x[1].recip(),
+        x[2].recip(),
+        x[3].recip(),
+        x[4].recip(),
+        x[5].recip(),
+        x[6].recip(),
+        x[7].recip(),
+    ]
 }
 
 /// Vectorized absolute value
 #[inline]
 pub fn simd_abs_8(x: [f64; 8]) -> [f64; 8] {
-    [x[0].abs(), x[1].abs(), x[2].abs(), x[3].abs(),
-     x[4].abs(), x[5].abs(), x[6].abs(), x[7].abs()]
+    [
+        x[0].abs(),
+        x[1].abs(),
+        x[2].abs(),
+        x[3].abs(),
+        x[4].abs(),
+        x[5].abs(),
+        x[6].abs(),
+        x[7].abs(),
+    ]
 }
 
 /// Vectorized clamp operation
@@ -250,10 +282,7 @@ pub fn simd_normalize_vec3_8(
     z: [f64; 8],
 ) -> ([f64; 8], [f64; 8], [f64; 8]) {
     // Compute magnitudes: mag = sqrt(x^2 + y^2 + z^2)
-    let mag_sq = simd_madd_8(
-        x, x,
-        simd_madd_8(y, y, simd_mul_8(z, z))
-    );
+    let mag_sq = simd_madd_8(x, x, simd_madd_8(y, y, simd_mul_8(z, z)));
     let mag = simd_sqrt_8(mag_sq);
     let mag_inv = simd_recip_8(mag);
 
@@ -270,13 +299,14 @@ pub fn simd_normalize_vec3_8(
 /// Computes dot product for 8 3D vector pairs
 /// dot = a_x*b_x + a_y*b_y + a_z*b_z for each pair
 pub fn simd_dot3_8(
-    a_x: [f64; 8], a_y: [f64; 8], a_z: [f64; 8],
-    b_x: [f64; 8], b_y: [f64; 8], b_z: [f64; 8],
+    a_x: [f64; 8],
+    a_y: [f64; 8],
+    a_z: [f64; 8],
+    b_x: [f64; 8],
+    b_y: [f64; 8],
+    b_z: [f64; 8],
 ) -> [f64; 8] {
-    simd_madd_8(
-        a_x, b_x,
-        simd_madd_8(a_y, b_y, simd_mul_8(a_z, b_z))
-    )
+    simd_madd_8(a_x, b_x, simd_madd_8(a_y, b_y, simd_mul_8(a_z, b_z)))
 }
 
 /// Vectorized 3D cross product
@@ -284,22 +314,26 @@ pub fn simd_dot3_8(
 /// Computes cross product for 8 3D vector pairs
 /// c = a × b
 pub fn simd_cross_8(
-    a_x: [f64; 8], a_y: [f64; 8], a_z: [f64; 8],
-    b_x: [f64; 8], b_y: [f64; 8], b_z: [f64; 8],
+    a_x: [f64; 8],
+    a_y: [f64; 8],
+    a_z: [f64; 8],
+    b_x: [f64; 8],
+    b_y: [f64; 8],
+    b_z: [f64; 8],
 ) -> ([f64; 8], [f64; 8], [f64; 8]) {
     let c_x = simd_add_8(
         simd_mul_8(a_y, b_z),
-        simd_mul_8(simd_mul_8(a_z, b_y), [-1.0; 8])
+        simd_mul_8(simd_mul_8(a_z, b_y), [-1.0; 8]),
     );
     let c_y = simd_add_8(
         simd_mul_8(a_z, b_x),
-        simd_mul_8(simd_mul_8(a_x, b_z), [-1.0; 8])
+        simd_mul_8(simd_mul_8(a_x, b_z), [-1.0; 8]),
     );
     let c_z = simd_add_8(
         simd_mul_8(a_x, b_y),
-        simd_mul_8(simd_mul_8(a_y, b_x), [-1.0; 8])
+        simd_mul_8(simd_mul_8(a_y, b_x), [-1.0; 8]),
     );
-    
+
     (c_x, c_y, c_z)
 }
 
@@ -312,35 +346,78 @@ mod tests {
 
     #[test]
     fn test_simd_sin_8() {
-        let angles = [0.0, PI / 6.0, PI / 4.0, PI / 3.0, PI / 2.0, PI, -PI / 6.0, -PI / 2.0];
+        let angles = [
+            0.0,
+            PI / 6.0,
+            PI / 4.0,
+            PI / 3.0,
+            PI / 2.0,
+            PI,
+            -PI / 6.0,
+            -PI / 2.0,
+        ];
         let result = simd_sin_8(angles);
 
         for i in 0..8 {
             let expected = angles[i].sin();
-            assert!((result[i] - expected).abs() < EPSILON, "sin mismatch at index {}", i);
+            assert!(
+                (result[i] - expected).abs() < EPSILON,
+                "sin mismatch at index {}",
+                i
+            );
         }
     }
 
     #[test]
     fn test_simd_cos_8() {
-        let angles = [0.0, PI / 6.0, PI / 4.0, PI / 3.0, PI / 2.0, PI, -PI / 6.0, -PI / 2.0];
+        let angles = [
+            0.0,
+            PI / 6.0,
+            PI / 4.0,
+            PI / 3.0,
+            PI / 2.0,
+            PI,
+            -PI / 6.0,
+            -PI / 2.0,
+        ];
         let result = simd_cos_8(angles);
 
         for i in 0..8 {
             let expected = angles[i].cos();
-            assert!((result[i] - expected).abs() < EPSILON, "cos mismatch at index {}", i);
+            assert!(
+                (result[i] - expected).abs() < EPSILON,
+                "cos mismatch at index {}",
+                i
+            );
         }
     }
 
     #[test]
     fn test_simd_sin_cos_8() {
-        let angles = [0.0, PI / 6.0, PI / 4.0, PI / 3.0, PI / 2.0, PI, -PI / 6.0, -PI / 2.0];
+        let angles = [
+            0.0,
+            PI / 6.0,
+            PI / 4.0,
+            PI / 3.0,
+            PI / 2.0,
+            PI,
+            -PI / 6.0,
+            -PI / 2.0,
+        ];
         let (sines, cosines) = simd_sin_cos_8(angles);
 
         for i in 0..8 {
             let (expected_sin, expected_cos) = angles[i].sin_cos();
-            assert!((sines[i] - expected_sin).abs() < EPSILON, "sin mismatch at index {}", i);
-            assert!((cosines[i] - expected_cos).abs() < EPSILON, "cos mismatch at index {}", i);
+            assert!(
+                (sines[i] - expected_sin).abs() < EPSILON,
+                "sin mismatch at index {}",
+                i
+            );
+            assert!(
+                (cosines[i] - expected_cos).abs() < EPSILON,
+                "cos mismatch at index {}",
+                i
+            );
         }
     }
 
@@ -352,7 +429,11 @@ mod tests {
 
         for i in 0..8 {
             let expected = y[i].atan2(x[i]);
-            assert!((result[i] - expected).abs() < EPSILON, "atan2 mismatch at index {}", i);
+            assert!(
+                (result[i] - expected).abs() < EPSILON,
+                "atan2 mismatch at index {}",
+                i
+            );
         }
     }
 
@@ -363,7 +444,11 @@ mod tests {
 
         for i in 0..8 {
             let expected = x[i].asin();
-            assert!((result[i] - expected).abs() < EPSILON, "asin mismatch at index {}", i);
+            assert!(
+                (result[i] - expected).abs() < EPSILON,
+                "asin mismatch at index {}",
+                i
+            );
         }
     }
 
@@ -378,9 +463,17 @@ mod tests {
         for i in 0..8 {
             // Each normalized vector should have magnitude ~= 1.0
             let mag_sq = nx[i] * nx[i] + ny[i] * ny[i] + nz[i] * nz[i];
-            assert!((mag_sq - 1.0).abs() < EPSILON, "magnitude mismatch at index {}", i);
+            assert!(
+                (mag_sq - 1.0).abs() < EPSILON,
+                "magnitude mismatch at index {}",
+                i
+            );
             // For y=0, z=0, normalized x should be 1.0
-            assert!((nx[i] - 1.0).abs() < EPSILON, "normalized x mismatch at index {}", i);
+            assert!(
+                (nx[i] - 1.0).abs() < EPSILON,
+                "normalized x mismatch at index {}",
+                i
+            );
         }
     }
 
@@ -399,7 +492,11 @@ mod tests {
 
         // Expected: dot([1,0,0], [b_x[i], 0, 0]) = b_x[i]
         for i in 0..8 {
-            assert!((result[i] - b_x[i]).abs() < EPSILON, "dot product mismatchat index {}", i);
+            assert!(
+                (result[i] - b_x[i]).abs() < EPSILON,
+                "dot product mismatchat index {}",
+                i
+            );
         }
     }
 }
@@ -457,11 +554,7 @@ pub fn simd_sph_to_vec_8(theta: [f64; 8], phi: [f64; 8]) -> ([f64; 8], [f64; 8],
 /// Output:
 /// - (theta, phi): 2 arrays of 8 spherical coordinates each
 #[inline]
-pub fn simd_vec_to_sph_8(
-    x: [f64; 8],
-    y: [f64; 8],
-    z: [f64; 8],
-) -> ([f64; 8], [f64; 8]) {
+pub fn simd_vec_to_sph_8(x: [f64; 8], y: [f64; 8], z: [f64; 8]) -> ([f64; 8], [f64; 8]) {
     // Clamp z to avoid acos domain errors
     let z_clamped = simd_clamp_8(z, -1.0, 1.0);
 
@@ -499,28 +592,19 @@ pub fn simd_matvec3_8(
 ) -> ([f64; 8], [f64; 8], [f64; 8]) {
     // First row: [m00*x[i] + m01*y[i] + m02*z[i]]
     let x_new = simd_add_8(
-        simd_add_8(
-            simd_mul_8(x, [mat[0][0]; 8]),
-            simd_mul_8(y, [mat[0][1]; 8]),
-        ),
+        simd_add_8(simd_mul_8(x, [mat[0][0]; 8]), simd_mul_8(y, [mat[0][1]; 8])),
         simd_mul_8(z, [mat[0][2]; 8]),
     );
 
     // Second row: [m10*x[i] + m11*y[i] + m12*z[i]]
     let y_new = simd_add_8(
-        simd_add_8(
-            simd_mul_8(x, [mat[1][0]; 8]),
-            simd_mul_8(y, [mat[1][1]; 8]),
-        ),
+        simd_add_8(simd_mul_8(x, [mat[1][0]; 8]), simd_mul_8(y, [mat[1][1]; 8])),
         simd_mul_8(z, [mat[1][2]; 8]),
     );
 
     // Third row: [m20*x[i] + m21*y[i] + m22*z[i]]
     let z_new = simd_add_8(
-        simd_add_8(
-            simd_mul_8(x, [mat[2][0]; 8]),
-            simd_mul_8(y, [mat[2][1]; 8]),
-        ),
+        simd_add_8(simd_mul_8(x, [mat[2][0]; 8]), simd_mul_8(y, [mat[2][1]; 8])),
         simd_mul_8(z, [mat[2][2]; 8]),
     );
 
@@ -534,7 +618,16 @@ mod healpix_tests {
 
     #[test]
     fn test_simd_sph_to_vec_8() {
-        let theta = [0.0, PI / 2.0, PI, 0.0, PI / 4.0, PI / 4.0, PI / 3.0, PI / 6.0];
+        let theta = [
+            0.0,
+            PI / 2.0,
+            PI,
+            0.0,
+            PI / 4.0,
+            PI / 4.0,
+            PI / 3.0,
+            PI / 6.0,
+        ];
         let phi = [0.0, 0.0, 0.0, PI / 2.0, 0.0, PI / 2.0, PI / 4.0, PI / 3.0];
 
         let (x, y, z) = simd_sph_to_vec_8(theta, phi);
@@ -563,7 +656,7 @@ mod healpix_tests {
 
     #[test]
     fn test_simd_vec_to_sph_8_roundtrip() {
-        let theta_in = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 0.1, 3.14];
+        let theta_in = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 0.1, std::f64::consts::PI];
         let phi_in = [0.0, PI / 4.0, PI / 2.0, PI, 3.0 * PI / 2.0, 0.1, 0.2, 0.3];
 
         // Convert to Cartesian
@@ -872,14 +965,23 @@ mod scaling_tests {
         let (result, out_mask) = simd_log_scale_8(values, log_min, log_range, mask);
 
         // All values are positive, so all should remain valid
-        for i in 0..8 {
-            assert!(out_mask[i], "All positive values should remain valid");
+        for item in &out_mask {
+            assert!(*item, "All positive values should remain valid");
         }
 
         // ln(1) → 0, ln(100) → 1 (within range)
-        assert!((result[0] - 0.0).abs() < 1e-14, "log scale of min should be 0"); // ln(1) = 0
-        assert!((result[2] - 1.0).abs() < 1e-14, "log scale of max should be 1"); // ln(100) = log_max
-        assert!((result[3] - 1.0).abs() < 1e-14, "log scale of 1000 should clamp to 1"); // 1000 > 100, clamps to 1
+        assert!(
+            (result[0] - 0.0).abs() < 1e-14,
+            "log scale of min should be 0"
+        ); // ln(1) = 0
+        assert!(
+            (result[2] - 1.0).abs() < 1e-14,
+            "log scale of max should be 1"
+        ); // ln(100) = log_max
+        assert!(
+            (result[3] - 1.0).abs() < 1e-14,
+            "log scale of 1000 should clamp to 1"
+        ); // 1000 > 100, clamps to 1
 
         // Verify log scale is increasing for in-range values
         assert!(result[0] < result[1]); // ln(1) < ln(10)
@@ -902,8 +1004,8 @@ mod scaling_tests {
         assert!((result[4] - 1.0).abs() < 1e-14); // sqrt(1) = 1
 
         // All should remain valid
-        for i in 0..8 {
-            assert!(out_mask[i], "Mask should remain true at {}", i);
+        for (i, item) in out_mask.iter().enumerate() {
+            assert!(*item, "Mask should remain true at {}", i);
         }
     }
 
@@ -911,9 +1013,9 @@ mod scaling_tests {
     fn test_simd_colormap_sample_8_lookup() {
         // Create a simple test LUT: gradient from black to white
         let mut lut = [[0u8; 3]; 256];
-        for i in 0..256 {
+        for (i, item) in lut.iter_mut().enumerate() {
             let val = i as u8;
-            lut[i] = [val, val, val]; // Grayscale gradient
+            *item = [val, val, val]; // Grayscale gradient
         }
 
         let normalized = [0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5];
@@ -934,8 +1036,8 @@ mod scaling_tests {
         assert_eq!(rgb_buffer[idx_white + 2], 255);
 
         // Mask unchanged
-        for i in 0..8 {
-            assert!(out_mask[i]);
+        for item in &out_mask {
+            assert!(*item);
         }
     }
 
@@ -999,10 +1101,10 @@ pub fn simd_batch_scale_8(
     if use_log {
         // Logarithmic scale: requires pre-computed cache
         if let Some((log_min, log_range)) = log_cache {
-            return simd_log_scale_8(values, log_min, log_range, mask);
+            simd_log_scale_8(values, log_min, log_range, mask)
         } else {
             // Fallback: use linear scale if cache not available
-            return simd_linear_scale_8(values, min, max, mask);
+            simd_linear_scale_8(values, min, max, mask)
         }
     } else {
         // Linear scale: no cache needed
@@ -1029,10 +1131,7 @@ use crate::PixelValue;
 /// This is the integration point between SIMD batch operations and the
 /// per-pixel enum-based rendering pipeline.
 #[inline]
-pub fn simd_to_pixel_values(
-    scaled: [f64; 8],
-    mask: [bool; 8],
-) -> [PixelValue; 8] {
+pub fn simd_to_pixel_values(scaled: [f64; 8], mask: [bool; 8]) -> [PixelValue; 8] {
     [
         if !mask[0] {
             PixelValue::Bad
@@ -1133,14 +1232,8 @@ mod batch_integration_tests {
         let log_range = 100.0_f64.ln() - log_min;
         let mask = [true; 8];
 
-        let (result, _) = simd_batch_scale_8(
-            values,
-            1.0,
-            100.0,
-            true,
-            Some((log_min, log_range)),
-            mask,
-        );
+        let (result, _) =
+            simd_batch_scale_8(values, 1.0, 100.0, true, Some((log_min, log_range)), mask);
 
         // Should match log scaling
         assert!((result[0] - 0.0).abs() < 1e-14); // log(1) at min
@@ -1157,7 +1250,7 @@ mod batch_integration_tests {
 
         // Check each value
         match pixel_values[0] {
-            PixelValue::Underflow => {}, // 0.0
+            PixelValue::Underflow => {} // 0.0
             _ => panic!("Expected Underflow for value 0.0"),
         }
 
@@ -1167,7 +1260,7 @@ mod batch_integration_tests {
         }
 
         match pixel_values[2] {
-            PixelValue::Overflow => {}, // 1.0
+            PixelValue::Overflow => {} // 1.0
             _ => panic!("Expected Overflow for value 1.0"),
         }
 
@@ -1182,12 +1275,12 @@ mod batch_integration_tests {
         }
 
         match pixel_values[5] {
-            PixelValue::Bad => {}, // mask[5] = false
+            PixelValue::Bad => {} // mask[5] = false
             _ => panic!("Expected Bad for masked value"),
         }
 
         match pixel_values[6] {
-            PixelValue::Bad => {}, // mask[6] = false
+            PixelValue::Bad => {} // mask[6] = false
             _ => panic!("Expected Bad for masked value"),
         }
 
@@ -1211,23 +1304,20 @@ mod batch_integration_tests {
 #[inline]
 pub fn simd_sin_cos_16(angles: [f64; 16]) -> ([f64; 16], [f64; 16]) {
     let (sin_lo, cos_lo) = simd_sin_cos_8([
-        angles[0], angles[1], angles[2], angles[3],
-        angles[4], angles[5], angles[6], angles[7],
+        angles[0], angles[1], angles[2], angles[3], angles[4], angles[5], angles[6], angles[7],
     ]);
     let (sin_hi, cos_hi) = simd_sin_cos_8([
-        angles[8], angles[9], angles[10], angles[11],
-        angles[12], angles[13], angles[14], angles[15],
+        angles[8], angles[9], angles[10], angles[11], angles[12], angles[13], angles[14],
+        angles[15],
     ]);
 
     let mut sin_result = [0.0; 16];
     let mut cos_result = [0.0; 16];
 
-    for i in 0..8 {
-        sin_result[i] = sin_lo[i];
-        cos_result[i] = cos_lo[i];
-        sin_result[i + 8] = sin_hi[i];
-        cos_result[i + 8] = cos_hi[i];
-    }
+    sin_result[..8].copy_from_slice(&sin_lo);
+    cos_result[..8].copy_from_slice(&cos_lo);
+    sin_result[8..16].copy_from_slice(&sin_hi);
+    cos_result[8..16].copy_from_slice(&cos_hi);
 
     (sin_result, cos_result)
 }
@@ -1247,43 +1337,38 @@ pub fn simd_batch_scale_16(
 ) -> ([f64; 16], [bool; 16]) {
     let (scaled_lo, mask_lo) = simd_batch_scale_8(
         [
-            values[0], values[1], values[2], values[3],
-            values[4], values[5], values[6], values[7],
+            values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
         ],
         min,
         max,
         use_log,
         log_cache,
         [
-            mask[0], mask[1], mask[2], mask[3],
-            mask[4], mask[5], mask[6], mask[7],
+            mask[0], mask[1], mask[2], mask[3], mask[4], mask[5], mask[6], mask[7],
         ],
     );
 
     let (scaled_hi, mask_hi) = simd_batch_scale_8(
         [
-            values[8], values[9], values[10], values[11],
-            values[12], values[13], values[14], values[15],
+            values[8], values[9], values[10], values[11], values[12], values[13], values[14],
+            values[15],
         ],
         min,
         max,
         use_log,
         log_cache,
         [
-            mask[8], mask[9], mask[10], mask[11],
-            mask[12], mask[13], mask[14], mask[15],
+            mask[8], mask[9], mask[10], mask[11], mask[12], mask[13], mask[14], mask[15],
         ],
     );
 
     let mut result = [0.0; 16];
     let mut out_mask = [false; 16];
 
-    for i in 0..8 {
-        result[i] = scaled_lo[i];
-        out_mask[i] = mask_lo[i];
-        result[i + 8] = scaled_hi[i];
-        out_mask[i + 8] = mask_hi[i];
-    }
+    result[..8].copy_from_slice(&scaled_lo);
+    out_mask[..8].copy_from_slice(&mask_lo);
+    result[8..16].copy_from_slice(&scaled_hi);
+    out_mask[8..16].copy_from_slice(&mask_hi);
 
     (result, out_mask)
 }
@@ -1293,37 +1378,29 @@ pub fn simd_batch_scale_16(
 /// Processes 16 scaled values, converting to PixelValue enum format
 /// by processing two 8-element batches.
 #[inline]
-pub fn simd_to_pixel_values_16(
-    scaled: [f64; 16],
-    mask: [bool; 16],
-) -> [PixelValue; 16] {
+pub fn simd_to_pixel_values_16(scaled: [f64; 16], mask: [bool; 16]) -> [PixelValue; 16] {
     let pixel_lo = simd_to_pixel_values(
         [
-            scaled[0], scaled[1], scaled[2], scaled[3],
-            scaled[4], scaled[5], scaled[6], scaled[7],
+            scaled[0], scaled[1], scaled[2], scaled[3], scaled[4], scaled[5], scaled[6], scaled[7],
         ],
         [
-            mask[0], mask[1], mask[2], mask[3],
-            mask[4], mask[5], mask[6], mask[7],
+            mask[0], mask[1], mask[2], mask[3], mask[4], mask[5], mask[6], mask[7],
         ],
     );
 
     let pixel_hi = simd_to_pixel_values(
         [
-            scaled[8], scaled[9], scaled[10], scaled[11],
-            scaled[12], scaled[13], scaled[14], scaled[15],
+            scaled[8], scaled[9], scaled[10], scaled[11], scaled[12], scaled[13], scaled[14],
+            scaled[15],
         ],
         [
-            mask[8], mask[9], mask[10], mask[11],
-            mask[12], mask[13], mask[14], mask[15],
+            mask[8], mask[9], mask[10], mask[11], mask[12], mask[13], mask[14], mask[15],
         ],
     );
 
     let mut result = [PixelValue::Bad; 16];
-    for i in 0..8 {
-        result[i] = pixel_lo[i];
-        result[i + 8] = pixel_hi[i];
-    }
+    result[..8].copy_from_slice(&pixel_lo);
+    result[8..16].copy_from_slice(&pixel_hi);
 
     result
 }
@@ -1336,8 +1413,8 @@ mod batch_16_tests {
     fn test_simd_sin_cos_16() {
         // Create test angles
         let mut angles = [0.0; 16];
-        for i in 0..16 {
-            angles[i] = (i as f64) * std::f64::consts::PI / 8.0;
+        for (i, item) in angles.iter_mut().enumerate() {
+            *item = (i as f64) * std::f64::consts::PI / 8.0;
         }
 
         let (sines, cosines) = simd_sin_cos_16(angles);
@@ -1361,8 +1438,7 @@ mod batch_16_tests {
     #[test]
     fn test_simd_batch_scale_16_linear() {
         let values = [
-            0.0, 2.5, 5.0, 7.5, 10.0, 1.0, 3.0, 9.0,
-            2.0, 4.0, 6.0, 8.0, 1.5, 3.5, 5.5, 7.5,
+            0.0, 2.5, 5.0, 7.5, 10.0, 1.0, 3.0, 9.0, 2.0, 4.0, 6.0, 8.0, 1.5, 3.5, 5.5, 7.5,
         ];
         let mask = [true; 16];
 
@@ -1391,29 +1467,28 @@ mod batch_16_tests {
     #[test]
     fn test_simd_to_pixel_values_16() {
         let scaled = [
-            0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5,
-            0.33, 0.67, -0.1, 1.1, 0.2, 0.8, 0.4, 0.6,
+            0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5, 0.33, 0.67, -0.1, 1.1, 0.2, 0.8, 0.4, 0.6,
         ];
         let mask = [
-            true, true, true, true, true, true, true, true,
-            true, true, false, false, true, true, true, true,
+            true, true, true, true, true, true, true, true, true, true, false, false, true, true,
+            true, true,
         ];
 
         let pixel_values = simd_to_pixel_values_16(scaled, mask);
 
         // Verify first 8 elements match individual conversions
         match pixel_values[0] {
-            PixelValue::Underflow => {},
+            PixelValue::Underflow => {}
             _ => panic!("Expected Underflow at 0"),
         }
 
         match pixel_values[4] {
-            PixelValue::Overflow => {},
+            PixelValue::Overflow => {}
             _ => panic!("Expected Overflow at 4"),
         }
 
         match pixel_values[10] {
-            PixelValue::Bad => {},
+            PixelValue::Bad => {}
             _ => panic!("Expected Bad at 10 (unmasked)"),
         }
 

@@ -263,12 +263,14 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             // First batch of 8 pixels
             let mut px_array_lo = [0u32; 8];
             let py_array_lo = [py; 8];
-            for i in 0..8 {
-                px_array_lo[i] = px + i as u32;
+            for (i, item) in px_array_lo.iter_mut().enumerate() {
+                *item = px + i as u32;
             }
 
             let (lons_lo, lats_lo, proj_mask_lo) =
-                params.proj.pixel_to_ang_batch(&px_array_lo, &py_array_lo, grid);
+                params
+                    .proj
+                    .pixel_to_ang_batch(&px_array_lo, &py_array_lo, grid);
 
             // Convert latitudes to theta values
             let mut thetas_lo = [0.0_f64; 8];
@@ -302,12 +304,14 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             // Second batch of 8 pixels
             let mut px_array_hi = [0u32; 8];
             let py_array_hi = [py; 8];
-            for i in 0..8 {
-                px_array_hi[i] = px + 8 + i as u32;
+            for (i, item) in px_array_hi.iter_mut().enumerate() {
+                *item = px + 8 + i as u32;
             }
 
             let (lons_hi, lats_hi, proj_mask_hi) =
-                params.proj.pixel_to_ang_batch(&px_array_hi, &py_array_hi, grid);
+                params
+                    .proj
+                    .pixel_to_ang_batch(&px_array_hi, &py_array_hi, grid);
 
             // Convert latitudes to theta values
             let mut thetas_hi = [0.0_f64; 8];
@@ -343,19 +347,20 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             let mut validity_mask_16 = [false; 16];
             let mut thetas_16 = [0.0; 16];
             let mut lons_16 = [0.0; 16];
-            for i in 0..8 {
-                healpix_values_16[i] = healpix_values_lo[i];
-                validity_mask_16[i] = validity_mask_lo[i];
-                thetas_16[i] = thetas_lo[i];
-                lons_16[i] = lons_lo[i];
-                healpix_values_16[i + 8] = healpix_values_hi[i];
-                validity_mask_16[i + 8] = validity_mask_hi[i];
-                thetas_16[i + 8] = thetas_hi[i];
-                lons_16[i + 8] = lons_hi[i];
-            }
+            healpix_values_16[..8].copy_from_slice(&healpix_values_lo);
+            validity_mask_16[..8].copy_from_slice(&validity_mask_lo);
+            thetas_16[..8].copy_from_slice(&thetas_lo);
+            lons_16[..8].copy_from_slice(&lons_lo);
+            healpix_values_16[8..16].copy_from_slice(&healpix_values_hi);
+            validity_mask_16[8..16].copy_from_slice(&validity_mask_hi);
+            thetas_16[8..16].copy_from_slice(&thetas_hi);
+            lons_16[8..16].copy_from_slice(&lons_hi);
 
             // Tier 5: Use 16-element SIMD scaling for improved throughput
-            let pixel_values: [PixelValue; 16] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
+            let pixel_values: [PixelValue; 16] = if matches!(
+                params.scale_type,
+                crate::scale::Scale::Linear | crate::scale::Scale::Log
+            ) {
                 let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
                 let log_cache = if use_log && params.scale_cache.is_some() {
                     let cache = params.scale_cache.as_ref().unwrap();
@@ -432,20 +437,19 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                     );
                     if let Some(idx) = healpix_idx
                         && !mask.is_valid(idx)
+                        && let Some(fill_color) = mask.fill_color
                     {
-                        if let Some(fill_color) = mask.fill_color {
-                            rgba = fill_color;
-                        }
+                        rgba = fill_color;
                     }
                 }
 
                 // Draw pixel
                 if pixel_valid {
                     unsafe {
-                        grid.set_pixel_unchecked(pixel_x as u32, py, rgba);
+                        grid.set_pixel_unchecked(pixel_x, py, rgba);
                     }
                 } else {
-                    grid.set_valid(pixel_x as u32, py, false);
+                    grid.set_valid(pixel_x, py, false);
                 }
             }
 
@@ -457,8 +461,8 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             // Prepare 8-pixel batch
             let mut px_array = [0u32; 8];
             let py_array = [py; 8];
-            for i in 0..8 {
-                px_array[i] = px + i as u32;
+            for (i, item) in px_array.iter_mut().enumerate() {
+                *item = px + i as u32;
             }
 
             // Batch projection
@@ -495,7 +499,10 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
             ];
 
             // Scaling
-            let pixel_values: [PixelValue; 8] = if matches!(params.scale_type, crate::scale::Scale::Linear | crate::scale::Scale::Log) {
+            let pixel_values: [PixelValue; 8] = if matches!(
+                params.scale_type,
+                crate::scale::Scale::Linear | crate::scale::Scale::Log
+            ) {
                 let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
                 let log_cache = if use_log && params.scale_cache.is_some() {
                     let cache = params.scale_cache.as_ref().unwrap();
@@ -567,10 +574,9 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                     );
                     if let Some(idx) = healpix_idx
                         && !mask.is_valid(idx)
+                        && let Some(fill_color) = mask.fill_color
                     {
-                        if let Some(fill_color) = mask.fill_color {
-                            rgba = fill_color;
-                        }
+                        rgba = fill_color;
                     }
                 }
 
@@ -588,7 +594,7 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
 
         // Scalar fallback: process remaining pixels (0-7 pixels)
         while px < width {
-            if let Some((lon, lat)) = params.proj.pixel_to_ang(px as u32, py, grid) {
+            if let Some((lon, lat)) = params.proj.pixel_to_ang(px, py, grid) {
                 let theta = std::f64::consts::PI / 2.0 - lat;
 
                 let pixel_val = match crate::healpix::sample_healpix(
@@ -637,18 +643,17 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
                     );
                     if let Some(idx) = healpix_idx
                         && !mask.is_valid(idx)
+                        && let Some(fill_color) = mask.fill_color
                     {
-                        if let Some(fill_color) = mask.fill_color {
-                            rgba = fill_color;
-                        }
+                        rgba = fill_color;
                     }
                 }
 
                 unsafe {
-                    grid.set_pixel_unchecked(px as u32, py, rgba);
+                    grid.set_pixel_unchecked(px, py, rgba);
                 }
             } else {
-                grid.set_valid(px as u32, py, false);
+                grid.set_valid(px, py, false);
             }
             px += 1;
         }

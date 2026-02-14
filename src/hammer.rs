@@ -703,7 +703,8 @@ mod tests {
         let px_array = [10u32, 50, 100, 200, 300, 400, 450, 500];
         let py_array = [10u32, 50, 100, 128, 150, 200, 240, 250];
 
-        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+        let (simd_lons, simd_lats, simd_mask) =
+            proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
 
         for i in 0..8 {
             let scalar_result = proj.pixel_to_ang(px_array[i], py_array[i], &grid);
@@ -753,8 +754,10 @@ mod tests {
         let px_array = [50u32, 100, 150, 200, 250, 300, 350, 400];
         let py_array = [50u32, 75, 100, 125, 150, 175, 200, 225];
 
-        let (batch_lons, batch_lats, batch_mask) = proj.pixel_to_ang_batch(&px_array, &py_array, &grid);
-        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+        let (batch_lons, batch_lats, batch_mask) =
+            proj.pixel_to_ang_batch(&px_array, &py_array, &grid);
+        let (simd_lons, simd_lats, simd_mask) =
+            proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
 
         for i in 0..8 {
             // Masks should match exactly
@@ -793,7 +796,8 @@ mod tests {
         let px_array = [0u32, 0, 511, 511, 256, 256, 1, 510];
         let py_array = [0u32, 255, 0, 255, 128, 128, 1, 254];
 
-        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+        let (simd_lons, simd_lats, simd_mask) =
+            proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
 
         // Verify that output arrays are properly populated (no NaNs or infinities unless invalid)
         for i in 0..8 {

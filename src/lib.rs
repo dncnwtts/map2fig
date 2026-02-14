@@ -58,11 +58,10 @@
 
 pub mod cli;
 pub mod cli_builder;
-pub mod diagnostics;
-pub mod pdf_optimize;
 pub mod colorbar;
 pub mod colormap;
 pub mod constants;
+pub mod diagnostics;
 pub mod executor;
 pub mod fits;
 pub mod gnomonic;
@@ -76,6 +75,7 @@ pub mod layout;
 pub mod mask;
 pub mod mollweide;
 pub mod params;
+pub mod pdf_optimize;
 pub mod pipeline;
 pub mod plot;
 pub mod projection;
@@ -85,14 +85,13 @@ pub mod scale;
 pub mod setup;
 pub mod simd;
 
-
 // Re-export useful items
 pub use cli::{Args, PlotConfig};
 pub use colormap::{Colormap, available_colormaps, get_colormap};
 pub use constants::*;
 pub use fits::{read_healpix_column, read_healpix_column_cached};
-pub use pdf_optimize::{PdfOptimizationConfig, estimate_pdf_complexity};
 pub use mask::PixelMask;
+pub use pdf_optimize::{PdfOptimizationConfig, estimate_pdf_complexity};
 pub use plot::{
     plot_gnomonic_auto, plot_gnomonic_pdf, plot_gnomonic_png, plot_hammer_auto, plot_hammer_pdf,
     plot_hammer_png, plot_mollweide_auto, plot_mollweide_pdf, plot_mollweide_png,
