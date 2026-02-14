@@ -16,7 +16,7 @@ A fast, publication-quality Rust tool for visualizing HEALPix sky maps in Mollwe
 ## Installation
 
 ### Requirements
-- **Rust 1.70+** (uses 2024 edition) — [Install from rustup.rs](https://rustup.rs)
+- **Rust 1.80+** (uses 2024 edition for let chains and other modern features) — [Install from rustup.rs](https://rustup.rs)
 - **LaTeX/pdflatex** (for equation rendering) — *Optional but recommended*
   - Ubuntu/Debian: `sudo apt-get install texlive-latex-base texlive-latex-extra`
   - macOS: `brew install basictex`

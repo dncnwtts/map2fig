@@ -4,13 +4,16 @@ This directory contains utility scripts and tools for development, testing, and 
 
 ## Structure
 
+
 ### 📁 [scripts/](scripts/)
 Shell scripts for common tasks:
 
 | Script | Purpose |
 |--------|---------|
 | `install.sh` | Installation and setup helper |
-| `run_benchmarks.sh` | Run performance benchmarks |
+| `run_benchmarks.sh` | Run comprehensive performance benchmarks |
+| `benchmark_quick.sh` | Run quick performance benchmarks |
+| `run_tests.sh` | Run test suite |
 | `plot_rotation.sh` | Plotting utility for coordinate rotation |
 | `verify_fixes.sh` | Verification test suite |
 
@@ -19,9 +22,11 @@ Python utility scripts for development and analysis:
 
 | Script | Purpose |
 |--------|---------|
+| `benchmark.py` | Performance benchmarking utilities |
 | `analyze_heights.py` | Triangle height geometry analysis |
 | `compare_outputs.py` | Compare test outputs and results |
 | `compare_pdf_png.py` | Compare PDF vs PNG rendering |
+| `create_mask_example.py` | Generate example mask FITS files |
 | `debug_coordinates.py` | Debug coordinate transformations |
 | `HEIGHT_ANALYSIS.py` | Detailed height/geometry metrics |
 | `verify_height_fix.py` | Verify triangle rasterization fixes |
