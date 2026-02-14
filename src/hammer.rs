@@ -1,5 +1,6 @@
 use crate::projection::Projection;
 use crate::render::raster::RasterGrid;
+use crate::simd;
 
 /// Hammer-Aitoff projection.
 ///
@@ -200,6 +201,74 @@ impl Projection for HammerProjection {
             let v = py_coords[i] as f64 * h_inv;
 
             if let Some((lon, lat)) = self.inverse(u, v) {
+                lons[i] = lon;
+                lats[i] = lat;
+                mask[i] = true;
+            }
+        }
+
+        (lons, lats, mask)
+    }
+}
+
+impl HammerProjection {
+    /// SIMD-accelerated batch projection for Hammer (8 pixels concurrently)
+    ///
+    /// Uses vectorized operations for coordinate normalization and initial setup,
+    /// then computes the Newton-Raphson inverse in scalar paths (independent
+    /// per pixel, allowing CPU to parallelize via ILP).
+    #[inline]
+    pub fn pixel_to_ang_batch_simd(
+        &self,
+        px_coords: &[u32; 8],
+        py_coords: &[u32; 8],
+        grid: &RasterGrid,
+    ) -> (
+        [f64; 8],  // longitudes
+        [f64; 8],  // latitudes
+        [bool; 8], // validity mask
+    ) {
+        let w_inv = 1.0 / ((grid.width - 1) as f64);
+        let h_inv = 1.0 / ((grid.height - 1) as f64);
+
+        // Convert integer coordinates to f64 arrays (vectorizable)
+        let px_f64: [f64; 8] = [
+            px_coords[0] as f64,
+            px_coords[1] as f64,
+            px_coords[2] as f64,
+            px_coords[3] as f64,
+            px_coords[4] as f64,
+            px_coords[5] as f64,
+            px_coords[6] as f64,
+            px_coords[7] as f64,
+        ];
+
+        let py_f64: [f64; 8] = [
+            py_coords[0] as f64,
+            py_coords[1] as f64,
+            py_coords[2] as f64,
+            py_coords[3] as f64,
+            py_coords[4] as f64,
+            py_coords[5] as f64,
+            py_coords[6] as f64,
+            py_coords[7] as f64,
+        ];
+
+        // Vectorized normalization: u = px_f64 * w_inv, v = py_f64 * h_inv
+        let u_values = simd::simd_mul_8(px_f64, [w_inv; 8]);
+        let v_values = simd::simd_mul_8(py_f64, [h_inv; 8]);
+
+        // Initialize output arrays
+        let mut lons = [0.0; 8];
+        let mut lats = [0.0; 8];
+        let mut mask = [false; 8];
+
+        // Note: Since the Hammer inverse involves iterative Newton-Raphson,
+        // we solve each pixel independently (they're independent computations).
+        // The CPU can parallelize these via Instruction-Level Parallelism (ILP)
+        // while we loop through the 8 pixels sequentially.
+        for i in 0..8 {
+            if let Some((lon, lat)) = self.inverse(u_values[i], v_values[i]) {
                 lons[i] = lon;
                 lats[i] = lat;
                 mask[i] = true;
@@ -623,5 +692,131 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_hammer_simd_batch_matches_scalar() {
+        let proj = HammerProjection::new();
+        let grid = RasterGrid::new(512, 256);
+
+        // Test SIMD batch projection against scalar version
+        let px_array = [10u32, 50, 100, 200, 300, 400, 450, 500];
+        let py_array = [10u32, 50, 100, 128, 150, 200, 240, 250];
+
+        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+
+        for i in 0..8 {
+            let scalar_result = proj.pixel_to_ang(px_array[i], py_array[i], &grid);
+
+            match (scalar_result, simd_mask[i]) {
+                (Some((scalar_lon, scalar_lat)), true) => {
+                    // Both should be valid - check values match
+                    assert!(
+                        (simd_lons[i] - scalar_lon).abs() < 1e-10,
+                        "SIMD Longitude mismatch at ({}, {}): simd={}, scalar={}",
+                        px_array[i],
+                        py_array[i],
+                        simd_lons[i],
+                        scalar_lon
+                    );
+                    assert!(
+                        (simd_lats[i] - scalar_lat).abs() < 1e-10,
+                        "SIMD Latitude mismatch at ({}, {}): simd={}, scalar={}",
+                        px_array[i],
+                        py_array[i],
+                        simd_lats[i],
+                        scalar_lat
+                    );
+                }
+                (None, false) => {
+                    // Both should be invalid - OK
+                }
+                _ => {
+                    panic!(
+                        "SIMD Mismatch at ({}, {}): scalar valid={}, simd valid={}",
+                        px_array[i],
+                        py_array[i],
+                        scalar_result.is_some(),
+                        simd_mask[i]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_hammer_simd_batch_matches_batch() {
+        let proj = HammerProjection::new();
+        let grid = RasterGrid::new(512, 256);
+
+        // Test that SIMD batch matches scalar batch
+        let px_array = [50u32, 100, 150, 200, 250, 300, 350, 400];
+        let py_array = [50u32, 75, 100, 125, 150, 175, 200, 225];
+
+        let (batch_lons, batch_lats, batch_mask) = proj.pixel_to_ang_batch(&px_array, &py_array, &grid);
+        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+
+        for i in 0..8 {
+            // Masks should match exactly
+            assert_eq!(
+                batch_mask[i], simd_mask[i],
+                "Mask mismatch at index {}: batch={}, simd={}",
+                i, batch_mask[i], simd_mask[i]
+            );
+
+            // If both valid, values should match
+            if batch_mask[i] && simd_mask[i] {
+                assert!(
+                    (batch_lons[i] - simd_lons[i]).abs() < 1e-10,
+                    "Batch vs SIMD longitude mismatch at index {}: batch={}, simd={}",
+                    i,
+                    batch_lons[i],
+                    simd_lons[i]
+                );
+                assert!(
+                    (batch_lats[i] - simd_lats[i]).abs() < 1e-10,
+                    "Batch vs SIMD latitude mismatch at index {}: batch={}, simd={}",
+                    i,
+                    batch_lats[i],
+                    simd_lats[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_hammer_simd_batch_edge_cases() {
+        let proj = HammerProjection::new();
+        let grid = RasterGrid::new(512, 256);
+
+        // Test with pixels at grid boundaries
+        let px_array = [0u32, 0, 511, 511, 256, 256, 1, 510];
+        let py_array = [0u32, 255, 0, 255, 128, 128, 1, 254];
+
+        let (simd_lons, simd_lats, simd_mask) = proj.pixel_to_ang_batch_simd(&px_array, &py_array, &grid);
+
+        // Verify that output arrays are properly populated (no NaNs or infinities unless invalid)
+        for i in 0..8 {
+            assert!(
+                simd_lons[i].is_finite() || !simd_mask[i],
+                "SIMD longitude is not finite at index {} (mask={})",
+                i,
+                simd_mask[i]
+            );
+            assert!(
+                simd_lats[i].is_finite() || !simd_mask[i],
+                "SIMD latitude is not finite at index {} (mask={})",
+                i,
+                simd_mask[i]
+            );
+        }
+
+        // Some boundary pixels should be valid (near center), others may be invalid (corners)
+        let valid_count = simd_mask.iter().filter(|&&m| m).count();
+        assert!(
+            valid_count > 0,
+            "SIMD edge case test: expected at least one valid pixel, got {} valid",
+            valid_count
+        );
     }
 }
