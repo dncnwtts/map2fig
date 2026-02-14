@@ -573,12 +573,12 @@ pub fn simd_vec_to_sph_8(x: [f64; 8], y: [f64; 8], z: [f64; 8]) -> ([f64; 8], [f
 /// Used in HEALPix sampling for view transformation application.
 ///
 /// Formula for each vector i:
-/// - x'[i] = m[0][0] * x[i] + m[0][1] * y[i] + m[0][2] * z[i]
-/// - y'[i] = m[1][0] * x[i] + m[1][1] * y[i] + m[1][2] * z[i]
-/// - z'[i] = m[2][0] * x[i] + m[2][1] * y[i] + m[2][2] * z[i]
+/// - x'\[i\] = m\[0\]\[0\] * x\[i\] + m\[0\]\[1\] * y\[i\] + m\[0\]\[2\] * z\[i\]
+/// - y'\[i\] = m\[1\]\[0\] * x\[i\] + m\[1\]\[1\] * y\[i\] + m\[1\]\[2\] * z\[i\]
+/// - z'\[i\] = m\[2\]\[0\] * x\[i\] + m\[2\]\[1\] * y\[i\] + m\[2\]\[2\] * z\[i\]
 ///
 /// Input:
-/// - mat: 3x3 matrix (row-major, [row][col])
+/// - mat: 3x3 matrix (row-major, \[row\]\[col\])
 /// - x, y, z: 3 arrays of input vector components
 ///
 /// Output:
@@ -791,7 +791,7 @@ pub fn simd_linear_scale_8(
 /// `t_i = (ln(value_i) - ln(min)) / (ln(max) - ln(min))`
 ///
 /// Handles edge cases:
-/// - value ≤ 0: returns mask[i] = false (invalid)
+/// - value ≤ 0: returns mask\[i\] = false (invalid)
 /// - value < min: t = 0.0
 /// - value ≥ max: t = 1.0
 ///

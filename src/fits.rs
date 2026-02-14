@@ -354,7 +354,7 @@ fn get_column_cache_key(filepath: &str, col_idx: usize, mtime_secs: u64) -> Opti
 }
 
 /// Try to load column data from cache
-/// Returns Some(Vec<f64>) if cache exists and is valid, None otherwise
+/// Returns Some(`Vec<f64>`) if cache exists and is valid, None otherwise
 fn try_load_column_cache(filepath: &str, col_idx: usize) -> Option<Vec<f64>> {
     let cache_dir = get_cache_dir()?;
 
