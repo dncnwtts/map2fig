@@ -16,6 +16,9 @@
 //! For sparse maps with EXPLICIT indexing, this module automatically expands the data
 //! to a full dense array with UNSEEN values for omitted pixels.
 //!
+//! **Tier 4.2b Optimization:** Sparse map column extraction is parallelized via rayon
+//! for efficient multi-core processing of large sparse catalogs.
+//!
 //! # Examples
 //!
 //! ```ignore
@@ -30,6 +33,7 @@ use std::io::BufReader;
 
 use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
 use fitsrs::{Fits, HDU, card::Value};
+use rayon::prelude::*;
 
 /// Read a HEALPix column from a FITS binary table.
 ///
@@ -105,31 +109,42 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                     let npix = (12 * nside * nside) as usize;
                     let mut full_map = vec![f64::NEG_INFINITY; npix];
 
-                    // extract pixel indices and data
-                    // NOTE: select_fields returns interleaved values [pix, data, pix, data, ...]
-                    for row_idx in 0..n_rows {
-                        let pix_idx = row_idx * 2;
-                        let data_idx = row_idx * 2 + 1;
+                    // Tier 4.2b: Parallel extraction of pixel indices and values
+                    // Use rayon to process rows in parallel, extracting (pixel_idx, value) pairs
+                    let pairs: Vec<(usize, f64)> = (0..n_rows)
+                        .into_par_iter()
+                        .filter_map(|row_idx| {
+                            let pix_idx = row_idx * 2;
+                            let data_idx = row_idx * 2 + 1;
 
-                        let pix = match &all_values[pix_idx] {
-                            DataValue::Integer { value, .. } => *value as i64,
-                            DataValue::Long { value, .. } => *value,
-                            DataValue::Float { value, .. } => *value as i64,
-                            DataValue::Double { value, .. } => *value as i64,
-                            _ => -1,
-                        };
+                            let pix = match &all_values[pix_idx] {
+                                DataValue::Integer { value, .. } => *value as i64,
+                                DataValue::Long { value, .. } => *value,
+                                DataValue::Float { value, .. } => *value as i64,
+                                DataValue::Double { value, .. } => *value as i64,
+                                _ => -1,
+                            };
 
-                        let val = match &all_values[data_idx] {
-                            DataValue::Double { value, .. } => *value,
-                            DataValue::Float { value, .. } => *value as f64,
-                            DataValue::Integer { value, .. } => *value as f64,
-                            other => panic!("Unsupported column type in FITS table: {:?}", other),
-                        };
+                            let val = match &all_values[data_idx] {
+                                DataValue::Double { value, .. } => *value,
+                                DataValue::Float { value, .. } => *value as f64,
+                                DataValue::Integer { value, .. } => *value as f64,
+                                other => panic!("Unsupported column type in FITS table: {:?}", other),
+                            };
 
-                        if pix >= 0 && (pix as usize) < npix {
-                            full_map[pix as usize] = val;
-                        }
+                            if pix >= 0 && (pix as usize) < npix {
+                                Some((pix as usize, val))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    // Populate map sequentially from parallel results
+                    for (pix_idx, val) in pairs {
+                        full_map[pix_idx] = val;
                     }
+                    
                     result = full_map;
                 }
             } else {
