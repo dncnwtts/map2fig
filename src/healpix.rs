@@ -577,6 +577,63 @@ pub fn sample_healpix_index(
     Some(ipix)
 }
 
+/// Batch sample HEALPix: process 8 pixels in parallel
+/// 
+/// Input:
+///   - map: HEALPix data array
+///   - meta: HEALPix metadata
+///   - view: view transformation
+///   - thetas: array of 8 theta values
+///   - lons: array of 8 longitude values
+///
+/// Output:
+///   - samples: array of 8 HEALPix values (or 0.0 if invalid)
+///   - mask: validity mask (true if sample succeeded)
+///
+/// This processes 8 independent sample operations with opportunity
+/// for instruction-level parallelism and potential SIMD vectorization.
+pub fn sample_healpix_batch(
+    map: &[f64],
+    meta: HealpixMeta,
+    view: &ViewTransform,
+    thetas: &[f64; 8],
+    lons: &[f64; 8],
+) -> ([f64; 8], [bool; 8]) {
+    let mut samples = [0.0_f64; 8];
+    let mut mask = [false; 8];
+
+    // Unrolled loop: process 8 samples with independent computation
+    for i in 0..8 {
+        if !thetas[i].is_finite() || !lons[i].is_finite() {
+            continue;
+        }
+
+        // Convert spherical to Cartesian
+        let v_view = sph_to_vec(thetas[i], lons[i]);
+
+        // Apply view transformation inverse
+        let v_map = view.apply_inverse(v_view);
+
+        // Convert back to spherical in map coordinates
+        let (mut theta_m, mut lon_m) = vec_to_sph(v_map);
+
+        // Clamp and normalize
+        theta_m = theta_m.clamp(0.0, PI);
+        lon_m = lon_m.rem_euclid(2.0 * PI);
+
+        // Get HEALPix pixel index
+        let ipix = ang2pix(meta, theta_m, lon_m) as usize;
+
+        // Get value from map
+        if let Some(&value) = map.get(ipix) {
+            samples[i] = value;
+            mask[i] = true;
+        }
+    }
+
+    (samples, mask)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,6 +830,58 @@ fn test_pix_ang_pix_roundtrip_ring() {
         let (theta, phi) = pix2ang_ring(nside, ipix);
         let ipix2 = ang2pix_ring(nside, theta, phi);
         assert_eq!(ipix, ipix2);
+    }
+}
+
+#[test]
+fn test_sample_healpix_batch_matches_scalar() {
+    use crate::rotation::{ViewTransform, CoordSystem};
+
+    // Create a simple test map
+    let nside = 16;
+    let npix = 12 * nside * nside;
+    let map: Vec<f64> = (0..npix).map(|i| (i as f64) * 0.1).collect();
+
+    let meta = HealpixMeta {
+        nside,
+        ordering: HealpixOrdering::Ring,
+        coord: CoordSystem::G,
+    };
+
+    // Identity view transform (no rotation, no coordinate change)
+    let view = ViewTransform::new(CoordSystem::G, CoordSystem::G, None);
+
+    // Test coordinates
+    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, 3.14];
+    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.28];
+
+    // Get batch results
+    let (batch_samples, batch_mask) = sample_healpix_batch(&map, meta, &view, &thetas, &lons);
+
+    // Verify each against scalar version
+    for i in 0..8 {
+        let scalar_result = sample_healpix(&map, meta, &view, thetas[i], lons[i]);
+
+        match (scalar_result, batch_mask[i]) {
+            (Some(scalar), true) => {
+                // Both valid - check values match
+                assert!(
+                    (batch_samples[i] - scalar).abs() < 1e-14,
+                    "Sample mismatch at ({}, {}): batch={}, scalar={}",
+                    thetas[i], lons[i], batch_samples[i], scalar
+                );
+            }
+            (None, false) => {
+                // Both invalid - OK
+            }
+            _ => {
+                panic!(
+                    "Validity mismatch at ({}, {}): scalar_some={}, batch_valid={}",
+                    thetas[i], lons[i],
+                    scalar_result.is_some(), batch_mask[i]
+                );
+            }
+        }
     }
 }
 
