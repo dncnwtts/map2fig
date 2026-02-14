@@ -214,7 +214,7 @@ where
     let map_w_int = (layout.map_w + 2.0 * layout.map_pad) as u32;
     let map_h_int = (layout.map_h + 2.0 * layout.map_pad) as u32;
     let mut pixel_buffer = image::RgbaImage::new(map_w_int, map_h_int);
-    
+
     // Clear buffer background (matches what we'd paint on Cairo surface)
     let bg_color = if transparent {
         image::Rgba([0, 0, 0, 0])
@@ -226,12 +226,12 @@ where
     }
 
     // Render pixels to in-memory buffer (fast memory writes, no Cairo overhead)
-    let mut sink = PngSink { 
-        img: &mut pixel_buffer, 
-        x0: 0, 
-        y0: 0 
+    let mut sink = PngSink {
+        img: &mut pixel_buffer,
+        x0: 0,
+        y0: 0,
     };
-    
+
     let debug_overlay = if cfg!(feature = "debug_overlay") {
         Some(DebugOverlay::grid_only())
     } else {
@@ -270,7 +270,7 @@ where
         let _ = cr_pdf.set_source_surface(&pixel_surface, layout.map_x, layout.map_y);
         cr_pdf.paint().unwrap();
     }
-    
+
     // Note: We no longer need surface_img for pixel rendering.
     // It's retained for compatibility with graticule drawing below if needed.
 

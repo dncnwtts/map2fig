@@ -62,13 +62,16 @@ pub fn simd_sin_cos_8(angles: [f64; 8]) -> ([f64; 8], [f64; 8]) {
     let (s1, c1) = angles[1].sin_cos();
     let (s2, c2) = angles[2].sin_cos();
     let (s3, c3) = angles[3].sin_cos();
-    
+
     let (s4, c4) = angles[4].sin_cos();
     let (s5, c5) = angles[5].sin_cos();
     let (s6, c6) = angles[6].sin_cos();
     let (s7, c7) = angles[7].sin_cos();
-    
-    ([s0, s1, s2, s3, s4, s5, s6, s7], [c0, c1, c2, c3, c4, c5, c6, c7])
+
+    (
+        [s0, s1, s2, s3, s4, s5, s6, s7],
+        [c0, c1, c2, c3, c4, c5, c6, c7],
+    )
 }
 
 /// Vectorized inverse tangent (atan2) for 8 point pairs

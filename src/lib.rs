@@ -220,7 +220,7 @@ impl<'a> PixelSink for CairoImageSink<'a> {
 }
 
 /// Batched Cairo pixel sink - groups pixels by color to reduce fill() calls.
-/// 
+///
 /// Instead of calling cairo_fill() for every pixel, this sink batches pixels
 /// of the same color together, reducing the number of fill() calls from 51k to ~256.
 pub struct BatchedCairoImageSink<'a> {
@@ -263,7 +263,10 @@ impl<'a> BatchedCairoImageSink<'a> {
 impl<'a> PixelSink for BatchedCairoImageSink<'a> {
     fn draw_pixel(&mut self, x: u32, y: u32, rgba: Rgba<u8>) {
         let color = [rgba[0], rgba[1], rgba[2], rgba[3]];
-        self.color_batches.entry(color).or_insert_with(Vec::new).push((x, y));
+        self.color_batches
+            .entry(color)
+            .or_insert_with(Vec::new)
+            .push((x, y));
     }
 }
 

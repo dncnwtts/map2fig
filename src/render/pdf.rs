@@ -1,3 +1,4 @@
+use crate::Colormap;
 use crate::PixelSink;
 use crate::colorbar::render_colorbar_gradient;
 use crate::colorbar::{ColorbarTicks, format_tick_label_with_units, format_units_label};
@@ -7,7 +8,6 @@ use crate::plot::rasterize_to_surface;
 use crate::render::RenderBackend;
 use crate::render::target::{PixelSource, RenderTarget};
 use crate::scale::generate_colorbar_ticks;
-use crate::Colormap;
 use cairo::{Context, Format, ImageSurface};
 use std::f64::consts::PI;
 
@@ -470,18 +470,18 @@ impl RenderTarget for PdfRenderTarget<'_> {
         // Instead of per-pixel Cairo operations (even batched), render to in-memory
         // image buffer first, then embed as single Cairo surface paint.
         // This eliminates path management overhead in Cairo.
-        
+
         // Create in-memory pixel buffer (1MB for 1200x741 RGBA)
         let mut img_buffer = image::RgbaImage::new(raster.width(), raster.height());
-        
+
         // Fast: Direct memory writes (no Cairo overhead)
         {
-            let mut sink = crate::PngSink { 
-                img: &mut img_buffer, 
-                x0: 0, 
-                y0: 0 
+            let mut sink = crate::PngSink {
+                img: &mut img_buffer,
+                x0: 0,
+                y0: 0,
             };
-            
+
             for py in 0..raster.height() {
                 for px in 0..raster.width() {
                     let [r, g, b, a] = raster.get_pixel(px, py);
@@ -489,7 +489,7 @@ impl RenderTarget for PdfRenderTarget<'_> {
                 }
             }
         }
-        
+
         // Convert to Cairo surface from raw pixel data
         // This creates the surface without any intermediate path operations
         if let Ok(surface) = ImageSurface::create_for_data(
