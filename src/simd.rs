@@ -633,3 +633,334 @@ mod healpix_tests {
         }
     }
 }
+
+//─────────────────────────────────────────────────────────────────────────────
+// Scaling & Color SIMD Operations
+//─────────────────────────────────────────────────────────────────────────────
+
+/// Vectorized linear scaling (normalization to [0, 1] range)
+///
+/// Maps 8 values from [min, max] to [0, 1] range using linear formula:
+/// `t_i = (value_i - min) / (max - min)`
+///
+/// Special handling:
+/// - Values ≤ min → t = 0.0
+/// - Values ≥ max → t = 1.0
+/// - Otherwise apply linear formula
+///
+/// Input:
+/// - values: 8 raw data values
+/// - min, max: scaling bounds
+/// - mask: validity mask (true = process, false = skip)
+///
+/// Output:
+/// - normalized: 8 normalized values in [0, 1]
+/// - out_mask: updated mask (invalid values set to false)
+#[inline]
+pub fn simd_linear_scale_8(
+    values: [f64; 8],
+    min: f64,
+    max: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    let inv_range = if max > min {
+        1.0 / (max - min)
+    } else {
+        0.0 // Degenerate case: max ≤ min
+    };
+
+    let mut result = [0.0; 8];
+    let out_mask = mask;
+
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+
+        if max <= min {
+            // Degenerate: all valid values map to 0.5
+            result[i] = 0.5;
+        } else if values[i] <= min {
+            result[i] = 0.0;
+        } else if values[i] >= max {
+            result[i] = 1.0;
+        } else {
+            result[i] = (values[i] - min) * inv_range;
+        }
+    }
+
+    (result, out_mask)
+}
+
+/// Vectorized log scale transformation (for positive data)
+///
+/// Maps positive values using logarithmic formula:
+/// `t_i = (ln(value_i) - ln(min)) / (ln(max) - ln(min))`
+///
+/// Handles edge cases:
+/// - value ≤ 0: returns mask[i] = false (invalid)
+/// - value < min: t = 0.0
+/// - value ≥ max: t = 1.0
+///
+/// Pre-computed cache values (log_min, log_range) avoid repeated ln() calls
+///
+/// Input:
+/// - values: 8 raw data values (should be positive for log scale)
+/// - log_min: pre-computed ln(min)
+/// - log_range: pre-computed ln(max) - ln(min)
+/// - mask: validity mask
+///
+/// Output:
+/// - normalized: 8 normalized values in [0, 1]
+/// - out_mask: updated mask (non-positive values marked invalid)
+#[inline]
+pub fn simd_log_scale_8(
+    values: [f64; 8],
+    log_min: f64,
+    log_range: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    let mut result = [0.0; 8];
+    let mut out_mask = mask;
+
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+
+        if values[i] <= 0.0 {
+            // Negative or zero: invalid for log scale
+            out_mask[i] = false;
+            continue;
+        }
+
+        if log_range <= 0.0 {
+            result[i] = 0.5;
+        } else {
+            let log_val = values[i].ln();
+            result[i] = ((log_val - log_min) / log_range).clamp(0.0, 1.0);
+        }
+    }
+
+    (result, out_mask)
+}
+
+/// Vectorized colormap LUT lookup (fast palette sampling)
+///
+/// Maps 8 normalized values [0, 1] to palette indices via fast LUT lookup.
+/// Input values clamped to [0, 1], then multiplied by 255 and truncated.
+///
+/// Input:
+/// - normalized: 8 values in [0, 1] (typically from scale_value)
+/// - lut: 256-entry RGB lookup table (pre-computed colormap)
+/// - mask: validity mask
+///
+/// Output:
+/// - rgb_buffer: flattened RGB buffer (8 pixels × 3 bytes = 24 bytes)
+///   Format: [R0, G0, B0, R1, G1, B1, ..., R7, G7, B7]
+/// - out_mask: unchanged validity mask
+///
+/// Note: This is a scalar loop in portable SIMD version.
+///       With AVX2, could gather 8 LUT entries in parallel.
+#[inline]
+pub fn simd_colormap_sample_8(
+    normalized: [f64; 8],
+    lut: &[[u8; 3]; 256],
+    mask: [bool; 8],
+) -> ([u8; 24], [bool; 8]) {
+    let mut rgb_buffer = [0u8; 24];
+
+    for i in 0..8 {
+        if !mask[i] {
+            // Bad pixel: set to black (0, 0, 0)
+            rgb_buffer[i * 3] = 0;
+            rgb_buffer[i * 3 + 1] = 0;
+            rgb_buffer[i * 3 + 2] = 0;
+            continue;
+        }
+
+        // Fast LUT lookup
+        let idx = (normalized[i].clamp(0.0, 1.0) * 255.0) as usize;
+        let rgb = lut[idx];
+
+        rgb_buffer[i * 3] = rgb[0];
+        rgb_buffer[i * 3 + 1] = rgb[1];
+        rgb_buffer[i * 3 + 2] = rgb[2];
+    }
+
+    (rgb_buffer, mask)
+}
+
+/// Vectorized gamma correction for 8 values
+///
+/// Applies inverse gamma: `out_i = value_i ^ (1/gamma)`
+/// Used to linearize colormapped output before display
+///
+/// Input:
+/// - values: 8 normalized values in [0, 1]
+/// - gamma_inv: pre-computed 1/gamma value
+/// - mask: validity mask
+///
+/// Output:
+/// - corrected: 8 gamma-corrected values
+#[inline]
+pub fn simd_gamma_correct_8(
+    values: [f64; 8],
+    gamma_inv: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    let mut result = [0.0; 8];
+
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+        result[i] = values[i].powf(gamma_inv);
+    }
+
+    (result, mask)
+}
+
+#[cfg(test)]
+mod scaling_tests {
+    use super::*;
+
+    #[test]
+    fn test_simd_linear_scale_8() {
+        let values = [0.0, 2.5, 5.0, 7.5, 10.0, 1.0, 3.0, 9.0];
+        let mask = [true; 8];
+        let (result, out_mask) = simd_linear_scale_8(values, 0.0, 10.0, mask);
+
+        // Expected: values are just divided by 10
+        let expected = [0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.3, 0.9];
+
+        for i in 0..8 {
+            assert!(
+                (result[i] - expected[i]).abs() < 1e-14,
+                "Linear scale mismatch at {}: {} vs {}",
+                i,
+                result[i],
+                expected[i]
+            );
+            assert!(out_mask[i], "Mask should remain true at {}", i);
+        }
+    }
+
+    #[test]
+    fn test_simd_linear_scale_clamping() {
+        let values = [-5.0, 0.0, 5.0, 10.0, 15.0, 20.0, 2.5, 7.5];
+        let mask = [true; 8];
+        let (result, _) = simd_linear_scale_8(values, 0.0, 10.0, mask);
+
+        // Values outside [0, 10] should clamp to 0.0 or 1.0
+        assert_eq!(result[0], 0.0); // -5 < 0: clamp to 0
+        assert_eq!(result[1], 0.0); // 0 ≤ 0: clamp to 0
+        assert_eq!(result[2], 0.5); // 5: linear
+        assert_eq!(result[3], 1.0); // 10 ≥ 10: clamp to 1
+        assert_eq!(result[4], 1.0); // 15 > 10: clamp to 1
+        assert_eq!(result[5], 1.0); // 20 > 10: clamp to 1
+    }
+
+    #[test]
+    fn test_simd_log_scale_8() {
+        let values = [1.0, 10.0, 100.0, 1000.0, 5.0, 50.0, 10.0, 100.0];
+        let log_min = 1.0_f64.ln(); // ln(1) = 0
+        let log_max = 100.0_f64.ln(); // ln(100) ≈ 4.605
+        let log_range = log_max - log_min;
+        let mask = [true; 8];
+
+        let (result, out_mask) = simd_log_scale_8(values, log_min, log_range, mask);
+
+        // All values are positive, so all should remain valid
+        for i in 0..8 {
+            assert!(out_mask[i], "All positive values should remain valid");
+        }
+
+        // ln(1) → 0, ln(100) → 1 (within range)
+        assert!((result[0] - 0.0).abs() < 1e-14, "log scale of min should be 0"); // ln(1) = 0
+        assert!((result[2] - 1.0).abs() < 1e-14, "log scale of max should be 1"); // ln(100) = log_max
+        assert!((result[3] - 1.0).abs() < 1e-14, "log scale of 1000 should clamp to 1"); // 1000 > 100, clamps to 1
+
+        // Verify log scale is increasing for in-range values
+        assert!(result[0] < result[1]); // ln(1) < ln(10)
+        assert!(result[1] < result[2]); // ln(10) < ln(100)
+    }
+
+    #[test]
+    fn test_simd_gamma_correct_8() {
+        let values = [0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5];
+        let mask = [true; 8];
+        let gamma = 2.0; // Common gamma correction
+        let gamma_inv = 1.0 / gamma; // 0.5
+
+        let (result, out_mask) = simd_gamma_correct_8(values, gamma_inv, mask);
+
+        // For gamma_inv = 0.5 (gamma = 2), result[i] = sqrt(values[i])
+        assert!((result[0] - 0.0).abs() < 1e-14); // sqrt(0) = 0
+        assert!((result[1] - 0.5).abs() < 1e-14); // sqrt(0.25) = 0.5
+        assert!((result[2] - (0.5_f64).sqrt()).abs() < 1e-14); // sqrt(0.5)
+        assert!((result[4] - 1.0).abs() < 1e-14); // sqrt(1) = 1
+
+        // All should remain valid
+        for i in 0..8 {
+            assert!(out_mask[i], "Mask should remain true at {}", i);
+        }
+    }
+
+    #[test]
+    fn test_simd_colormap_sample_8_lookup() {
+        // Create a simple test LUT: gradient from black to white
+        let mut lut = [[0u8; 3]; 256];
+        for i in 0..256 {
+            let val = i as u8;
+            lut[i] = [val, val, val]; // Grayscale gradient
+        }
+
+        let normalized = [0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5];
+        let mask = [true; 8];
+
+        let (rgb_buffer, out_mask) = simd_colormap_sample_8(normalized, &lut, mask);
+
+        // Verify LUT lookups
+        // 0.0 * 255 = 0 → RGB(0, 0, 0)
+        assert_eq!(rgb_buffer[0], 0);
+        assert_eq!(rgb_buffer[1], 0);
+        assert_eq!(rgb_buffer[2], 0);
+
+        // 1.0 * 255 = 255 → RGB(255, 255, 255)
+        let idx_white = 4 * 3;
+        assert_eq!(rgb_buffer[idx_white], 255);
+        assert_eq!(rgb_buffer[idx_white + 1], 255);
+        assert_eq!(rgb_buffer[idx_white + 2], 255);
+
+        // Mask unchanged
+        for i in 0..8 {
+            assert!(out_mask[i]);
+        }
+    }
+
+    #[test]
+    fn test_simd_colormap_sample_8_invalid_pixels() {
+        let lut = [[100u8; 3]; 256];
+        let normalized = [0.5; 8];
+        let mut mask = [true; 8];
+        mask[2] = false; // Mark one pixel invalid
+        mask[5] = false; // Mark another invalid
+
+        let (rgb_buffer, out_mask) = simd_colormap_sample_8(normalized, &lut, mask);
+
+        // Valid pixels should get LUT value
+        assert_eq!(rgb_buffer[0], 100); // Pixel 0: 0.5 * 255 = 127 → lut[127]
+
+        // Invalid pixels should get black (0, 0, 0)
+        let idx_invalid = 2 * 3;
+        assert_eq!(rgb_buffer[idx_invalid], 0);
+        assert_eq!(rgb_buffer[idx_invalid + 1], 0);
+        assert_eq!(rgb_buffer[idx_invalid + 2], 0);
+
+        // Mask unchanged
+        assert!(out_mask[0]);
+        assert!(!out_mask[2]);
+        assert!(!out_mask[5]);
+    }
+}
