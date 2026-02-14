@@ -107,7 +107,30 @@ pub struct HealpixMeta {
 ///
 /// - `Some(HealpixMeta)` if valid HEALPix FITS file
 /// - `None` if file doesn't exist, is invalid, or lacks HEALPix headers
+///
+/// # Caching (Tier 4.2a Optimization)
+///
+/// This function uses file-based metadata caching to avoid expensive FITS header
+/// parsing on repeated calls. Cache is validated via file modification time.
+/// Cache location: ~/.cache/map2fig/fits_meta_*.json
 pub fn read_healpix_meta(path: &str) -> Option<HealpixMeta> {
+    // Try cached lookup first (Tier 4.2a optimization)
+    // This avoids expensive FITS header parsing if we've seen this file before
+    if let Some((nside, ordering_str, _indxschm)) = crate::fits::read_healpix_meta_cached(path) {
+        let ordering = if ordering_str == "NESTED" {
+            HealpixOrdering::Nested
+        } else {
+            HealpixOrdering::Ring // Default to RING if unknown
+        };
+
+        return Some(HealpixMeta {
+            ordering,
+            nside,
+            coord: CoordSystem::G, // Default coordinate system (will be overridden by caller if needed)
+        });
+    }
+
+    // Cache miss or caching unavailable: parse FITS file directly
     let f = File::open(path).ok()?;
     let reader = BufReader::new(f);
     let mut fits = Fits::from_reader(reader);
