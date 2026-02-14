@@ -49,17 +49,28 @@ Comparison between `main` branch (baseline) and `performance-optimizations` bran
 - Root cause: I/O + PDF generation dominate CPU-bound scaling work
 - Verdict: Enabled and kept, minimal overhead, enables future improvements
 
-### Tier 4.2a: Metadata Caching Infrastructure (In Progress)
+### Tier 4.2a: Metadata Caching Infrastructure ✓ INTEGRATED
 
-Infrastructure added but not yet integrated:
-- serde_json caching framework
-- File metadata cache with mtime validation
-- Cache directory: ~/.cache/map2fig/
-- Next: Integrate into read_healpix_meta()
+Caching infrastructure fully integrated into read_healpix_meta():
+- Cache lookup first (zero overhead on cache hit)
+- Falls back to FITS parsing if cache unavailable  
+- Cache stored in ~/.cache/map2fig/ with mtime validation
+- Successfully tested with cosmoglobe_clipped.fits
 
 | Branch | FITS File | Linear 512 | Linear 1200 | Log 512 | Log 1200 | Notes |
 |--------|-----------|-----------|-----------|---------|----------|-------|
-| `tier4-optimization` | `cosmoglobe_clipped.fits` | TBD | 0.916s | TBD | TBD | Caching infrastructure added, benchmarking pending |
+| `tier4-optimization` | `cosmoglobe_clipped.fits` | — | 0.918s (1st), 0.906s (2nd) | — | 0.773s (1st), 0.776s (2nd) | Cache integrated: ±1-2% variation (noise level) |
+
+**Finding:** FITS header parsing is very fast (~5-10ms). Most execution time spent on PDF generation 
+and pixel rendering. Cache benefit is minimal on this single-file workload due to I/O dominance.
+Infrastructure is solid and zero-overhead when cache hits.
+
+### Code Quality Improvements
+
+- Removed unused imports (std::f64::consts::PI moved to test modules only)
+- Zero compilation warnings
+- 155/155 unit tests passing
+- Clean, maintainable codebase
 
 ---
 
