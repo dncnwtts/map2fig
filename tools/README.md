@@ -41,16 +41,22 @@ Performance comparison scripts:
 
 ## Usage
 
-### Running Benchmarks
+### Using the Makefile (Recommended)
+The easiest way to perform common tasks is via the Makefile in the project root:
+
 ```bash
-./tools/scripts/run_benchmarks.sh
-# or individually:
-python tools/python/benchmarks/cosmoglobe_benchmark.py
+make build          # Build the project (cargo build --release)
+make test           # Run test suite
+make test-fuzz      # Run fuzzing tests (requires Rust nightly)
+make clean          # Remove build artifacts
+make help           # Show available targets
 ```
 
-### Installing
+### Running Benchmarks
 ```bash
-./tools/scripts/install.sh
+python tools/python/benchmarks/cosmoglobe_benchmark.py
+# or:
+python tools/quick_bench.py
 ```
 
 ### Testing/Verification
