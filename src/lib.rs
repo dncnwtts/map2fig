@@ -81,6 +81,8 @@ pub mod render;
 pub mod rotation;
 pub mod scale;
 pub mod setup;
+pub mod simd;
+
 
 // Re-export useful items
 pub use cli::{Args, PlotConfig};
