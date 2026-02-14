@@ -28,3 +28,10 @@ lto = "fat"
 codegen-units = 1
 strip = true
 panic = "abort"
+
+# CPU-specific optimization: compile for native CPU (march=native)
+# Enables: AVX2, SSE4, and other modern CPU features
+# Significantly improves SIMD performance and auto-vectorization
+# Note: Binary won't be portable, but matches deployment environment
+[build]
+rustflags = ["-C", "target-cpu=native"]
