@@ -40,6 +40,7 @@ use std::f64::consts::PI;
 
 pub const HPX_UNSEEN: f64 = -1.6375e30;
 use crate::rotation::ViewTransform;
+use crate::simd;
 
 const HALF_PI: f64 = PI / 2.0;
 const TWOPI: f64 = 2.0 * PI;
@@ -634,6 +635,74 @@ pub fn sample_healpix_batch(
     (samples, mask)
 }
 
+/// Batch sample HEALPix with SIMD acceleration (8 pixels)
+///
+/// Vectorized version using SIMD primitives for coordinate transformations.
+/// Processes spherical-to-Cartesian and view transforms in parallel,
+/// then applies scalar HEALPix indexing (independent per-pixel).
+///
+/// Input:
+///   - map: HEALPix data array
+///   - meta: HEALPix metadata
+///   - view: view transformation
+///   - thetas: array of 8 theta values
+///   - lons: array of 8 longitude values
+///
+/// Output:
+///   - samples: array of 8 HEALPix values (or 0.0 if invalid)
+///   - mask: validity mask (true if sample succeeded)
+#[inline]
+pub fn sample_healpix_batch_simd(
+    map: &[f64],
+    meta: HealpixMeta,
+    view: &ViewTransform,
+    thetas: &[f64; 8],
+    lons: &[f64; 8],
+) -> ([f64; 8], [bool; 8]) {
+    // Check validity of input angles
+    let mut valid = [true; 8];
+    for i in 0..8 {
+        if !thetas[i].is_finite() || !lons[i].is_finite() {
+            valid[i] = false;
+        }
+    }
+
+    // Vectorized: convert spherical to Cartesian (8 theta-phi pairs)
+    let (x_view, y_view, z_view) = simd::simd_sph_to_vec_8(*thetas, *lons);
+
+    // Apply view transformation: v_map = view.apply_inverse(v_view)
+    // This requires applying the inverse rotation matrix to 8 vectors
+    let (x_map, y_map, z_map) = simd::simd_matvec3_8(view.rotation_inv.matrix, x_view, y_view, z_view);
+
+    // Vectorized: convert Cartesian back to spherical (8 vectors)
+    let (theta_m, lon_m) = simd::simd_vec_to_sph_8(x_map, y_map, z_map);
+
+    // Scalar: clamp angles and get HEALPix pixel indices
+    let mut samples = [0.0_f64; 8];
+    let mut mask = [false; 8];
+
+    for i in 0..8 {
+        if !valid[i] {
+            continue;
+        }
+
+        // Clamp and normalize angles
+        let theta_clamped = theta_m[i].clamp(0.0, PI);
+        let lon_normalized = lon_m[i].rem_euclid(2.0 * PI);
+
+        // Get HEALPix pixel index
+        let ipix = ang2pix(meta, theta_clamped, lon_normalized) as usize;
+
+        // Get value from map
+        if let Some(&value) = map.get(ipix) {
+            samples[i] = value;
+            mask[i] = true;
+        }
+    }
+
+    (samples, mask)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -886,6 +955,109 @@ fn test_sample_healpix_batch_matches_scalar() {
                     batch_mask[i]
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn test_sample_healpix_batch_simd_matches_scalar() {
+    use crate::rotation::{CoordSystem, ViewTransform};
+
+    // Create a simple test map
+    let nside = 16;
+    let npix = 12 * nside * nside;
+    let map: Vec<f64> = (0..npix).map(|i| (i as f64) * 0.1).collect();
+
+    let meta = HealpixMeta {
+        nside,
+        ordering: HealpixOrdering::Ring,
+        coord: CoordSystem::G,
+    };
+
+    // Identity view transform (no rotation, no coordinate change)
+    let view = ViewTransform::new(CoordSystem::G, CoordSystem::G, None);
+
+    // Test coordinates
+    let thetas = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1, 3.14];
+    let lons = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.28];
+
+    // Get SIMD batch results
+    let (simd_samples, simd_mask) = sample_healpix_batch_simd(&map, meta, &view, &thetas, &lons);
+
+    // Verify each against scalar version
+    for i in 0..8 {
+        let scalar_result = sample_healpix(&map, meta, &view, thetas[i], lons[i]);
+
+        match (scalar_result, simd_mask[i]) {
+            (Some(scalar), true) => {
+                // Both valid - check values match
+                assert!(
+                    (simd_samples[i] - scalar).abs() < 1e-12,
+                    "SIMD Sample mismatch at ({}, {}): simd={}, scalar={}",
+                    thetas[i],
+                    lons[i],
+                    simd_samples[i],
+                    scalar
+                );
+            }
+            (None, false) => {
+                // Both invalid - OK
+            }
+            _ => {
+                panic!(
+                    "SIMD Validity mismatch at ({}, {}): scalar_some={}, simd_valid={}",
+                    thetas[i],
+                    lons[i],
+                    scalar_result.is_some(),
+                    simd_mask[i]
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_sample_healpix_batch_simd_vs_batch() {
+    use crate::rotation::{CoordSystem, ViewTransform};
+
+    // Create a test map
+    let nside = 16;
+    let npix = 12 * nside * nside;
+    let map: Vec<f64> = (0..npix).map(|i| ((i as f64) * 0.1) % 1.0).collect();
+
+    let meta = HealpixMeta {
+        nside,
+        ordering: HealpixOrdering::Ring,
+        coord: CoordSystem::G,
+    };
+
+    // Identity view transform
+    let view = ViewTransform::new(CoordSystem::G, CoordSystem::G, None);
+
+    // Test coordinates
+    let thetas = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.1];
+    let lons = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0];
+
+    // Get batch and SIMD results
+    let (batch_samples, batch_mask) = sample_healpix_batch(&map, meta, &view, &thetas, &lons);
+    let (simd_samples, simd_mask) = sample_healpix_batch_simd(&map, meta, &view, &thetas, &lons);
+
+    // Cross-validate
+    for i in 0..8 {
+        assert_eq!(
+            batch_mask[i], simd_mask[i],
+            "Mask mismatch at index {}: batch={}, simd={}",
+            i, batch_mask[i], simd_mask[i]
+        );
+
+        if batch_mask[i] && simd_mask[i] {
+            assert!(
+                (batch_samples[i] - simd_samples[i]).abs() < 1e-13,
+                "Batch vs SIMD sample mismatch at {}: batch={}, simd={}",
+                i,
+                batch_samples[i],
+                simd_samples[i]
+            );
         }
     }
 }

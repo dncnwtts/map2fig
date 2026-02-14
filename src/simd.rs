@@ -404,3 +404,232 @@ mod tests {
         }
     }
 }
+
+//─────────────────────────────────────────────────────────────────────────────
+// HEALPix-Specific Vectorized Operations
+//─────────────────────────────────────────────────────────────────────────────
+
+/// Vectorized spherical to Cartesian conversion (8 theta-phi pairs)
+///
+/// Converts 8 spherical coordinates (theta, phi) to 3D Cartesian vectors (x, y, z).
+/// Used in HEALPix sampling pipeline: project coordinates → convert to vectors.
+///
+/// Formulas:
+/// - x = sin(theta) * cos(phi)
+/// - y = sin(theta) * sin(phi)
+/// - z = cos(theta)
+///
+/// Input:
+/// - theta: 8 polar angles [0, π]
+/// - phi: 8 azimuthal angles [0, 2π]
+///
+/// Output:
+/// - (x, y, z): 3 arrays of 8 Cartesian coordinates each
+#[inline]
+pub fn simd_sph_to_vec_8(theta: [f64; 8], phi: [f64; 8]) -> ([f64; 8], [f64; 8], [f64; 8]) {
+    // Vectorized sin/cos
+    let sin_theta = simd_sin_8(theta);
+    let cos_theta = simd_cos_8(theta);
+    let sin_phi = simd_sin_8(phi);
+    let cos_phi = simd_cos_8(phi);
+
+    // x = sin(theta) * cos(phi)
+    let x = simd_mul_8(sin_theta, cos_phi);
+    // y = sin(theta) * sin(phi)
+    let y = simd_mul_8(sin_theta, sin_phi);
+    // z = cos(theta)
+    let z = cos_theta;
+
+    (x, y, z)
+}
+
+/// Vectorized Cartesian to spherical conversion (8 vectors)
+///
+/// Converts 8 3D Cartesian vectors back to spherical coordinates.
+/// Used in HEALPix sampling after view transformation.
+///
+/// Formulas:
+/// - theta = acos(clamp(z, -1, 1))
+/// - phi = atan2(y, x)
+///
+/// Input:
+/// - x, y, z: 3 arrays of Cartesian coordinates
+///
+/// Output:
+/// - (theta, phi): 2 arrays of 8 spherical coordinates each
+#[inline]
+pub fn simd_vec_to_sph_8(
+    x: [f64; 8],
+    y: [f64; 8],
+    z: [f64; 8],
+) -> ([f64; 8], [f64; 8]) {
+    // Clamp z to avoid acos domain errors
+    let z_clamped = simd_clamp_8(z, -1.0, 1.0);
+
+    // theta = acos(z_clamped)
+    let theta = simd_acos_8(z_clamped);
+
+    // phi = atan2(y, x)
+    let phi = simd_atan2_8(y, x);
+
+    (theta, phi)
+}
+
+/// Vectorized 3x3 matrix-vector multiplication (8 vectors)
+///
+/// Applies 3x3 rotation/transformation matrix to 8 vectors in parallel.
+/// Used in HEALPix sampling for view transformation application.
+///
+/// Formula for each vector i:
+/// - x'[i] = m[0][0] * x[i] + m[0][1] * y[i] + m[0][2] * z[i]
+/// - y'[i] = m[1][0] * x[i] + m[1][1] * y[i] + m[1][2] * z[i]
+/// - z'[i] = m[2][0] * x[i] + m[2][1] * y[i] + m[2][2] * z[i]
+///
+/// Input:
+/// - mat: 3x3 matrix (row-major, [row][col])
+/// - x, y, z: 3 arrays of input vector components
+///
+/// Output:
+/// - (x', y', z'): 3 arrays of transformed vector components
+#[inline]
+pub fn simd_matvec3_8(
+    mat: [[f64; 3]; 3],
+    x: [f64; 8],
+    y: [f64; 8],
+    z: [f64; 8],
+) -> ([f64; 8], [f64; 8], [f64; 8]) {
+    // First row: [m00*x[i] + m01*y[i] + m02*z[i]]
+    let x_new = simd_add_8(
+        simd_add_8(
+            simd_mul_8(x, [mat[0][0]; 8]),
+            simd_mul_8(y, [mat[0][1]; 8]),
+        ),
+        simd_mul_8(z, [mat[0][2]; 8]),
+    );
+
+    // Second row: [m10*x[i] + m11*y[i] + m12*z[i]]
+    let y_new = simd_add_8(
+        simd_add_8(
+            simd_mul_8(x, [mat[1][0]; 8]),
+            simd_mul_8(y, [mat[1][1]; 8]),
+        ),
+        simd_mul_8(z, [mat[1][2]; 8]),
+    );
+
+    // Third row: [m20*x[i] + m21*y[i] + m22*z[i]]
+    let z_new = simd_add_8(
+        simd_add_8(
+            simd_mul_8(x, [mat[2][0]; 8]),
+            simd_mul_8(y, [mat[2][1]; 8]),
+        ),
+        simd_mul_8(z, [mat[2][2]; 8]),
+    );
+
+    (x_new, y_new, z_new)
+}
+
+#[cfg(test)]
+mod healpix_tests {
+    use super::*;
+
+    #[test]
+    fn test_simd_sph_to_vec_8() {
+        let theta = [0.0, PI / 2.0, PI, 0.0, PI / 4.0, PI / 4.0, PI / 3.0, PI / 6.0];
+        let phi = [0.0, 0.0, 0.0, PI / 2.0, 0.0, PI / 2.0, PI / 4.0, PI / 3.0];
+
+        let (x, y, z) = simd_sph_to_vec_8(theta, phi);
+
+        // Test case 0: theta=0, phi=0 => (0, 0, 1) [north pole]
+        assert!((x[0] - 0.0).abs() < 1e-14);
+        assert!((y[0] - 0.0).abs() < 1e-14);
+        assert!((z[0] - 1.0).abs() < 1e-14);
+
+        // Test case 1: theta=π/2, phi=0 => (1, 0, 0) [equator, prime meridian]
+        assert!((x[1] - 1.0).abs() < 1e-14);
+        assert!((y[1] - 0.0).abs() < 1e-14);
+        assert!((z[1] - 0.0).abs() < 1e-14);
+
+        // Test case 2: theta=π, phi=0 => (0, 0, -1) [south pole]
+        assert!((x[2] - 0.0).abs() < 1e-14);
+        assert!((y[2] - 0.0).abs() < 1e-14);
+        assert!((z[2] - (-1.0)).abs() < 1e-14);
+
+        // Test case 3: theta=0 (north pole again, different phi, should still be (0,0,1))
+        // phi doesn't matter at the poles
+        assert!((x[3] - 0.0).abs() < 1e-14);
+        assert!((y[3] - 0.0).abs() < 1e-14);
+        assert!((z[3] - 1.0).abs() < 1e-14);
+    }
+
+    #[test]
+    fn test_simd_vec_to_sph_8_roundtrip() {
+        let theta_in = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 0.1, 3.14];
+        let phi_in = [0.0, PI / 4.0, PI / 2.0, PI, 3.0 * PI / 2.0, 0.1, 0.2, 0.3];
+
+        // Convert to Cartesian
+        let (x, y, z) = simd_sph_to_vec_8(theta_in, phi_in);
+
+        // Convert back to spherical
+        let (theta_out, phi_out) = simd_vec_to_sph_8(x, y, z);
+
+        // Check roundtrip (the phi for theta=0 or theta=π is undefined in the mathematics)
+        for i in 0..8 {
+            assert!(
+                (theta_out[i] - theta_in[i]).abs() < 1e-12,
+                "Theta mismatch at {}: {} vs {}",
+                i,
+                theta_out[i],
+                theta_in[i]
+            );
+
+            // For phi, compare modulo 2π (wrap around)
+            let phi_diff = (phi_out[i] - phi_in[i]).abs();
+            let phi_diff_wrapped = (2.0 * PI - phi_diff).min(phi_diff);
+            assert!(
+                phi_diff_wrapped < 1e-12 || theta_in[i].sin().abs() < 1e-10,
+                "Phi mismatch at {}: {} vs {} (theta_sin={})",
+                i,
+                phi_out[i],
+                phi_in[i],
+                theta_in[i].sin()
+            );
+        }
+    }
+
+    #[test]
+    fn test_simd_matvec3_8_identity() {
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+        let x_in = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let y_in = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5];
+        let z_in = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+
+        let (x_out, y_out, z_out) = simd_matvec3_8(identity, x_in, y_in, z_in);
+
+        // Should be unchanged
+        for i in 0..8 {
+            assert!((x_out[i] - x_in[i]).abs() < 1e-14);
+            assert!((y_out[i] - y_in[i]).abs() < 1e-14);
+            assert!((z_out[i] - z_in[i]).abs() < 1e-14);
+        }
+    }
+
+    #[test]
+    fn test_simd_matvec3_8_scaling() {
+        // Diagonal matrix with scaling factors
+        let scale_matrix = [[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 5.0]];
+
+        let x_in = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let y_in = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let z_in = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+
+        let (x_out, y_out, z_out) = simd_matvec3_8(scale_matrix, x_in, y_in, z_in);
+
+        // x should be scaled by 2, y by 3, z by 5
+        for i in 0..8 {
+            assert!((x_out[i] - 2.0 * x_in[i]).abs() < 1e-14);
+            assert!((y_out[i] - 3.0 * y_in[i]).abs() < 1e-14);
+            assert!((z_out[i] - 5.0 * z_in[i]).abs() < 1e-14);
+        }
+    }
+}
