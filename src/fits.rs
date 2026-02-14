@@ -29,7 +29,7 @@
 //! ```
 
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read, Write};
 
 use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
 use fitsrs::{Fits, HDU, card::Value};
@@ -245,13 +245,27 @@ fn save_cache(filepath: &str, nside: i64, ordering: &str, indxschm: &str) {
 
 /// Read FITS metadata with caching support
 /// This function attempts to use cached metadata to avoid expensive header parsing
+/// When MAP2FIG_PROFILE environment variable is set, outputs diagnostic timing info
 pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)> {
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+    
     // Try cache first
+    let cache_start = std::time::Instant::now();
     if let Some((nside, order, indxschm)) = try_load_cache(filename) {
+        if enable_profile {
+            let elapsed = cache_start.elapsed();
+            eprintln!("[I/O DIAG] Cache HIT: {} ({:.3}µs)", filename, elapsed.as_micros());
+        }
         return Some((nside, order, indxschm));
     }
 
     // Cache miss: parse FITS file
+    if enable_profile {
+        let elapsed = cache_start.elapsed();
+        eprintln!("[I/O DIAG] Cache MISS: {} (lookup took {:.3}µs)", filename, elapsed.as_micros());
+    }
+    
+    let parse_start = std::time::Instant::now();
     let f = File::open(filename).ok()?;
     let reader = BufReader::new(f);
     let mut fits = Fits::from_reader(reader);
@@ -292,6 +306,11 @@ pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)>
         }
     }
 
+    let parse_elapsed = parse_start.elapsed();
+    if enable_profile {
+        eprintln!("[I/O DIAG] FITS parse took {:.2}ms", parse_elapsed.as_secs_f64() * 1000.0);
+    }
+
     if nside > 0 {
         // Cache for next time
         save_cache(filename, nside, &ordering, &indxschm);
@@ -300,3 +319,146 @@ pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)>
         None
     }
 }
+
+// ============================================================================
+// Tier 5.2.1: Column Data Caching
+// ============================================================================
+
+/// Generate cache key for column data
+/// Format: {SHA256(filepath)}_{column_idx}_{mtime_secs}
+fn get_column_cache_key(filepath: &str, col_idx: usize, mtime_secs: u64) -> Option<String> {
+    use sha2::{Sha256, Digest};
+    
+    let mut hasher = Sha256::new();
+    hasher.update(filepath.as_bytes());
+    let hash = hasher.finalize();
+    
+    // Convert hash to hex string (first 16 chars for brevity)
+    let hash_str = format!("{:x}", hash);
+    let short_hash = &hash_str[..16.min(hash_str.len())];
+    
+    Some(format!("fits_col_{}_{:03}_{}", short_hash, col_idx, mtime_secs))
+}
+
+/// Try to load column data from cache
+/// Returns Some(Vec<f64>) if cache exists and is valid, None otherwise
+fn try_load_column_cache(filepath: &str, col_idx: usize) -> Option<Vec<f64>> {
+    let cache_dir = get_cache_dir()?;
+    
+    // Get file metadata for mtime validation
+    let metadata = std::fs::metadata(filepath).ok()?;
+    let mtime_secs = metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    
+    // Generate cache key and filename
+    let cache_key = get_column_cache_key(filepath, col_idx, mtime_secs)?;
+    let cache_file = cache_dir.join(&cache_key);
+    
+    // Try to open and read cache file
+    let mut file = File::open(cache_file).ok()?;
+    
+    // Read header (16 bytes)
+    let mut header = [0u8; 16];
+    file.read_exact(&mut header).ok()?;
+    
+    // Parse header
+    let magic = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
+    let version = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
+    let num_pixels = u32::from_le_bytes([header[8], header[9], header[10], header[11]]);
+    
+    // Validate magic and version
+    if magic != 0xCAFEBABE || version != 1 {
+        return None;
+    }
+    
+    // Read data
+    let mut data = vec![0.0; num_pixels as usize];
+    let byte_data = unsafe {
+        std::slice::from_raw_parts_mut(
+            data.as_mut_ptr() as *mut u8,
+            num_pixels as usize * 8,
+        )
+    };
+    file.read_exact(byte_data).ok()?;
+    
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+    if enable_profile {
+        eprintln!("[I/O DIAG] Column cache HIT: {} col#{}", filepath, col_idx);
+    }
+    
+    Some(data)
+}
+
+/// Save column data to cache
+fn save_column_cache(filepath: &str, col_idx: usize, data: &[f64]) -> Option<()> {
+    let cache_dir = get_cache_dir()?;
+    let _ = std::fs::create_dir_all(&cache_dir);
+    
+    // Get file metadata for mtime
+    let metadata = std::fs::metadata(filepath).ok()?;
+    let mtime_secs = metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    
+    // Generate cache key and filename
+    let cache_key = get_column_cache_key(filepath, col_idx, mtime_secs)?;
+    let cache_file = cache_dir.join(&cache_key);
+    
+    // Create file
+    let mut file = File::create(cache_file).ok()?;
+    
+    // Write header: magic (0xCAFEBABE), version (1), num_pixels, reserved
+    file.write_all(&0xCAFEBABEu32.to_le_bytes()).ok()?;
+    file.write_all(&1u32.to_le_bytes()).ok()?;
+    file.write_all(&(data.len() as u32).to_le_bytes()).ok()?;
+    file.write_all(&0u32.to_le_bytes()).ok()?;
+    
+    // Write data as little-endian f64 bytes
+    let byte_data = unsafe {
+        std::slice::from_raw_parts(
+            data.as_ptr() as *const u8,
+            data.len() * 8,
+        )
+    };
+    file.write_all(byte_data).ok()?;
+    
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+    if enable_profile {
+        eprintln!("[I/O DIAG] Column cache SAVE: {} col#{} ({} pixels)", filepath, col_idx, data.len());
+    }
+    
+    Some(())
+}
+
+/// Read a HEALPix column with caching support (Tier 5.2.1 optimization)
+/// 
+/// This function reads column data from cache if available, otherwise reads from FITS
+/// and saves to cache for future use. Cache is automatically invalidated if file mtime changes.
+pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
+    // Try cache first
+    if let Some(data) = try_load_column_cache(filename, col_idx) {
+        return data;
+    }
+    
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+    if enable_profile {
+        eprintln!("[I/O DIAG] Column cache MISS: {} col#{}", filename, col_idx);
+    }
+    
+    // Cache miss: read from FITS
+    let data = read_healpix_column(filename, col_idx);
+    
+    // Save to cache for next time (ignore if save fails)
+    let _ = save_column_cache(filename, col_idx, &data);
+    
+    data
+}
+
+

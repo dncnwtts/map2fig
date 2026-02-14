@@ -1,4 +1,4 @@
-use crate::fits::read_healpix_column;
+use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
     HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map, is_seen, read_healpix_meta,
@@ -38,8 +38,8 @@ pub fn load_and_process_data(
         )
     })?;
 
-    // Load and scale data
-    let mut map = read_healpix_column(new_fits_path, col);
+    // Load and scale data (Tier 5.2.1: Column caching)
+    let mut map = read_healpix_column_cached(new_fits_path, col);
     for v in &mut map {
         if *v == 0.0 {
             *v = HPX_UNSEEN;
