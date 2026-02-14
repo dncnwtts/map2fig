@@ -254,6 +254,10 @@ pub struct Args {
     /// Coordinate system of mask file (gal, eq, ecl) - auto-detects if not specified
     #[arg(long)]
     pub mask_coord: Option<String>,
+
+    /// Fast render mode: skip graticule, colorbar, and labels for faster iteration
+    #[arg(long)]
+    pub fast_render: bool,
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends
