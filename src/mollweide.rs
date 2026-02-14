@@ -76,8 +76,7 @@ impl Projection for MollweideProjection {
         }
 
         let theta_aux = py.asin();
-        let sin_theta = 2.0 * theta_aux;
-        let sin_lat = (sin_theta + sin_theta.sin()) * (1.0 / PI);
+        let sin_lat = (2.0 * theta_aux + (2.0 * theta_aux).sin()) / PI;
 
         if sin_lat.abs() > 1.0 {
             return None;
@@ -88,7 +87,7 @@ impl Projection for MollweideProjection {
         if c.abs() < 1e-12 {
             return None;
         }
-        let lon = PI * px * (0.5 / c);  // Precompute PI/2 as constant multiplication
+        let lon = PI * px / (2.0 * c);
 
         Some((lon, lat))
     }
