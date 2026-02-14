@@ -10,6 +10,17 @@ repository = "https://github.com/dncnwtts/map2fig"
 license = "MIT"
 keywords = ["healpix", "astronomy", "visualization", "mollweide", "fits"]
 categories = ["science", "visualization"]
+exclude = [
+    "docs/",
+    "examples/outputs/",
+    "examples/output/",
+    "perf.data",
+    "perf.data.old",
+    "target/",
+    "test*.png",
+    "smoke.png",
+    "out*.txt",
+]
 
 [dependencies]
 cdshealpix = "0.7"
