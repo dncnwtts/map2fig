@@ -34,6 +34,35 @@ Comparison between `main` branch (baseline) and `performance-optimizations` bran
 
 ---
 
+## Tier 4 Optimizations (Feb 14, 2026)
+
+### Tier 4.1: Native CPU Optimization (march=native)
+
+| Branch | FITS File | Linear 512 | Linear 1200 | Log 512 | Log 1200 | Notes |
+|--------|-----------|-----------|-----------|---------|----------|-------|
+| `tier4-optimization` | `cosmoglobe_clipped.fits` | 0.438s | 0.943s | 0.377s | 0.772s | Phase 4.1: march=native enabled +3% variation |
+
+**Analysis:**
+- Linear 1200: 0.943s (vs baseline 0.914s = -3.2% slower, likely timing variance)
+- Log 1200: 0.772s (vs baseline 0.777s = +0.6% improvement)
+- Conclusion: Native CPU optimization enabled but isolated impact minimal
+- Root cause: I/O + PDF generation dominate CPU-bound scaling work
+- Verdict: Enabled and kept, minimal overhead, enables future improvements
+
+### Tier 4.2a: Metadata Caching Infrastructure (In Progress)
+
+Infrastructure added but not yet integrated:
+- serde_json caching framework
+- File metadata cache with mtime validation
+- Cache directory: ~/.cache/map2fig/
+- Next: Integrate into read_healpix_meta()
+
+| Branch | FITS File | Linear 512 | Linear 1200 | Log 512 | Log 1200 | Notes |
+|--------|-----------|-----------|-----------|---------|----------|-------|
+| `tier4-optimization` | `cosmoglobe_clipped.fits` | TBD | 0.916s | TBD | TBD | Caching infrastructure added, benchmarking pending |
+
+---
+
 ## Future Benchmark Results
 
 Add new rows below as major updates are completed. Include:
