@@ -1048,3 +1048,10 @@ mod batch_integration_tests {
         assert!((result[2] - 1.0).abs() < 1e-14); // log(100) at max
     }
 }
+
+//─────────────────────────────────────────────────────────────────────────────
+// Full Pipeline Integration Tests (Phase 5.2 Validation)
+//─────────────────────────────────────────────────────────────────────────────
+// NOTE: Full pipeline tests deferred to Phase 5.2 integration work.
+// Phase 5.1 focuses on individual operation verification.
+// Complete pipeline tests will be added after main render loop integration.
