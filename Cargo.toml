@@ -8,7 +8,6 @@ documentation = "https://docs.rs/map2fig"
 homepage = "https://github.com/dncnwtts/map2fig"
 repository = "https://github.com/dncnwtts/map2fig"
 license = "MIT"
-license-file = "LICENSE.txt"
 keywords = ["healpix", "astronomy", "visualization", "mollweide", "fits"]
 categories = ["science", "visualization"]
 
