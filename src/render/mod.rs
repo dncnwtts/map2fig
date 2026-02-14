@@ -18,4 +18,5 @@ pub mod raster;
 pub mod target;
 
 pub use pdf::PdfBackend;
+pub use printpdf_backend::PrintpdfBackend;
 pub use raster::RasterBackend;

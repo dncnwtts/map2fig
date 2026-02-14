@@ -38,6 +38,25 @@ impl BenchmarkResult {
     pub fn duration_ms(&self) -> f64 {
         self.duration.as_secs_f64() * 1000.0
     }
+
+    pub fn to_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut json = format!(
+            r#"{{"name": "{}", "duration_ms": {:.2}"#,
+            self.name,
+            self.duration_ms()
+        );
+
+        if let Some(size) = self.file_size_bytes {
+            json.push_str(&format!(r#", "file_size_bytes": {}"#, size));
+        }
+
+        if let Some(mem) = self.memory_peak_mb {
+            json.push_str(&format!(r#", "memory_peak_mb": {:.2}"#, mem));
+        }
+
+        json.push('}');
+        Ok(json)
+    }
 }
 
 /// A collection of benchmark results for comparison

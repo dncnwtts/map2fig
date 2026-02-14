@@ -62,7 +62,7 @@ pub fn compute_mollweide_scale(
     MollweideScale { minv, maxv }
 }
 
-fn render_mollweide_pixels(
+pub fn render_mollweide_pixels(
     params: crate::params::RenderMollweideParams,
     layout: MollweideLayout,
     sink: &mut dyn PixelSink,
