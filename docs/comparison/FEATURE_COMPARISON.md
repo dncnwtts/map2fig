@@ -254,12 +254,11 @@ Output: PNG only
 ```
 -o/--out FILENAME
 Supports: PNG, PDF
---pdf-backend cairo|printpdf (default: cairo)
-  - cairo: vector graphics, colorbar quality
-  - printpdf: faster, larger files, rasterized overlays
+--pdf-backend cairo (default)
+  - cairo: high-quality vector graphics with colorbar and overlays
 ```
 
-**Status:** map2fig superior (PNG + PDF with 2 backends)
+**Status:** map2fig superior (PNG + PDF output)
 
 ---
 
