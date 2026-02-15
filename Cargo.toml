@@ -30,7 +30,7 @@ rusttype = "0.9"
 fitsrs = "0.4"
 rand = "0.10"
 clap = { version = "4", features = ["derive"] }
-cairo-rs = { version = "0.19", features = ["pdf"] }
+cairo-rs = { version = "0.21", features = ["pdf"] }
 sha2 = "0.10"
 tempfile = "3"
 directories = "6"
