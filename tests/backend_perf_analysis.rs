@@ -1,11 +1,10 @@
 /// Real-world benchmark comparing Cairo PDF vs alternative backends
 /// This directly measures the actual rendering time difference
-
 #[cfg(test)]
 mod backend_performance {
+    use image::{ImageBuffer, Rgba};
     use map2fig::benchmark::{BenchmarkContext, BenchmarkSuite};
     use std::time::Instant;
-    use image::{ImageBuffer, Rgba};
 
     /// Generate synthetic HEALPix-like data for testing
     fn generate_test_map(nside_power: usize) -> Vec<f64> {
@@ -28,7 +27,7 @@ mod backend_performance {
         // This benchmark measures the time difference between:
         // 1. Regular Cairo PDF rendering (full pipeline)
         // 2. "printpdf" backend (PPM output, no PDF encoding overhead)
-        
+
         println!("\n");
         println!("╔════════════════════════════════════════════════════════════════╗");
         println!("║         PDF BACKEND PERFORMANCE ANALYSIS                        ║");
@@ -48,32 +47,40 @@ mod backend_performance {
 
         // Benchmark 1: Full Cairo PDF rendering path (including finalization)
         let _cairo_start = Instant::now();
-        
+
         // Simulate Cairo PDF rendering overhead by doing file operations
         let cairo_file = "/tmp/bench_cairo.pdf";
         let _start = Instant::now();
-        
+
         // Create a dummy file to simulate PDF writing (no actual rendering)
         let dummy_pdf_size = 500_000; // Typical PDF is ~400-600KB
         let dummy_data = vec![0u8; dummy_pdf_size];
         let _ = std::fs::write(cairo_file, &dummy_data);
-        
-        let cairo_result = BenchmarkContext::start("Cairo PDF (file write baseline)").finish_with_file(cairo_file);
+
+        let cairo_result =
+            BenchmarkContext::start("Cairo PDF (file write baseline)").finish_with_file(cairo_file);
         suite.add(cairo_result.clone());
-        
+
         println!("Baseline measurements:");
-        println!("  Cairo PDF file write (500KB): {:.2} ms", cairo_result.duration_ms());
+        println!(
+            "  Cairo PDF file write (500KB): {:.2} ms",
+            cairo_result.duration_ms()
+        );
 
         // Benchmark 2: Alternative backend (PPM file write, smaller)
         let ppm_file = "/tmp/bench_ppm.ppm";
         let ppm_size = 1024 * 1024 * 3 + 50; // 3MB RGB image + header
         let ppm_data = vec![0u8; ppm_size];
         let _ = std::fs::write(ppm_file, &ppm_data);
-        
-        let ppm_result = BenchmarkContext::start("PPM output (uncompressed, 3.1MB)").finish_with_file(ppm_file);
+
+        let ppm_result =
+            BenchmarkContext::start("PPM output (uncompressed, 3.1MB)").finish_with_file(ppm_file);
         suite.add(ppm_result.clone());
-        
-        println!("  PPM file write (3.1MB): {:.2} ms", ppm_result.duration_ms());
+
+        println!(
+            "  PPM file write (3.1MB): {:.2} ms",
+            ppm_result.duration_ms()
+        );
         println!();
 
         // Benchmark 3: Image data serialization only
@@ -86,9 +93,12 @@ mod backend_performance {
             rgb_data.push(pixel[2]);
         }
         let serialize_time = serialize_start.elapsed();
-        
+
         println!("Component measurements:");
-        println!("  Image RGBA→RGB conversion: {:.2} ms", serialize_time.as_secs_f64() * 1000.0);
+        println!(
+            "  Image RGBA→RGB conversion: {:.2} ms",
+            serialize_time.as_secs_f64() * 1000.0
+        );
 
         // Analysis
         println!();
@@ -99,7 +109,7 @@ mod backend_performance {
 
         let cairo_ms = cairo_result.duration_ms();
         let ppm_ms = ppm_result.duration_ms();
-        
+
         // Calculate overhead as percentage
         let _ppm_overhead_pct = (ppm_ms / cairo_ms * 100.0) - 100.0;
         let _cairo_overhead_pct = (cairo_ms / ppm_ms * 100.0) - 100.0;
@@ -107,17 +117,25 @@ mod backend_performance {
         println!("Cairo PDF write time:    {:.2} ms (500KB file)", cairo_ms);
         println!("PPM write time:          {:.2} ms (3.1MB file)", ppm_ms);
         println!();
-        
+
         if cairo_ms > ppm_ms {
             let speedup = cairo_ms / ppm_ms;
             let savings = cairo_ms - ppm_ms;
-            println!("✅ PPM is {:.2}x faster ({:.2} ms faster, {:.1}% improvement)", 
-                     speedup, savings, (savings / cairo_ms) * 100.0);
+            println!(
+                "✅ PPM is {:.2}x faster ({:.2} ms faster, {:.1}% improvement)",
+                speedup,
+                savings,
+                (savings / cairo_ms) * 100.0
+            );
         } else {
             let overhead = ppm_ms - cairo_ms;
             let overhead_pct = (overhead / cairo_ms) * 100.0;
-            println!("⚠️  PPM is {:.2}x slower ({:.2} ms slower, {:.1}% overhead)", 
-                     ppm_ms / cairo_ms, overhead, overhead_pct);
+            println!(
+                "⚠️  PPM is {:.2}x slower ({:.2} ms slower, {:.1}% overhead)",
+                ppm_ms / cairo_ms,
+                overhead,
+                overhead_pct
+            );
         }
 
         println!();
@@ -172,7 +190,7 @@ mod backend_performance {
         println!();
         println!("  TOTAL:                      300ms");
         println!();
-        
+
         println!("Optimization Potential:");
         println!("─────────────────────");
         println!();
@@ -182,21 +200,21 @@ mod backend_performance {
         println!("  Feasibility: EASY (Cairo API change)");
         println!("  Status: ❌ Below 1% threshold");
         println!();
-        
+
         println!("Option B: Use printpdf with uncompressed PDF");
         println!("  Estimate: Save ~50-60ms (16-20%)");
         println!("  Trade-off: Uncompressed PDF 2-3x larger, no vector overlays");
         println!("  Feasibility: MEDIUM (need PDF writer)");
         println!("  Status: ✅ WELL above 1% threshold");
         println!();
-        
+
         println!("Option C: Custom minimal PDF format");
         println!("  Estimate: Save ~30-40ms (10-13%)");
         println!("  Trade-off: High complexity, custom encoding");
         println!("  Feasibility: HARD (significant development)");
         println!("  Status: ✅ Above 1% threshold");
         println!();
-        
+
         println!("RECOMMENDATION:");
         println!("═══════════════════════════════════════════════════════════════════");
         println!("Option B (printpdf) meets your >1% threshold with 15%+ improvement.");

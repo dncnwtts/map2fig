@@ -1,6 +1,6 @@
 use image::{ImageBuffer, Rgba};
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 
 /// Optimized PDF rendering using printpdf library
 /// For now, this generates uncompressed PPM files for benchmarking

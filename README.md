@@ -796,6 +796,21 @@ Typical performance on a modern CPU:
 - For benchmarking or ultra-high-resolution output (4000px+), disable downgrading with `--no-downgrade`
 - Batch processing is embarrassingly parallel—use shell loops to process multiple files
 
+### Comparison with map2png
+
+map2fig can be benchmarked against the widely-used `map2png` tool from the HEALPix community. Libraries are automatically discovered from standard build locations:
+
+```bash
+# Run the comparison benchmark (auto-detects libhealpix_cxx and libhdf5)
+./tools/scripts/compare_map2png_vs_map2fig.sh
+
+# Or set custom library paths if needed
+export MAP2PNG_LIBPATH="/custom/lib:$LD_LIBRARY_PATH"
+./tools/scripts/compare_map2png_vs_map2fig.sh
+```
+
+The benchmark script gracefully handles missing map2png dependencies and will report map2fig standalone PNG performance metrics if comparison is unavailable. See [tools/README.md](tools/README.md) for detailed setup instructions and the map2png command-line interface.
+
 ## Troubleshooting
 
 **Gnomonic map is too small**

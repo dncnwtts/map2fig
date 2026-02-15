@@ -11,12 +11,12 @@ pub trait RenderBackend {
     fn draw_text(&mut self, x: f64, y: f64, size: f64, text: &str);
 }
 
+pub mod cairo_uncompressed;
 pub mod pdf;
 pub mod png;
 pub mod printpdf_backend;
 pub mod raster;
 pub mod target;
-pub mod cairo_uncompressed;
 
 pub use pdf::PdfBackend;
 pub use printpdf_backend::PrintpdfBackend;

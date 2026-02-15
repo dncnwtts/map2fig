@@ -6,6 +6,7 @@ use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
 use crate::healpix::is_seen;
 use crate::layout::{MollweideLayout, compute_mollweide_layout};
 use crate::params::MollweideParams;
+use crate::plot::mollweide_printpdf::plot_mollweide_pdf_printpdf;
 use crate::render::pdf::{draw_colorbar_pdf, draw_projection_border_pdf};
 use crate::render::raster::RasterGrid;
 use crate::rotation::CoordSystem;
@@ -13,7 +14,6 @@ use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
 use crate::{PixelSink, PngSink};
-use crate::plot::mollweide_printpdf::plot_mollweide_pdf_printpdf;
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;

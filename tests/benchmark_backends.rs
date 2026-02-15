@@ -25,8 +25,8 @@ mod pdf_backend_comparison {
 
         // Fill with test pattern
         for (x, y, pixel) in img.enumerate_pixels_mut() {
-            let r = ((x as u32 * 255) / width) as u8;
-            let g = ((y as u32 * 255) / height) as u8;
+            let r = ((x * 255) / width) as u8;
+            let g = ((y * 255) / height) as u8;
             let b = 128;
             *pixel = image::Rgba([r, g, b, 255]);
         }

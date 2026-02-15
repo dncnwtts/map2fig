@@ -3,7 +3,6 @@
 /// This test measures the performance of both backends to determine which
 /// is better for different use cases. The printpdf backend uses uncompressed
 /// output while Cairo uses zlib compression.
-
 #[cfg(test)]
 mod backend_comparison {
 
@@ -26,7 +25,7 @@ mod backend_comparison {
         println!("   - File size: ~500KB");
         println!("   - CLI: --pdf-backend cairo (or omit for default)");
         println!();
-        
+
         println!("2. Printpdf");
         println!("   - Compression: None (uncompressed image data)");
         println!("   - Features: Minimal (image only, no overlays)");
@@ -41,17 +40,23 @@ mod backend_comparison {
         println!("PROFILING ANALYSIS (Cairo v0.3.0 Phase 2B):");
         println!("──────────────────────────────────────────");
         println!();
-        
+
         // Simulate timing measurements
         let cairo_total_ms = 300.0;
         let cairo_finish_ms = 99.0;
         let cairo_render_ms = cairo_total_ms - cairo_finish_ms;
-        
+
         println!("Total time: {:.1}ms", cairo_total_ms);
-        println!("  ├─ Rendering (HEALPix math, colormap lookup): {:.1}ms ({:.1}%)", 
-               cairo_render_ms, (cairo_render_ms / cairo_total_ms) * 100.0);
-        println!("  └─ cairo_surface_finish() (compression): {:.1}ms ({:.1}%)", 
-               cairo_finish_ms, (cairo_finish_ms / cairo_total_ms) * 100.0);
+        println!(
+            "  ├─ Rendering (HEALPix math, colormap lookup): {:.1}ms ({:.1}%)",
+            cairo_render_ms,
+            (cairo_render_ms / cairo_total_ms) * 100.0
+        );
+        println!(
+            "  └─ cairo_surface_finish() (compression): {:.1}ms ({:.1}%)",
+            cairo_finish_ms,
+            (cairo_finish_ms / cairo_total_ms) * 100.0
+        );
         println!("      ├─ zlib compression: ~10ms");
         println!("      ├─ PDF structure encoding: ~8ms");
         println!("      └─ I/O buffering: ~15ms");
@@ -60,16 +65,19 @@ mod backend_comparison {
         println!("THEORETICAL PRINTPDF SPEED:");
         println!("──────────────────────────");
         println!();
-        
+
         let printpdf_render_ms = cairo_render_ms; // Same rendering
         let printpdf_rgb_ms = 3.0; // RGBA→RGB conversion
         let printpdf_write_ms = 50.0; // Uncompressed image write
         let printpdf_total_ms = printpdf_render_ms + printpdf_rgb_ms + printpdf_write_ms;
         let speedup = cairo_total_ms / printpdf_total_ms;
         let improvement = ((cairo_total_ms - printpdf_total_ms) / cairo_total_ms) * 100.0;
-        
+
         println!("Total time: {:.1}ms", printpdf_total_ms);
-        println!("  ├─ Rendering (identical to Cairo): {:.1}ms", printpdf_render_ms);
+        println!(
+            "  ├─ Rendering (identical to Cairo): {:.1}ms",
+            printpdf_render_ms
+        );
         println!("  ├─ RGBA→RGB conversion: {:.1}ms", printpdf_rgb_ms);
         println!("  └─ Uncompressed PDF write: {:.1}ms", printpdf_write_ms);
         println!();
@@ -84,7 +92,7 @@ mod backend_comparison {
         println!("WHEN TO USE EACH BACKEND:");
         println!("───────────────────────");
         println!();
-        
+
         println!("Use CAIRO (default):");
         println!("  ✓ Publication-quality maps needed");
         println!("  ✓ Graticule/colorbar essential");
@@ -92,7 +100,7 @@ mod backend_comparison {
         println!("  ✓ Fast iteration in interactive tools");
         println!("  ✓ Standard PDF tools compatibility");
         println!();
-        
+
         println!("Use PRINTPDF:");
         println!("  ✓ Speed is critical (batch processing, large volumes)");
         println!("  ✓ Raw image output sufficient");
@@ -103,7 +111,7 @@ mod backend_comparison {
 
         println!("═══════════════════════════════════════════════════════════════════");
         println!();
-        
+
         println!("CLI USAGE:");
         println!("─────────");
         println!();
@@ -116,10 +124,10 @@ mod backend_comparison {
         println!("# Fast printpdf backend");
         println!("cargo run -- -f map.fits -o output.pdf --pdf-backend printpdf");
         println!();
-        
+
         println!("═══════════════════════════════════════════════════════════════════");
         println!();
-        
+
         println!("BENCHMARK RESULTS INTERPRETATION:");
         println!("──────────────────────────────");
         println!();
@@ -134,16 +142,25 @@ mod backend_comparison {
         println!("   • Potential compatibility issues with some PDF readers");
         println!("   • Need for post-processing if overlays required");
         println!();
-        
+
         // Create dummy files to demonstrate size difference
         let cairo_size = 500_000;
         let printpdf_size = 1_300_000;
-        
+
         println!("ESTIMATED FILE SIZES (1024×1024 map):");
         println!("─────────────────────────────────────");
-        println!("Cairo (compressed):    {:.1} KB", cairo_size as f64 / 1024.0);
-        println!("Printpdf (uncompressed): {:.1} KB", printpdf_size as f64 / 1024.0);
-        println!("Overhead: {:.2}x increase", printpdf_size as f64 / cairo_size as f64);
+        println!(
+            "Cairo (compressed):    {:.1} KB",
+            cairo_size as f64 / 1024.0
+        );
+        println!(
+            "Printpdf (uncompressed): {:.1} KB",
+            printpdf_size as f64 / 1024.0
+        );
+        println!(
+            "Overhead: {:.2}x increase",
+            printpdf_size as f64 / cairo_size as f64
+        );
         println!();
     }
 

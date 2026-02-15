@@ -132,7 +132,6 @@ pub fn plot_mollweide_pdf_printpdf(params: MollweideParams) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_minimal_pdf_rendering() {

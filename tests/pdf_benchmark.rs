@@ -15,7 +15,7 @@ mod pdf_rendering_benchmarks {
 
     fn cleanup_test_files(paths: &[&str]) {
         for path in paths {
-            if let Ok(_) = fs::metadata(path) {
+            if fs::metadata(path).is_ok() {
                 let _ = fs::remove_file(path);
             }
         }
