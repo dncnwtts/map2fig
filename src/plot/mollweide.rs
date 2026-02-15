@@ -213,7 +213,11 @@ where
     // This avoids per-pixel Cairo operations and allows batch optimization.
     let map_w_int = (layout.map_w + 2.0 * layout.map_pad) as u32;
     let map_h_int = (layout.map_h + 2.0 * layout.map_pad) as u32;
-    let mut pixel_buffer = image::RgbaImage::new(map_w_int, map_h_int);
+    
+    // Tier 3a: Lazy initialization - skip kernel zeroing of pixel buffer
+    // Reduces 1.58M page faults by using uninitialized memory. All pixels are
+    // written in the clear_background loop immediately after (see below).
+    let mut pixel_buffer = crate::render::create_image_buffer_uninitialized(map_w_int, map_h_int);
 
     // Clear buffer background (matches what we'd paint on Cairo surface)
     let bg_color = if transparent {

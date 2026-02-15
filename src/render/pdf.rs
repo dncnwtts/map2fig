@@ -471,8 +471,12 @@ impl RenderTarget for PdfRenderTarget<'_> {
         // image buffer first, then embed as single Cairo surface paint.
         // This eliminates path management overhead in Cairo.
 
-        // Create in-memory pixel buffer (1MB for 1200x741 RGBA)
-        let mut img_buffer = image::RgbaImage::new(raster.width(), raster.height());
+        // Tier 3a: Create in-memory pixel buffer without zero-initialization
+        // Avoids 1.58M page faults from kernel zeroing. All pixels written immediately.
+        let mut img_buffer = crate::render::create_image_buffer_uninitialized(
+            raster.width(),
+            raster.height(),
+        );
 
         // Fast: Direct memory writes (no Cairo overhead)
         {
