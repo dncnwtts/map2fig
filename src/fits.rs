@@ -246,6 +246,12 @@ fn save_cache(filepath: &str, nside: i64, ordering: &str, indxschm: &str) {
 /// This function attempts to use cached metadata to avoid expensive header parsing
 /// When MAP2FIG_PROFILE environment variable is set, outputs diagnostic timing info
 pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)> {
+    // Check if mmap mode is enabled
+    let use_mmap = std::env::var("MAP2FIX_USE_MMAP").is_ok();
+    if use_mmap {
+        return read_healpix_meta_cached_mmap(filename);
+    }
+
     let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
 
     // Try cache first
