@@ -132,7 +132,7 @@ pub fn read_healpix_meta(path: &str) -> Option<HealpixMeta> {
 
     // Cache miss or caching unavailable: parse FITS file directly
     let f = File::open(path).ok()?;
-    let reader = BufReader::new(f);
+    let reader = BufReader::with_capacity(256 * 1024, f);
     let mut fits = Fits::from_reader(reader);
 
     while let Some(Ok(hdu)) = fits.next() {

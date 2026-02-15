@@ -61,7 +61,7 @@ use rayon::prelude::*;
 /// - Required HEALPix headers are missing
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     let f = File::open(filename).expect("Failed to open FITS file");
-    let reader = BufReader::new(f);
+    let reader = BufReader::with_capacity(256 * 1024, f);
 
     let mut fits = Fits::from_reader(reader);
     let mut result: Vec<f64> = Vec::new();
@@ -274,7 +274,7 @@ pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)>
 
     let parse_start = std::time::Instant::now();
     let f = File::open(filename).ok()?;
-    let reader = BufReader::new(f);
+    let reader = BufReader::with_capacity(256 * 1024, f);
     let mut fits = Fits::from_reader(reader);
     let mut nside: i64 = 0;
     let mut ordering = String::new();

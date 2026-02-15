@@ -86,7 +86,7 @@ impl PixelMask {
         // Open FITS file
         let f =
             File::open(path).map_err(|e| format!("Failed to open FITS file '{}': {}", path, e))?;
-        let reader = BufReader::new(f);
+        let reader = BufReader::with_capacity(256 * 1024, f);
         let mut fits = Fits::from_reader(reader);
 
         let mut mask_data: Vec<f64> = Vec::new();
