@@ -181,6 +181,10 @@ map2png outputs PNG only
 
 ---
 
+**👉 See [ROADMAP.md](ROADMAP.md) for detailed implementation strategy, timeline estimates, and success criteria for eliminating all map2png use cases.**
+
+---
+
 ## Feature Parity Scorecard
 
 ### Output Quality
