@@ -4,8 +4,6 @@
 #[cfg(test)]
 mod backend_performance {
     use map2fig::benchmark::{BenchmarkContext, BenchmarkSuite};
-    use map2fig::scale::Scale;
-    use map2fig::rotation::ViewTransform;
     use std::time::Instant;
     use image::{ImageBuffer, Rgba};
 
@@ -49,11 +47,11 @@ mod backend_performance {
         println!();
 
         // Benchmark 1: Full Cairo PDF rendering path (including finalization)
-        let cairo_start = Instant::now();
+        let _cairo_start = Instant::now();
         
         // Simulate Cairo PDF rendering overhead by doing file operations
         let cairo_file = "/tmp/bench_cairo.pdf";
-        let start = Instant::now();
+        let _start = Instant::now();
         
         // Create a dummy file to simulate PDF writing (no actual rendering)
         let dummy_pdf_size = 500_000; // Typical PDF is ~400-600KB
@@ -103,8 +101,8 @@ mod backend_performance {
         let ppm_ms = ppm_result.duration_ms();
         
         // Calculate overhead as percentage
-        let ppm_overhead_pct = (ppm_ms / cairo_ms * 100.0) - 100.0;
-        let cairo_overhead_pct = (cairo_ms / ppm_ms * 100.0) - 100.0;
+        let _ppm_overhead_pct = (ppm_ms / cairo_ms * 100.0) - 100.0;
+        let _cairo_overhead_pct = (cairo_ms / ppm_ms * 100.0) - 100.0;
 
         println!("Cairo PDF write time:    {:.2} ms (500KB file)", cairo_ms);
         println!("PPM write time:          {:.2} ms (3.1MB file)", ppm_ms);

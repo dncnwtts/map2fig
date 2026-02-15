@@ -6,8 +6,6 @@
 
 #[cfg(test)]
 mod backend_comparison {
-    use std::time::Instant;
-    use std::fs;
 
     #[test]
     fn benchmark_backends_documentation() {

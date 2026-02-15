@@ -260,15 +260,16 @@ where
     );
 
     // Convert pre-rendered image to Cairo surface and paint onto PDF surface
-    // IMPORTANT: image::RgbaImage stores pixels as RGBA, but Cairo::Format::ARgb32 
-    // expects ARGB in memory. We must convert the byte order.
+    // IMPORTANT: Cairo's Format::ARgb32 on little-endian systems expects bytes in
+    // memory as B, G, R, A (not A, R, G, B). image::RgbaImage stores as R, G, B, A,
+    // so we must reorder to B, G, R, A for Cairo.
     let mut argb_buffer = Vec::with_capacity(pixel_buffer.len() * 4);
     for pixel in pixel_buffer.pixels() {
-        // Convert RGBA to ARGB: swap bytes so alpha moves from last to first
-        argb_buffer.push(pixel[3]); // A
-        argb_buffer.push(pixel[0]); // R
-        argb_buffer.push(pixel[1]); // G
+        // Convert RGBA to BGRA for Cairo::Format::ARgb32
         argb_buffer.push(pixel[2]); // B
+        argb_buffer.push(pixel[1]); // G
+        argb_buffer.push(pixel[0]); // R
+        argb_buffer.push(pixel[3]); // A
     }
 
     if let Ok(pixel_surface) = cairo::ImageSurface::create_for_data(

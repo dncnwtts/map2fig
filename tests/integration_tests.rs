@@ -23,6 +23,7 @@ mod integration_tests {
             map: &map,
             width: 800,
             filename: "test_basic.pdf".to_string(),
+            pdf_backend: "cairo".to_string(),
         };
 
         assert_eq!(plot_data.map.len(), npix);
@@ -51,6 +52,7 @@ mod integration_tests {
             map: &map,
             width: 600,
             filename: "test_extreme.pdf".to_string(),
+            pdf_backend: "cairo".to_string(),
         };
 
         assert!(plot_data.map.iter().any(|&v| v > 0.0));
@@ -136,6 +138,7 @@ mod integration_tests {
                 map: &map,
                 width: *width,
                 filename: format!("test_{}.pdf", width),
+                pdf_backend: "cairo".to_string(),
             };
 
             assert_eq!(plot_data.width, *width);
@@ -153,6 +156,7 @@ mod integration_tests {
             map: &map,
             width: 100,
             filename: "test_minimal.pdf".to_string(),
+            pdf_backend: "cairo".to_string(),
         };
 
         assert_eq!(plot_data.map.len(), npix);

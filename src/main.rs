@@ -14,6 +14,16 @@ fn main() {
 fn run() -> Result<(), String> {
     let args = Args::parse();
 
+    // Validate PDF backend argument
+    let valid_backends = ["cairo", "printpdf"];
+    if !valid_backends.contains(&args.pdf_backend.as_str()) {
+        return Err(format!(
+            "Invalid PDF backend '{}'. Valid options are: {}",
+            args.pdf_backend,
+            valid_backends.join(", ")
+        ));
+    }
+
     // Setup: Initialize configuration and load data
     let setup_result = setup::setup_initialization(&args, args.verbose)?;
     let data = setup::load_data(&args, args.verbose)?;

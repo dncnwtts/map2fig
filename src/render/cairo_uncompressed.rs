@@ -9,7 +9,7 @@ use std::path::Path;
 /// This is a post-processing step that re-encodes the PDF without compression
 pub fn decompress_pdf<P: AsRef<Path>>(pdf_path: P) -> std::io::Result<()> {
     let path = pdf_path.as_ref();
-    let data = fs::read(path)?;
+    let _data = fs::read(path)?;
     
     // For now, this is a placeholder
     // A full implementation would:
