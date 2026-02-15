@@ -12,7 +12,7 @@ use crate::scale::{
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
-use rusttype::{Font, Scale as FontScale};
+use ab_glyph::{FontRef, PxScale, Font};
 use std::path::Path;
 
 /// Compute scale limits for gnomonic projections using only FOV-contained pixels.
@@ -137,7 +137,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
     );
 
     let font_data = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8]).expect("Failed to load font");
+    let font = FontRef::try_from_slice(font_data).expect("Failed to load font");
 
     let roll_rad = roll_deg * std::f64::consts::PI / 180.0;
     let proj = GnomonicProjection::with_roll(lon_deg, lat_deg, resolution_arcmin, roll_rad);
@@ -248,7 +248,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             Rgba([0, 0, 0, 255]),
             title_x,
             title_y,
-            FontScale::uniform(title_font_size),
+            PxScale::from(title_font_size),
             &font,
             title_text,
         );
@@ -322,13 +322,13 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             // Draw label - position depends on tick direction
             let label =
                 format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
-            let font_scale = FontScale::uniform(cb_layout.tick_font_size as f32);
+            let font_scale = PxScale::from(cb_layout.tick_font_size as f32);
 
             // Measure actual text width using font metrics
             let mut text_width = 0.0;
             for ch in label.chars() {
-                let glyph = font.glyph(ch);
-                text_width += glyph.scaled(font_scale).h_metrics().advance_width;
+                let glyph_id = font.glyph_id(ch);
+                text_width += font.h_advance_unscaled(glyph_id) * font_scale.x;
             }
             let text_x = px as i32 - (text_width / 2.0) as i32;
 
@@ -460,7 +460,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                         Rgba([0, 0, 0, 255]),
                         center_x,
                         units_y,
-                        FontScale::uniform(units_font_size),
+                        PxScale::from(units_font_size),
                         &font,
                         units_label,
                     );
@@ -481,7 +481,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                     Rgba([0, 0, 0, 255]),
                     center_x,
                     units_y,
-                    FontScale::uniform(units_font_size),
+                    PxScale::from(units_font_size),
                     &font,
                     &units_label,
                 );

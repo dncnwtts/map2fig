@@ -7,7 +7,7 @@ use crate::{PixelSink, PixelValue};
 use cairo::{Context, Format, ImageSurface};
 use image::Rgba;
 use imageproc::drawing::draw_text_mut;
-use rusttype::{Font, Scale as FontScale};
+use ab_glyph::{FontRef, PxScale};
 
 /// Apply gamma correction with fast-paths for common values
 ///
@@ -141,10 +141,10 @@ pub fn draw_figure_labels_png(
         (14.0 * scale as f32 + 2.0).max(6.0)
     };
     let font_size_pt = font_size as u32;
-    let font_scale = FontScale::uniform(font_size);
+    let font_scale = PxScale::from(font_size);
 
     let font_data = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8]).expect("Failed to load font");
+    let font = FontRef::try_from_slice(font_data).expect("Failed to load font");
 
     let text_color = Rgba([0, 0, 0, 255]); // Black text
 

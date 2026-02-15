@@ -1,5 +1,5 @@
 use image::{Rgba, RgbaImage};
-use rusttype::Font;
+use ab_glyph::FontRef;
 
 use crate::render::RenderBackend;
 use crate::render::target::PixelSource;
@@ -7,11 +7,11 @@ use crate::render::target::PixelSource;
 pub struct RasterBackend<'a> {
     pub img: &'a mut RgbaImage,
     color: Rgba<u8>,
-    font: Font<'static>,
+    font: FontRef<'a>,
 }
 
 impl<'a> RasterBackend<'a> {
-    pub fn new(img: &'a mut RgbaImage, font: Font<'static>) -> Self {
+    pub fn new(img: &'a mut RgbaImage, font: FontRef<'a>) -> Self {
         Self {
             img,
             color: Rgba([0, 0, 0, 255]),
@@ -102,14 +102,14 @@ impl<'a> RenderBackend for RasterBackend<'a> {
 
     fn draw_text(&mut self, x: f64, y: f64, size: f64, text: &str) {
         use imageproc::drawing::draw_text_mut;
-        use rusttype::Scale;
+        use ab_glyph::PxScale;
 
         draw_text_mut(
             self.img,
             self.color,
             x as i32,
             y as i32,
-            Scale::uniform(size as f32),
+            PxScale::from(size as f32),
             &self.font,
             text,
         );

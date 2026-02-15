@@ -24,9 +24,9 @@ exclude = [
 
 [dependencies]
 cdshealpix = "0.9"
-image = "0.24"
-imageproc = "0.23"
-rusttype = "0.9"
+image = "0.25"
+imageproc = "0.26"
+ab_glyph = "0.2"
 fitsrs = "0.4"
 rand = "0.10"
 clap = { version = "4", features = ["derive"] }
