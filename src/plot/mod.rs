@@ -1,7 +1,6 @@
 pub mod gnomonic;
 pub mod hammer;
 pub mod mollweide;
-pub mod mollweide_printpdf;
 
 use crate::render::raster::RasterGrid;
 use crate::{PixelSink, PixelValue};
@@ -34,7 +33,6 @@ pub use mollweide::{
     compute_mollweide_scale, plot_mollweide_auto, plot_mollweide_pdf, plot_mollweide_png,
     render_mollweide_pixels,
 };
-pub use mollweide_printpdf::plot_mollweide_pdf_printpdf;
 
 /// Rasterize to Cairo image surface
 pub fn rasterize_to_surface<F>(width: u32, height: u32, render: F) -> ImageSurface

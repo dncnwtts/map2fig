@@ -15,7 +15,7 @@ fn run() -> Result<(), String> {
     let args = Args::parse();
 
     // Validate PDF backend argument
-    let valid_backends = ["cairo", "printpdf"];
+    let valid_backends = ["cairo"];
     if !valid_backends.contains(&args.pdf_backend.as_str()) {
         return Err(format!(
             "Invalid PDF backend '{}'. Valid options are: {}",

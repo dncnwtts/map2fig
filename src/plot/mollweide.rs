@@ -6,7 +6,6 @@ use crate::colorbar::{format_tick_label_with_units, render_colorbar_gradient};
 use crate::healpix::is_seen;
 use crate::layout::{MollweideLayout, compute_mollweide_layout};
 use crate::params::MollweideParams;
-use crate::plot::mollweide_printpdf::plot_mollweide_pdf_printpdf;
 use crate::render::pdf::{draw_colorbar_pdf, draw_projection_border_pdf};
 use crate::render::raster::RasterGrid;
 use crate::rotation::CoordSystem;
@@ -928,13 +927,7 @@ pub fn plot_mollweide_auto(params: MollweideParams) {
 
     match ext.as_str() {
         "png" => plot_mollweide_png(params),
-        "pdf" => {
-            let backend = params.plot.pdf_backend.to_lowercase();
-            match backend.as_str() {
-                "printpdf" => plot_mollweide_pdf_printpdf(params),
-                _ => plot_mollweide_pdf(params), // Default to Cairo
-            }
-        }
+        "pdf" => plot_mollweide_pdf(params),
         _ => {
             panic!(
                 "Unsupported output format: .{} (expected .png or .pdf)",

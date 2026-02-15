@@ -259,7 +259,7 @@ pub struct Args {
     #[arg(long)]
     pub fast_render: bool,
 
-    /// PDF backend: cairo (default) or printpdf (faster, larger files, no vector overlays)
+    /// PDF backend: cairo
     #[arg(long, default_value = "cairo")]
     pub pdf_backend: String,
 }
