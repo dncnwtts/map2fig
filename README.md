@@ -875,11 +875,22 @@ The repository includes sample FITS files for testing:
 
 ## Contributing
 
-Contributions welcome! Common areas:
+**Development Roadmap:** See [ROADMAP.md](ROADMAP.md) for planned features and priorities.
+
+**High-Impact Contributions:**
+- **Multi-panel output** ⭐ (Priority 1: Eliminate critical map2png use case)
+- **Quantile-based auto-scaling** (Priority 2)
+- **Additional short CLI flags** (Priority 2)
+- **Batch processing mode** (Priority 3)
+
+**Optional Improvements:**
 - New colormaps (see `tools/generate_colormaps.py`)
 - Additional projections
 - Graticule improvements
 - Performance optimizations
+- Interactive/TUI mode
+
+See [ROADMAP.md](ROADMAP.md) for detailed implementation estimates and testing strategies.
 
 ## License
 
