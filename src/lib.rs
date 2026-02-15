@@ -74,6 +74,7 @@ pub mod latex;
 pub mod latex_render;
 pub mod layout;
 pub mod mask;
+pub mod mmap_reader;
 pub mod mollweide;
 pub mod params;
 pub mod pdf_optimize;

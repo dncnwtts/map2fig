@@ -452,6 +452,11 @@ fn save_column_cache(filepath: &str, col_idx: usize, data: &[f64]) -> Option<()>
 ///
 /// This function reads column data from cache if available, otherwise reads from FITS
 /// and saves to cache for future use. Cache is automatically invalidated if file mtime changes.
+///
+/// # Memory-mapped I/O Option
+///
+/// Set `MAP2FIX_USE_MMAP=1` environment variable to use memory-mapped I/O instead of buffered reading.
+/// This can improve performance for large files (>500 MB) at the cost of higher memory usage.
 pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
     // Try cache first
     if let Some(data) = try_load_column_cache(filename, col_idx) {
@@ -463,11 +468,226 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
         eprintln!("[I/O DIAG] Column cache MISS: {} col#{}", filename, col_idx);
     }
 
-    // Cache miss: read from FITS
-    let data = read_healpix_column(filename, col_idx);
+    // Check if mmap mode is enabled
+    let use_mmap = std::env::var("MAP2FIX_USE_MMAP").is_ok();
+    
+    // Cache miss: read from FITS (use mmap if enabled)
+    let data = if use_mmap {
+        read_healpix_column_mmap(filename, col_idx)
+    } else {
+        read_healpix_column(filename, col_idx)
+    };
 
     // Save to cache for next time (ignore if save fails)
     let _ = save_column_cache(filename, col_idx, &data);
 
     data
+}
+// ============================================================================
+// Memory-mapped FITS Reading (Optional optimization path)
+// ============================================================================
+
+/// Read a HEALPix column from a FITS file using memory-mapped I/O
+///
+/// This is an alternative to the standard `read_healpix_column` that uses
+/// memory-mapped file access (memmap2) instead of buffered reading.
+///
+/// # Performance Characteristics
+///
+/// - **For large files** (>500 MB): Comparable or slightly faster (10-20% best case)
+/// - **For small files** (<100 MB): Minimal difference, possibly slower due to memmap overhead
+/// - **Memory usage**: Maps entire file to memory (could be large)
+/// - **Cache effects**: Once mapped, subsequent passes are very fast
+///
+/// # Arguments
+///
+/// Same as `read_healpix_column`
+///
+/// # Returns
+///
+/// Same as `read_healpix_column`
+pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
+    use std::io::Cursor;
+    use memmap2::Mmap;
+
+    let f = File::open(filename).expect("Failed to open FITS file");
+    let mmap = unsafe {
+        Mmap::map(&f).expect("Failed to memory-map FITS file")
+    };
+
+    // Create a Cursor over the memory-mapped data
+    // This allows fitsrs to work with the mapped memory without copying
+    let cursor = Cursor::new(&mmap[..]);
+    let mut fits = Fits::from_reader(cursor);
+    let mut result: Vec<f64> = Vec::new();
+    let mut nside: i64 = 0;
+
+    while let Some(Ok(hdu)) = fits.next() {
+        if let HDU::XBinaryTable(hdu) = hdu {
+            let header = hdu.get_header();
+
+            // Check if this uses explicit indexing (sparse/partial sky map)
+            let has_explicit_indexing = match header.get("INDXSCHM") {
+                Some(Value::String { value, .. }) => value.trim() == "EXPLICIT",
+                _ => false,
+            };
+
+            // Get NSIDE if not already set
+            if nside == 0 {
+                nside = match header.get("NSIDE") {
+                    Some(Value::Integer { value, .. }) => *value,
+                    _ => 0,
+                };
+            }
+
+            let data = fits.get_data(&hdu);
+            let mut table = data.table_data();
+
+            // If explicit indexing, read both PIXEL and data columns together
+            if has_explicit_indexing && nside > 0 {
+                let file_col_for_data = col_idx + 1;
+
+                // Read both PIXEL (col 0) and data column
+                let all_values: Vec<DataValue> = table
+                    .select_fields(&[ColumnId::Index(0), ColumnId::Index(file_col_for_data)])
+                    .collect();
+
+                if all_values.is_empty() {
+                    result = vec![f64::NEG_INFINITY; (12 * nside * nside) as usize];
+                } else {
+                    let n_rows = all_values.len() / 2;
+                    let npix = (12 * nside * nside) as usize;
+                    let mut full_map = vec![f64::NEG_INFINITY; npix];
+
+                    let pairs: Vec<(usize, f64)> = (0..n_rows)
+                        .into_par_iter()
+                        .filter_map(|row_idx| {
+                            let pix_idx = row_idx * 2;
+                            let data_idx = row_idx * 2 + 1;
+
+                            let pix = match &all_values[pix_idx] {
+                                DataValue::Integer { value, .. } => *value as i64,
+                                DataValue::Long { value, .. } => *value,
+                                DataValue::Float { value, .. } => *value as i64,
+                                DataValue::Double { value, .. } => *value as i64,
+                                _ => -1,
+                            };
+
+                            let val = match &all_values[data_idx] {
+                                DataValue::Double { value, .. } => *value,
+                                DataValue::Float { value, .. } => *value as f64,
+                                DataValue::Integer { value, .. } => *value as f64,
+                                other => {
+                                    panic!("Unsupported column type in FITS table: {:?}", other)
+                                }
+                            };
+
+                            if pix >= 0 && (pix as usize) < npix {
+                                Some((pix as usize, val))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    for (pix_idx, val) in pairs {
+                        full_map[pix_idx] = val;
+                    }
+
+                    result = full_map;
+                }
+            } else {
+                // Regular dense map: read column directly
+                let values = table.select_fields(&[ColumnId::Index(col_idx)]);
+                for cell in values {
+                    match cell {
+                        DataValue::Double { value, .. } => result.push(value),
+                        DataValue::Float { value, .. } => result.push(value as f64),
+                        DataValue::Integer { value, .. } => result.push(value as f64),
+                        other => panic!("Unsupported column type in FITS table: {:?}", other),
+                    }
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// Read FITS metadata using memory-mapped I/O (mmap variant of `read_healpix_meta_cached`)
+pub fn read_healpix_meta_cached_mmap(filename: &str) -> Option<(i64, String, String)> {
+    use std::io::Cursor;
+    use memmap2::Mmap;
+
+    let enable_profile = std::env::var("MAP2FIX_PROFILE").is_ok();
+
+    // Try cache first
+    let cache_start = std::time::Instant::now();
+    if let Some((nside, order, indxschm)) = try_load_cache(filename) {
+        if enable_profile {
+            let elapsed = cache_start.elapsed();
+            eprintln!(
+                "[I/O DIAG] Cache HIT (mmap): {} ({:.3}µs)",
+                filename,
+                elapsed.as_micros()
+            );
+        }
+        return Some((nside, order, indxschm));
+    }
+
+    // Cache miss: parse FITS file with mmap
+    if enable_profile {
+        let elapsed = cache_start.elapsed();
+        eprintln!(
+            "[I/O DIAG] Cache MISS (mmap): {} (lookup took {:.3}µs)",
+            filename,
+            elapsed.as_micros()
+        );
+    }
+
+    let parse_start = std::time::Instant::now();
+    let f = File::open(filename).ok()?;
+    let mmap = unsafe {
+        Mmap::map(&f).ok()?
+    };
+
+    let cursor = Cursor::new(&mmap[..]);
+    let mut fits = Fits::from_reader(cursor);
+    let mut nside: i64 = 0;
+    let mut ordering = String::new();
+    let mut indxschm = String::from("IMPLICIT");
+
+    while let Some(Ok(hdu)) = fits.next() {
+        if let HDU::XBinaryTable(hdu) = hdu {
+            let header = hdu.get_header();
+            nside = match header.get("NSIDE") {
+                Some(Value::Integer { value, .. }) => *value,
+                _ => 0,
+            };
+            ordering = match header.get("ORDERING") {
+                Some(Value::String { value, .. }) => value.trim().to_string(),
+                _ => "RING".to_string(),
+            };
+            indxschm = match header.get("INDXSCHM") {
+                Some(Value::String { value, .. }) => value.trim().to_string(),
+                _ => "IMPLICIT".to_string(),
+            };
+            break;
+        }
+    }
+
+    let parse_end = std::time::Instant::now();
+    if enable_profile {
+        eprintln!(
+            "[I/O DIAG] Parse done (mmap): {:.3}ms",
+            parse_end.duration_since(parse_start).as_secs_f64() * 1000.0
+        );
+    }
+
+    if nside > 0 {
+        let _ = save_cache(filename, nside, &ordering, &indxschm);
+        Some((nside, ordering, indxschm))
+    } else {
+        None
+    }
 }
