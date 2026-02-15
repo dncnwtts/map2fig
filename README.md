@@ -811,6 +811,23 @@ export MAP2PNG_LIBPATH="/custom/lib:$LD_LIBRARY_PATH"
 
 The benchmark script gracefully handles missing map2png dependencies and will report map2fig standalone PNG performance metrics if comparison is unavailable. See [tools/README.md](tools/README.md) for detailed setup instructions and the map2png command-line interface.
 
+#### Feature Comparison
+
+**Benchmark Results:** map2fig is **27% faster** overall than map2png, with better performance on larger datasets.
+
+**Feature Differences:** See detailed analysis documents:
+
+| Document | Contents | Users |
+|----------|----------|-------|
+| [**FEATURE_COMPARISON.md**](FEATURE_COMPARISON.md) | Complete side-by-side feature matrix with detailed explanations | Users comparing tools, deciding which to use |
+| [**IMPLEMENTATION_GAPS.md**](IMPLEMENTATION_GAPS.md) | Missing features, enhancement opportunities, and migration guide | Users transitioning from map2png, looking for feature parity |
+
+**Quick Summary:**
+- ✅ **map2fig advantages:** Faster, more projections (Hammer), coordinate systems, data masking, PDF output, LaTeX support, 80+ colormaps
+- ✅ **map2png advantages:** Simpler CLI, multi-panel output in single command
+
+
+
 ## Troubleshooting
 
 **Gnomonic map is too small**
