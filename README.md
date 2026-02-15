@@ -819,8 +819,8 @@ The benchmark script gracefully handles missing map2png dependencies and will re
 
 | Document | Contents | Users |
 |----------|----------|-------|
-| [**FEATURE_COMPARISON.md**](FEATURE_COMPARISON.md) | Complete side-by-side feature matrix with detailed explanations | Users comparing tools, deciding which to use |
-| [**IMPLEMENTATION_GAPS.md**](IMPLEMENTATION_GAPS.md) | Missing features, enhancement opportunities, and migration guide | Users transitioning from map2png, looking for feature parity |
+| [**FEATURE_COMPARISON.md**](docs/comparison/FEATURE_COMPARISON.md) | Complete side-by-side feature matrix with detailed explanations | Users comparing tools, deciding which to use |
+| [**IMPLEMENTATION_GAPS.md**](docs/comparison/IMPLEMENTATION_GAPS.md) | Missing features, enhancement opportunities, and migration guide | Users transitioning from map2png, looking for feature parity |
 
 **Quick Summary:**
 - ✅ **map2fig advantages:** Faster, more projections (Hammer), coordinate systems, data masking, PDF output, LaTeX support, 80+ colormaps
@@ -875,7 +875,7 @@ The repository includes sample FITS files for testing:
 
 ## Contributing
 
-**Development Roadmap:** See [ROADMAP.md](ROADMAP.md) for planned features and priorities.
+**Development Roadmap:** See [ROADMAP.md](docs/comparison/ROADMAP.md) for planned features and priorities.
 
 **High-Impact Contributions:**
 - **Multi-panel output** ⭐ (Priority 1: Eliminate critical map2png use case)
@@ -890,7 +890,7 @@ The repository includes sample FITS files for testing:
 - Performance optimizations
 - Interactive/TUI mode
 
-See [ROADMAP.md](ROADMAP.md) for detailed implementation estimates and testing strategies.
+See [ROADMAP.md](docs/comparison/ROADMAP.md) for detailed implementation estimates and testing strategies.
 
 ## License
 
