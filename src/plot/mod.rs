@@ -8,6 +8,48 @@ use ab_glyph::{FontRef, PxScale};
 use cairo::{Context, Format, ImageSurface};
 use image::Rgba;
 use imageproc::drawing::draw_text_mut;
+use rayon::prelude::*;
+
+/// Tile structure for parallel rendering
+/// Represents a rectangular region of the output image
+/// (Currently unused, reserved for future parallel rendering implementation)
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+struct Tile {
+    pixel_x_start: u32, // Absolute pixel column start
+    pixel_y_start: u32, // Absolute pixel row start
+    width: u32,         // Pixel width
+    height: u32,        // Pixel height
+}
+
+/// Partition output image into tiles for parallel processing
+/// Returns a vector of tiles covering the entire image
+/// (Currently unused, reserved for future parallel rendering implementation)
+#[allow(dead_code)]
+fn partition_tiles(total_width: u32, total_height: u32, tile_size: u32) -> Vec<Tile> {
+    let mut tiles = Vec::new();
+    let tiles_per_row = (total_width + tile_size - 1) / tile_size;
+    let tiles_per_col = (total_height + tile_size - 1) / tile_size;
+
+    for ty in 0..tiles_per_col {
+        for tx in 0..tiles_per_row {
+            let y_start = ty.saturating_mul(tile_size);
+            let x_start = tx.saturating_mul(tile_size);
+            let tile_w = std::cmp::min(tile_size, total_width.saturating_sub(x_start));
+            let tile_h = std::cmp::min(tile_size, total_height.saturating_sub(y_start));
+
+            if tile_w > 0 && tile_h > 0 {
+                tiles.push(Tile {
+                    pixel_x_start: x_start,
+                    pixel_y_start: y_start,
+                    width: tile_w,
+                    height: tile_h,
+                });
+            }
+        }
+    }
+    tiles
+}
 
 /// Apply gamma correction with fast-paths for common values
 ///
