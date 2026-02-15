@@ -1,9 +1,9 @@
 # HEALPix Plotter Optimization Progress Summary
 
 ## Current Performance Baseline
-- **Execution Time:** 10.51 seconds (3-run average)
-- **Overall Improvement from Start:** 51.5% (from 22.58s baseline)
-- **Improvement from this session (Tier 2b):** 4% (from 10.94s → 10.51s)
+- **Execution Time:** 10.14 seconds (3-run average)
+- **Overall Improvement from Start:** 55.1% (from 22.58s baseline)
+- **Improvement from this session (Tier 2b + Tier 3a):** 7.3% (from 10.94s → 10.14s)
 
 ---
 
@@ -27,25 +27,27 @@
 - **Details:** Syscall/page fault overhead elimination
 - **Commit:** 7180b8b
 
+### Tier 3a: Lazy Pixel Buffer Initialization (COMPLETED this session)
+- **Change:** Skip kernel zero-initialization of image buffers via unsafe Vec sizing
+- **Gain:** 3.6% improvement (371ms saved)
+- **Details:** Improved cache locality, not page fault reduction
+- **Commit:** 53ad008
+
 ---
 
 ## Remaining Bottlenecks by Tier
 
-### Tier 3a: Lazy Initialization (RECOMMENDED NEXT)
+### Tier 3: Vectorize Scaling Loop (RECOMMENDED NEXT)
 **Status:** Not started  
-**Predicted Gain:** 8-10% (estimated)  
-**Effort:** Medium (2-3 hours)  
-**Target:** Reduce 1.58M page faults from zero-initialization of pixel buffers
+**Predicted Gain:** 1-2% (modest, but easy)  
+**Effort:** Low (1 hour)  
+**Target:** Use SIMD for min/max/scaling computation in scale_value()
 
-**Approach:**
-1. Use mmap with lazy page faulting for output buffers
-2. Only initialize pixels as they're written to
-3. Reduce upfront allocation overhead
-
-**Current metrics supporting this:**
-- Page faults: 1.58M per run
-- Page fault handling: ~20% of CPU time (from profiling)
-- Cache misses: 35% (increased from Tier 1+2)
+### Tier 3b: Cache-Aware Access Patterns (ALTERNATIVE)
+**Status:** Not started  
+**Predicted Gain:** 5-8% (if memory bandwidth is bottleneck)  
+**Effort:** High (3-4 hours)  
+**Target:** Reorder Mollweide projection loops to improve spatial locality
 
 ---
 
@@ -72,43 +74,40 @@ Baseline (22.58s)
     ↓ (Tier 1: -30-35%)
 10.94s (after data loading optimization)
     ↓ (Tier 2b: -4%)
-10.51s (current)
-    ↓ (Tier 3a predicted: -8-10%)
-~9.5-9.7s (projected after Tier 3a)
-    ↓ (Tier 3 + Tier 4: -7-12%)
-~8.5-9.0s (best case with all remaining)
+10.51s (after metadata mmap)
+    ↓ (Tier 3a: -3.6%)
+10.14s (current after lazy buffer init)
+    ↓ (Tier 3 + Tier 3b: -6-10% predicted)
+~9.2-9.6s (best case after remaining tiers)
 ```
 
 ---
 
 ## Current Bottleneck Analysis
 
-### Function Breakdown (perf report, Tier 2b binary)
+### Function Breakdown (perf report, Tier 3a binary)
 ```
-18.27%  load_and_process_data (down from 24.57%)
-0.14%   ang2pix_ring
-0.11%   sample_healpix_batch_simd
-0.11%   plot_mollweide_pdf
-0.06%   draw_colorbar_pdf
+26.35%  load_and_process_data (up from 18.27%, but fewer absolute cycles)
+0.17%   sample_healpix_batch_simd
+0.16%   plot_mollweide_pdf
+0.08%   pixel_to_ang_batch
+0.07%   render_projection_to_grid
+0.04%   draw_colorbar_pdf
 32%+    idle/intel_idle (I/O wait)
 ```
 
-**Key insight:** load_and_process_data still dominant but reduced significantly. The function includes:
-- FITS column data loading
-- Pixel scaling
-- Mollweide projection
-- Cairo rasterization
-- Memory allocation
+**Key Insight:** load_and_process_data percentage increased because total cycle count decreased more than the function's cycles. Absolute time is still highest consumer.
 
-### Memory Metrics (Tier 2b)
+### Memory Metrics (Tier 3a)
 ```
-Cache misses:     35.00% (629M / 1.8B refs) ← INCREASED
-Page faults:      1.584M
-dTLB misses:      0.13% of dTLB accesses
-Memory bandwidth: High (many cache misses)
+Cache misses:     31.85% (614M / 1.9B refs) ← IMPROVED from 35%
+Instructions/Cycle: 2.05  ← IMPROVED from 2.02
+Page faults:      1.584M ← UNCHANGED (not the bottleneck)
+dTLB misses:      0.13% of dTLB accesses ← unchanged
+Memory bandwidth: Still high (cache miss dependent)
 ```
 
-**Concern:** Cache miss rate increased from 27.67% to 35% after Tier 2b. This suggests mmap may have different spatial locality characteristics than buffered I/O. However, overall execution time still improved due to kernel overhead reduction.
+**Key Finding:** Lazy initialization improved cache efficiency, but page faults remain unchanged because we write to 100% of the buffer. True lazy allocation (mmap-based sparse files) not worth pursuing.
 
 ---
 
@@ -117,54 +116,60 @@ Memory bandwidth: High (many cache misses)
 ### What Was Accomplished
 1. ✅ Analyzed Tier 1+2 optimized binary with perf profiling
 2. ✅ Identified small remaining bottlenecks
-3. ✅ Implemented Tier 2b (metadata mmap)
-4. ✅ Verified 4% speedup
+3. ✅ Implemented Tier 2b (metadata mmap) - 4% speedup
+4. ✅ Verified Tier 2b improvement
 5. ✅ Re-profiled to assess next target
-6. ✅ Updated documentation with findings
+6. ✅ Implemented Tier 3a (lazy buffer init) - 3.6% speedup
+7. ✅ Verified Tier 3a improvement with detailed perf stat
+8. ✅ Discovered page faults are NOT the bottleneck (cache is)
+9. ✅ Updated documentation with findings
+10. ✅ **Total this session: 7.3% improvement (10.94s → 10.14s)**
 
 ### What Wasn't Done
-- Tier 3a implementation (recommended for next session)
-- Full `perf annotate` on load_and_process_data (would show exact hot instructions)
-- Measurement of page fault cost in isolation
+- Tier 3 SIMD optimization (recommended for next time)
+- Tier 3b cache-aware loops (higher complexity)
+- Full `perf c2c` cache contention analysis
 
 ---
 
 ## Recommendation for Next Session
 
-### Option 1: Implement Tier 3a (RECOMMENDED)
+### Option 1: Tier 3 - SIMD Math (RECOMMENDED - LOW RISK)
 **Rationale:** 
-- Page faults (1.58M) are measurable overhead
-- Lazy initialization is a focused change with clear ROI
-- Medium effort-to-gain ratio
-- Should yield 8-10% improvement
+- Quick win with minimal risk
+- Low effort (1-2 hours)
+- Modest gains (1-2%) but guarantees success
+- Good stepping stone before higher-risk optimizations
 
 **Steps:**
-1. Measure current page fault overhead with perf
-2. Insert lazy allocation into pixel buffer creation
+1. Profile scale_value() to confirm it's still hot
+2. Add SIMD-based min/max/comparison operations
 3. Benchmark and validate
-4. Estimate Tier 4 feasibility
+4. Move to next tier
 
-### Option 2: Measure More Before Deciding
+### Option 2: Tier 3b - Cache-Aware Loops (HIGHER RISK/REWARD)
 **Rationale:**
-- Cache miss rate increased unexpectedly
-- Memory allocation still significant
-- Might learn more useful info before committing to Tier 3a
+- Cache miss rate is now limiting factor (31.85%)
+- Could provide 5-8% gain if successful
+- Requires understanding memory access patterns
 
 **Steps:**
-1. Run `perf annotate` on load_and_process_data to identify hot instructions
-2. Measure cache-aware optimizations (L1/L2/L3 splits)
-3. Profile memory allocation patterns
-4. Reassess whether Tier 3a or optimization elsewhere is better
+1. Profile cache miss sources with `perf c2c` (cache-to-cache)
+2. Identify hottest innermost loops
+3. Reorder Mollweide projection for better locality
+4. Benchmark extensively
 
-### Option 3: Skip to Tier 4 (RISKY)
+### Option 3: Measure Before Deciding
 **Rationale:**
-- Highest ROI (6-10%)
-- Threading could provide best overall gains
+- We've achieved 55% total improvement (22.58s → 10.14s)
+- 31.85% cache miss rate is concerning
+- Might learn useful info with more detailed profiling
 
-**Risks:**
-- Complex implementation (file locking, task synchronization)
-- Potential for regressions
-- Hard to debug if issues arise
+**Steps:**
+1. Run `perf c2c` to find cache contention points
+2. Profile with `-e LLC-loads,LLC-load-misses`
+3. Assess whether memory bandwidth or algorithm is bottleneck
+4. Determine if Tier 3 or 3b is better ROI
 
 ---
 
@@ -185,12 +190,15 @@ Memory bandwidth: High (many cache misses)
 
 ## File Status
 
-### Modified Today
-- `src/fits.rs`: Tier 2b optimization (92 lines removed, cleaner code)
-- New docs: TIER2B_RESULTS.md, OPTIMIZATION_SESSION_2_SUMMARY.md
+### Modified This Session
+- `src/render/mod.rs`: Added lazy allocation helper
+- `src/plot/mollweide.rs`: Tier 3a optimization
+- `src/render/pdf.rs`: Tier 3a optimization
+- `OPTIMIZATION_SESSION_2_SUMMARY.md`: This file (updated)
+- **New Docs:** TIER2B_RESULTS.md, TIER3A_RESULTS.md
 
 ### Important Existing Docs
-- `CURRENT_BOTTLENECK_ANALYSIS.md`: Detailed analysis pre-Tier2b
+- `CURRENT_BOTTLENECK_ANALYSIS.md`: Pre-optimization detailed analysis
 - `.github/copilot-instructions.md`: Architecture overview
 - `PERFORMANCE_OPTIMIZATION_RESULTS.md`: Previous Tier 1+2 results
 
@@ -198,13 +206,14 @@ Memory bandwidth: High (many cache misses)
 
 ## Metrics Summary
 
-| Metric | Value | Target |
-|--------|-------|--------|
-| Current execution time | 10.51s | <8s (stretch: <7s) |
-| Total improvement | 51.5% | 70%+ |
-| Cache misses | 35.00% | <30% |
-| Page faults | 1.58M | <1M |
-| Load function CPU % | 18.27% | <10% |
+| Metric | Baseline | Current | Sessions Done | Target |
+|--------|----------|---------|---------------|--------|
+| Execution time | 22.58s | 10.14s | Tier 1+2+3a | <8s |
+| Overall improvement | — | 55.1% | — | 70%+ |
+| Cache misses | — | 31.85% | — | <25% |
+| Page faults | — | 1.58M | — | <1M (stretch) |
+| Load func CPU % | — | 26.35% | — | <15% |
+| IPC (insn/cycle) | — | 2.05 | — | >2.2 |
 
 ---
 
@@ -227,5 +236,5 @@ sudo perf annotate -i perf_tier2b.data -s "map2fig::pipeline::load_and_process_d
 
 ---
 
-Generated: Session 2 (after Tier 2b completion)  
-Status: Ready for next optimization phase
+Generated: Session 2 (after Tier 3a completion)  
+Status: Ready for next optimization phase (Tier 3 or 3b recommended)
