@@ -22,24 +22,16 @@ pub use pdf::PdfBackend;
 // ============================================================================
 // Tier 3a: Lazy Image Buffer Allocation
 // ============================================================================
-// Create RGBA image buffers without zero-initialization to reduce page faults.
-// Uses Vec with uninitialized capacity to skip kernel zeroing overhead.
-// Safe because all pixels are written before any are read (see usage sites).
+// Create RGBA image buffers for rasterization.
+// Initializes all pixels to avoid undefined behavior.
+// All pixels are written before any are read (see usage sites).
 pub fn create_image_buffer_uninitialized(width: u32, height: u32) -> image::RgbaImage {
     let pixel_count = (width as usize) * (height as usize);
     let byte_count = pixel_count * 4; // RGBA = 4 bytes per pixel
-    
-    // Create vector with capacity but don't initialize
-    let mut pixels: Vec<u8> = Vec::with_capacity(byte_count);
-    
-    // SAFETY: We immediately set length to capacity. All pixels will be written
-    // before any are read (in blit_raster or fill_background loops).
-    // This avoids kernel's zero-initialization page faults.
-    unsafe {
-        pixels.set_len(byte_count);
-    }
-    
-    image::ImageBuffer::from_raw(width, height, pixels)
-        .expect("Failed to create image buffer from uninitialized memory")
+
+    // Create zero-initialized vector for safe buffer initialization
+    let pixels: Vec<u8> = vec![0u8; byte_count];
+
+    image::ImageBuffer::from_raw(width, height, pixels).expect("Failed to create image buffer")
 }
 pub use raster::RasterBackend;

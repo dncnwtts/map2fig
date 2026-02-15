@@ -13,10 +13,10 @@ use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
 use crate::{PixelSink, PngSink};
+use ab_glyph::{Font, FontRef, PxScale};
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
-use ab_glyph::{FontRef, PxScale, Font};
 use std::path::Path;
 
 pub fn compute_mollweide_scale(
@@ -213,7 +213,7 @@ where
     // This avoids per-pixel Cairo operations and allows batch optimization.
     let map_w_int = (layout.map_w + 2.0 * layout.map_pad) as u32;
     let map_h_int = (layout.map_h + 2.0 * layout.map_pad) as u32;
-    
+
     // Tier 3a: Lazy initialization - skip kernel zeroing of pixel buffer
     // Reduces 1.58M page faults by using uninitialized memory. All pixels are
     // written in the clear_background loop immediately after (see below).

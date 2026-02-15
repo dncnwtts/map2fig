@@ -1,5 +1,5 @@
-use image::{Rgba, RgbaImage};
 use ab_glyph::FontRef;
+use image::{Rgba, RgbaImage};
 
 use crate::render::RenderBackend;
 use crate::render::target::PixelSource;
@@ -101,8 +101,8 @@ impl<'a> RenderBackend for RasterBackend<'a> {
     }
 
     fn draw_text(&mut self, x: f64, y: f64, size: f64, text: &str) {
-        use imageproc::drawing::draw_text_mut;
         use ab_glyph::PxScale;
+        use imageproc::drawing::draw_text_mut;
 
         draw_text_mut(
             self.img,

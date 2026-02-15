@@ -860,6 +860,154 @@ pub fn simd_log_scale_8(
     (result, out_mask)
 }
 
+/// Vectorized symlog scale transformation (supports negative values)
+///
+/// Maps values using symmetric logarithmic formula that handles both positive and negative:
+/// - Linear region |x| < linthresh: t = 0.5 + 0.5 * (x / linthresh)
+/// - Log region |x| ≥ linthresh: t = 0.5 + 0.5 * sign(x) * ln(|x| / linthresh) / ln(max / linthresh)
+///
+/// Input:
+/// - values: 8 raw data values (can be positive or negative)
+/// - linthresh: linear threshold parameter (typically 1% of data range)
+/// - min, max: scaling bounds (min typically negative, max positive for symlog)
+/// - mask: validity mask
+///
+/// Output:
+/// - normalized: 8 normalized values in [0, 1]
+/// - out_mask: unchanged validity mask
+#[inline]
+pub fn simd_symlog_scale_8(
+    values: [f64; 8],
+    linthresh: f64,
+    min: f64,
+    max: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    // Pre-compute min/max transformations to avoid repeated calculations
+    let f = |x: f64| {
+        if x.abs() < linthresh {
+            x / linthresh
+        } else {
+            x.signum() * (x.abs() / linthresh).ln()
+        }
+    };
+
+    let f_min = f(min);
+    let f_max = f(max);
+    let f_range = f_max - f_min;
+    let safe_range = if f_range.abs() > 1e-10 { f_range } else { 1.0 };
+
+    let mut result = [0.0; 8];
+    let out_mask = mask;
+
+    // Vectorized: process all 8 values in parallel (ILP)
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+
+        let f_val = f(values[i]);
+        result[i] = ((f_val - f_min) / safe_range).clamp(0.0, 1.0);
+    }
+
+    (result, out_mask)
+}
+
+/// Vectorized asinh scale transformation (handles positive and negative data)
+///
+/// Maps values using inverse hyperbolic sine: `asinh(x / scale)`
+/// Useful for data with wide dynamic range including both positive and negative values.
+///
+/// Input:
+/// - values: 8 raw data values (can be positive or negative)
+/// - scale: asinh scale parameter
+/// - min, max: scaling bounds
+/// - mask: validity mask
+///
+/// Output:
+/// - normalized: 8 normalized values in [0, 1]
+/// - out_mask: unchanged validity mask
+#[inline]
+pub fn simd_asinh_scale_8(
+    values: [f64; 8],
+    scale: f64,
+    min: f64,
+    max: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    // Pre-compute asinh boundary values
+    let min_val = (min / scale).asinh();
+    let max_val = (max / scale).asinh();
+    let range = max_val - min_val;
+    let safe_range = if range.abs() > 1e-10 { range } else { 1.0 };
+
+    let mut result = [0.0; 8];
+    let out_mask = mask;
+
+    // Vectorized: process all 8 values in parallel (ILP)
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+
+        let asinh_val = (values[i] / scale).asinh();
+        result[i] = ((asinh_val - min_val) / safe_range).clamp(0.0, 1.0);
+    }
+
+    (result, out_mask)
+}
+
+/// Vectorized PlanckLog scale transformation
+///
+/// Maps values using PlanckLog formula: symmetric log with offset
+/// `f(x) = sign(x) * ln(1 + |x| / linthresh) if |x| ≥ linthresh else x / linthresh`
+///
+/// Input:
+/// - values: 8 raw data values
+/// - linthresh: linear threshold parameter
+/// - min, max: scaling bounds
+/// - mask: validity mask
+///
+/// Output:
+/// - normalized: 8 normalized values in [0, 1]
+/// - out_mask: unchanged validity mask
+#[inline]
+pub fn simd_plancklog_scale_8(
+    values: [f64; 8],
+    linthresh: f64,
+    min: f64,
+    max: f64,
+    mask: [bool; 8],
+) -> ([f64; 8], [bool; 8]) {
+    let f = |x: f64| {
+        if x.abs() < linthresh {
+            x / linthresh
+        } else {
+            x.signum() * (1.0 + (x.abs() / linthresh).ln())
+        }
+    };
+
+    let f_min = f(min);
+    let f_max = f(max);
+    let f_range = f_max - f_min;
+    let safe_range = if f_range.abs() > 1e-10 { f_range } else { 1.0 };
+
+    let mut result = [0.0; 8];
+    let out_mask = mask;
+
+    // Vectorized: process all 8 values in parallel (ILP)
+    for i in 0..8 {
+        if !mask[i] {
+            continue;
+        }
+
+        let f_val = f(values[i]);
+        result[i] = ((f_val - f_min) / safe_range).clamp(0.0, 1.0);
+    }
+
+    (result, out_mask)
+}
+
 /// Vectorized colormap LUT lookup (fast palette sampling)
 ///
 /// Maps 8 normalized values [0, 1] to palette indices via fast LUT lookup.

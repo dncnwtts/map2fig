@@ -473,10 +473,8 @@ impl RenderTarget for PdfRenderTarget<'_> {
 
         // Tier 3a: Create in-memory pixel buffer without zero-initialization
         // Avoids 1.58M page faults from kernel zeroing. All pixels written immediately.
-        let mut img_buffer = crate::render::create_image_buffer_uninitialized(
-            raster.width(),
-            raster.height(),
-        );
+        let mut img_buffer =
+            crate::render::create_image_buffer_uninitialized(raster.width(), raster.height());
 
         // Fast: Direct memory writes (no Cairo overhead)
         {

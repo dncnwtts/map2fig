@@ -62,13 +62,11 @@ use rayon::prelude::*;
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     // Tier 2 Optimization: Use memory-mapped I/O instead of buffered reads
     // Eliminates kernel memcpy overhead (rep_movs_alternative) and improves cache locality
-    use std::io::Cursor;
     use memmap2::Mmap;
+    use std::io::Cursor;
 
     let f = File::open(filename).expect("Failed to open FITS file");
-    let mmap = unsafe {
-        Mmap::map(&f).expect("Failed to mmap FITS file")
-    };
+    let mmap = unsafe { Mmap::map(&f).expect("Failed to mmap FITS file") };
 
     let cursor = Cursor::new(&mmap[..]);
     let mut fits = Fits::from_reader(cursor);
@@ -111,8 +109,12 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 let mut full_map = vec![f64::NEG_INFINITY; npix];
 
                 // Extract columns directly as iterators, then process
-                let pixel_col = table.select_fields(&[ColumnId::Index(0)]).collect::<Vec<_>>();
-                let value_col = table.select_fields(&[ColumnId::Index(file_col_for_data)]).collect::<Vec<_>>();
+                let pixel_col = table
+                    .select_fields(&[ColumnId::Index(0)])
+                    .collect::<Vec<_>>();
+                let value_col = table
+                    .select_fields(&[ColumnId::Index(file_col_for_data)])
+                    .collect::<Vec<_>>();
 
                 if !pixel_col.is_empty() && !value_col.is_empty() {
                     // Tier 4.2b: Parallel extraction of pixel indices and values
@@ -400,7 +402,7 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
 
     // Check if mmap mode is enabled
     let use_mmap = std::env::var("MAP2FIX_USE_MMAP").is_ok();
-    
+
     // Cache miss: read from FITS (use mmap if enabled)
     let data = if use_mmap {
         read_healpix_column_mmap(filename, col_idx)
@@ -437,13 +439,11 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
 ///
 /// Same as `read_healpix_column`
 pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
-    use std::io::Cursor;
     use memmap2::Mmap;
+    use std::io::Cursor;
 
     let f = File::open(filename).expect("Failed to open FITS file");
-    let mmap = unsafe {
-        Mmap::map(&f).expect("Failed to memory-map FITS file")
-    };
+    let mmap = unsafe { Mmap::map(&f).expect("Failed to memory-map FITS file") };
 
     // Create a Cursor over the memory-mapped data
     // This allows fitsrs to work with the mapped memory without copying
@@ -546,8 +546,8 @@ pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
 
 /// Read FITS metadata using memory-mapped I/O (mmap variant of `read_healpix_meta_cached`)
 pub fn read_healpix_meta_cached_mmap(filename: &str) -> Option<(i64, String, String)> {
-    use std::io::Cursor;
     use memmap2::Mmap;
+    use std::io::Cursor;
 
     let enable_profile = std::env::var("MAP2FIX_PROFILE").is_ok();
 
@@ -577,9 +577,7 @@ pub fn read_healpix_meta_cached_mmap(filename: &str) -> Option<(i64, String, Str
 
     let parse_start = std::time::Instant::now();
     let f = File::open(filename).ok()?;
-    let mmap = unsafe {
-        Mmap::map(&f).ok()?
-    };
+    let mmap = unsafe { Mmap::map(&f).ok()? };
 
     let cursor = Cursor::new(&mmap[..]);
     let mut fits = Fits::from_reader(cursor);
@@ -615,7 +613,7 @@ pub fn read_healpix_meta_cached_mmap(filename: &str) -> Option<(i64, String, Str
     }
 
     if nside > 0 {
-        let _ = save_cache(filename, nside, &ordering, &indxschm);
+        save_cache(filename, nside, &ordering, &indxschm);
         Some((nside, ordering, indxschm))
     } else {
         None

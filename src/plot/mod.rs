@@ -4,10 +4,10 @@ pub mod mollweide;
 
 use crate::render::raster::RasterGrid;
 use crate::{PixelSink, PixelValue};
+use ab_glyph::{FontRef, PxScale};
 use cairo::{Context, Format, ImageSurface};
 use image::Rgba;
 use imageproc::drawing::draw_text_mut;
-use ab_glyph::{FontRef, PxScale};
 
 /// Apply gamma correction with fast-paths for common values
 ///
@@ -380,68 +380,303 @@ pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: 
 
             // Tier 5: Use 16-element SIMD scaling for improved throughput
             // Skip scaling for unseen pixels (Tier 5.4 optimization)
-            let pixel_values: [PixelValue; 16] = if matches!(
-                params.scale_type,
-                crate::scale::Scale::Linear | crate::scale::Scale::Log
-            ) {
-                let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
-                let log_cache = if use_log {
-                    params
-                        .scale_cache
-                        .as_ref()
-                        .map(|cache| (cache.log_min, cache.log_range))
-                } else {
-                    None
-                };
-
-                // Tier 5.4: Create validity mask excluding unseen pixels
-                let mut validity_for_scaling = validity_mask_16;
-                for i in 0..16 {
-                    if unseen_mask[i] {
-                        validity_for_scaling[i] = false;
-                    }
-                }
-
-                // 16-element batch scaling
-                let (scaled_values, out_mask) = crate::simd::simd_batch_scale_16(
-                    healpix_values_16,
-                    params.scale.minv,
-                    params.scale.maxv,
-                    use_log,
-                    log_cache,
-                    validity_for_scaling,
-                );
-
-                // Convert to PixelValue array, marking unseen as Bad
-                let mut pixel_array = crate::simd::simd_to_pixel_values_16(scaled_values, out_mask);
-                for i in 0..16 {
-                    if unseen_mask[i] {
-                        pixel_array[i] = PixelValue::Bad;
-                    }
-                }
-                pixel_array
-            } else {
-                // Fallback to scalar path for non-linear/log scales
-                let mut result = [PixelValue::Bad; 16];
-                for i in 0..16 {
-                    if unseen_mask[i] {
-                        // Tier 5.4: Skip scaling for unseen pixels
-                        result[i] = PixelValue::Bad;
-                    } else if validity_mask_16[i] {
-                        result[i] = crate::scale::scale_value(
-                            healpix_values_16[i],
-                            params.scale.minv,
-                            params.scale.maxv,
-                            params.scale_type,
-                            params.neg_mode,
-                            params.hist_scale,
-                            params.scale_cache,
-                        );
+            let pixel_values: [PixelValue; 16] = match params.scale_type {
+                crate::scale::Scale::Linear | crate::scale::Scale::Log => {
+                    let use_log = matches!(params.scale_type, crate::scale::Scale::Log);
+                    let log_cache = if use_log {
+                        params
+                            .scale_cache
+                            .as_ref()
+                            .map(|cache| (cache.log_min, cache.log_range))
                     } else {
-                        result[i] = PixelValue::Bad;
+                        None
+                    };
+
+                    // Tier 5.4: Create validity mask excluding unseen pixels
+                    let mut validity_for_scaling = validity_mask_16;
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            validity_for_scaling[i] = false;
+                        }
                     }
+
+                    // 16-element batch scaling
+                    let (scaled_values, out_mask) = crate::simd::simd_batch_scale_16(
+                        healpix_values_16,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        use_log,
+                        log_cache,
+                        validity_for_scaling,
+                    );
+
+                    // Convert to PixelValue array, marking unseen as Bad
+                    let mut pixel_array =
+                        crate::simd::simd_to_pixel_values_16(scaled_values, out_mask);
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            pixel_array[i] = PixelValue::Bad;
+                        }
+                    }
+                    pixel_array
                 }
-                result
+                crate::scale::Scale::Symlog { linthresh } => {
+                    // Tier 5: Vectorized symlog scaling
+                    let mut validity_for_scaling = validity_mask_16;
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            validity_for_scaling[i] = false;
+                        }
+                    }
+
+                    // Process in two 8-element batches
+                    let (scaled_lo, mask_lo) = crate::simd::simd_symlog_scale_8(
+                        [
+                            healpix_values_16[0],
+                            healpix_values_16[1],
+                            healpix_values_16[2],
+                            healpix_values_16[3],
+                            healpix_values_16[4],
+                            healpix_values_16[5],
+                            healpix_values_16[6],
+                            healpix_values_16[7],
+                        ],
+                        linthresh,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[0],
+                            validity_for_scaling[1],
+                            validity_for_scaling[2],
+                            validity_for_scaling[3],
+                            validity_for_scaling[4],
+                            validity_for_scaling[5],
+                            validity_for_scaling[6],
+                            validity_for_scaling[7],
+                        ],
+                    );
+
+                    let (scaled_hi, mask_hi) = crate::simd::simd_symlog_scale_8(
+                        [
+                            healpix_values_16[8],
+                            healpix_values_16[9],
+                            healpix_values_16[10],
+                            healpix_values_16[11],
+                            healpix_values_16[12],
+                            healpix_values_16[13],
+                            healpix_values_16[14],
+                            healpix_values_16[15],
+                        ],
+                        linthresh,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[8],
+                            validity_for_scaling[9],
+                            validity_for_scaling[10],
+                            validity_for_scaling[11],
+                            validity_for_scaling[12],
+                            validity_for_scaling[13],
+                            validity_for_scaling[14],
+                            validity_for_scaling[15],
+                        ],
+                    );
+
+                    let mut scaled_all = [0.0; 16];
+                    let mut mask_all = [false; 16];
+                    scaled_all[..8].copy_from_slice(&scaled_lo);
+                    mask_all[..8].copy_from_slice(&mask_lo);
+                    scaled_all[8..16].copy_from_slice(&scaled_hi);
+                    mask_all[8..16].copy_from_slice(&mask_hi);
+
+                    let mut pixel_array =
+                        crate::simd::simd_to_pixel_values_16(scaled_all, mask_all);
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            pixel_array[i] = PixelValue::Bad;
+                        }
+                    }
+                    pixel_array
+                }
+                crate::scale::Scale::Asinh { scale } => {
+                    // Tier 5: Vectorized asinh scaling
+                    let mut validity_for_scaling = validity_mask_16;
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            validity_for_scaling[i] = false;
+                        }
+                    }
+
+                    // Process in two 8-element batches
+                    let (scaled_lo, mask_lo) = crate::simd::simd_asinh_scale_8(
+                        [
+                            healpix_values_16[0],
+                            healpix_values_16[1],
+                            healpix_values_16[2],
+                            healpix_values_16[3],
+                            healpix_values_16[4],
+                            healpix_values_16[5],
+                            healpix_values_16[6],
+                            healpix_values_16[7],
+                        ],
+                        scale,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[0],
+                            validity_for_scaling[1],
+                            validity_for_scaling[2],
+                            validity_for_scaling[3],
+                            validity_for_scaling[4],
+                            validity_for_scaling[5],
+                            validity_for_scaling[6],
+                            validity_for_scaling[7],
+                        ],
+                    );
+
+                    let (scaled_hi, mask_hi) = crate::simd::simd_asinh_scale_8(
+                        [
+                            healpix_values_16[8],
+                            healpix_values_16[9],
+                            healpix_values_16[10],
+                            healpix_values_16[11],
+                            healpix_values_16[12],
+                            healpix_values_16[13],
+                            healpix_values_16[14],
+                            healpix_values_16[15],
+                        ],
+                        scale,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[8],
+                            validity_for_scaling[9],
+                            validity_for_scaling[10],
+                            validity_for_scaling[11],
+                            validity_for_scaling[12],
+                            validity_for_scaling[13],
+                            validity_for_scaling[14],
+                            validity_for_scaling[15],
+                        ],
+                    );
+
+                    let mut scaled_all = [0.0; 16];
+                    let mut mask_all = [false; 16];
+                    scaled_all[..8].copy_from_slice(&scaled_lo);
+                    mask_all[..8].copy_from_slice(&mask_lo);
+                    scaled_all[8..16].copy_from_slice(&scaled_hi);
+                    mask_all[8..16].copy_from_slice(&mask_hi);
+
+                    let mut pixel_array =
+                        crate::simd::simd_to_pixel_values_16(scaled_all, mask_all);
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            pixel_array[i] = PixelValue::Bad;
+                        }
+                    }
+                    pixel_array
+                }
+                crate::scale::Scale::PlanckLog { linthresh } => {
+                    // Tier 5: Vectorized PlanckLog scaling
+                    let mut validity_for_scaling = validity_mask_16;
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            validity_for_scaling[i] = false;
+                        }
+                    }
+
+                    // Process in two 8-element batches
+                    let (scaled_lo, mask_lo) = crate::simd::simd_plancklog_scale_8(
+                        [
+                            healpix_values_16[0],
+                            healpix_values_16[1],
+                            healpix_values_16[2],
+                            healpix_values_16[3],
+                            healpix_values_16[4],
+                            healpix_values_16[5],
+                            healpix_values_16[6],
+                            healpix_values_16[7],
+                        ],
+                        linthresh,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[0],
+                            validity_for_scaling[1],
+                            validity_for_scaling[2],
+                            validity_for_scaling[3],
+                            validity_for_scaling[4],
+                            validity_for_scaling[5],
+                            validity_for_scaling[6],
+                            validity_for_scaling[7],
+                        ],
+                    );
+
+                    let (scaled_hi, mask_hi) = crate::simd::simd_plancklog_scale_8(
+                        [
+                            healpix_values_16[8],
+                            healpix_values_16[9],
+                            healpix_values_16[10],
+                            healpix_values_16[11],
+                            healpix_values_16[12],
+                            healpix_values_16[13],
+                            healpix_values_16[14],
+                            healpix_values_16[15],
+                        ],
+                        linthresh,
+                        params.scale.minv,
+                        params.scale.maxv,
+                        [
+                            validity_for_scaling[8],
+                            validity_for_scaling[9],
+                            validity_for_scaling[10],
+                            validity_for_scaling[11],
+                            validity_for_scaling[12],
+                            validity_for_scaling[13],
+                            validity_for_scaling[14],
+                            validity_for_scaling[15],
+                        ],
+                    );
+
+                    let mut scaled_all = [0.0; 16];
+                    let mut mask_all = [false; 16];
+                    scaled_all[..8].copy_from_slice(&scaled_lo);
+                    mask_all[..8].copy_from_slice(&mask_lo);
+                    scaled_all[8..16].copy_from_slice(&scaled_hi);
+                    mask_all[8..16].copy_from_slice(&mask_hi);
+
+                    let mut pixel_array =
+                        crate::simd::simd_to_pixel_values_16(scaled_all, mask_all);
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            pixel_array[i] = PixelValue::Bad;
+                        }
+                    }
+                    pixel_array
+                }
+                _ => {
+                    // Fallback to scalar path for histogram and other scales
+                    let mut result = [PixelValue::Bad; 16];
+                    for i in 0..16 {
+                        if unseen_mask[i] {
+                            // Tier 5.4: Skip scaling for unseen pixels
+                            result[i] = PixelValue::Bad;
+                        } else if validity_mask_16[i] {
+                            result[i] = crate::scale::scale_value(
+                                healpix_values_16[i],
+                                params.scale.minv,
+                                params.scale.maxv,
+                                params.scale_type,
+                                params.neg_mode,
+                                params.hist_scale,
+                                params.scale_cache,
+                            );
+                        } else {
+                            result[i] = PixelValue::Bad;
+                        }
+                    }
+                    result
+                }
             };
 
             // Process 16 pixels in parallel

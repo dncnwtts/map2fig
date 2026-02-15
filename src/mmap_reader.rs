@@ -11,10 +11,10 @@
 //! let fits = Fits::from_reader(mmap);
 //! ```
 
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom, BufRead};
-use std::path::Path;
 use memmap2::Mmap;
+use std::fs::File;
+use std::io::{self, BufRead, Read, Seek, SeekFrom};
+use std::path::Path;
 
 /// Memory-mapped FITS file reader
 ///
@@ -34,10 +34,7 @@ impl MmapFitsReader {
     pub fn new(file: File) -> io::Result<Self> {
         // Safety: FITS files are read-only during parsing
         let mmap = unsafe { Mmap::map(&file)? };
-        Ok(Self {
-            mmap,
-            position: 0,
-        })
+        Ok(Self { mmap, position: 0 })
     }
 
     /// Create a memory-mapped FITS reader from a file path
