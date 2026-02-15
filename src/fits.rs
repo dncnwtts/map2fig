@@ -60,8 +60,10 @@ use rayon::prelude::*;
 /// - Column index is out of bounds
 /// - Required HEALPix headers are missing
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
-    let f = File::open(filename).expect("Failed to open FITS file");
-    let reader = BufReader::with_capacity(256 * 1024, f);
+    // Tier 2 Optimization: Use memory-mapped I/O instead of buffered reads
+    // Eliminates kernel memcpy overhead (rep_movs_alternative) and improves cache locality
+    let reader = crate::mmap_reader::MmapFitsReader::open(filename)
+        .unwrap_or_else(|_| panic!("Failed to open FITS file: {}", filename));
 
     let mut fits = Fits::from_reader(reader);
     let mut result: Vec<f64> = Vec::new();
@@ -97,27 +99,22 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 // - Adjust file column: file_col = col_idx + 1
                 let file_col_for_data = col_idx + 1;
 
-                // Read both PIXEL (col 0) and data column
-                let all_values: Vec<DataValue> = table
-                    .select_fields(&[ColumnId::Index(0), ColumnId::Index(file_col_for_data)])
-                    .collect();
+                // Tier 1 Optimization: Eliminate intermediate Vec<DataValue>
+                // Directly zip columns and process without intermediate buffer
+                let npix = (12 * nside * nside) as usize;
+                let mut full_map = vec![f64::NEG_INFINITY; npix];
 
-                if all_values.is_empty() {
-                    result = vec![f64::NEG_INFINITY; (12 * nside * nside) as usize];
-                } else {
-                    let n_rows = all_values.len() / 2;
-                    let npix = (12 * nside * nside) as usize;
-                    let mut full_map = vec![f64::NEG_INFINITY; npix];
+                // Extract columns directly as iterators, then process
+                let pixel_col = table.select_fields(&[ColumnId::Index(0)]).collect::<Vec<_>>();
+                let value_col = table.select_fields(&[ColumnId::Index(file_col_for_data)]).collect::<Vec<_>>();
 
+                if !pixel_col.is_empty() && !value_col.is_empty() {
                     // Tier 4.2b: Parallel extraction of pixel indices and values
-                    // Use rayon to process rows in parallel, extracting (pixel_idx, value) pairs
-                    let pairs: Vec<(usize, f64)> = (0..n_rows)
+                    // Extract pairs from separate columns in parallel
+                    let pairs: Vec<(usize, f64)> = (0..pixel_col.len())
                         .into_par_iter()
                         .filter_map(|row_idx| {
-                            let pix_idx = row_idx * 2;
-                            let data_idx = row_idx * 2 + 1;
-
-                            let pix = match &all_values[pix_idx] {
+                            let pix = match &pixel_col[row_idx] {
                                 DataValue::Integer { value, .. } => *value as i64,
                                 DataValue::Long { value, .. } => *value,
                                 DataValue::Float { value, .. } => *value as i64,
@@ -125,13 +122,17 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                                 _ => -1,
                             };
 
-                            let val = match &all_values[data_idx] {
-                                DataValue::Double { value, .. } => *value,
-                                DataValue::Float { value, .. } => *value as f64,
-                                DataValue::Integer { value, .. } => *value as f64,
-                                other => {
-                                    panic!("Unsupported column type in FITS table: {:?}", other)
+                            let val = if row_idx < value_col.len() {
+                                match &value_col[row_idx] {
+                                    DataValue::Double { value, .. } => *value,
+                                    DataValue::Float { value, .. } => *value as f64,
+                                    DataValue::Integer { value, .. } => *value as f64,
+                                    other => {
+                                        panic!("Unsupported column type in FITS table: {:?}", other)
+                                    }
                                 }
+                            } else {
+                                return None;
                             };
 
                             if pix >= 0 && (pix as usize) < npix {
@@ -146,9 +147,9 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                     for (pix_idx, val) in pairs {
                         full_map[pix_idx] = val;
                     }
-
-                    result = full_map;
                 }
+
+                result = full_map;
             } else {
                 // Regular dense map: read column directly
                 let values = table.select_fields(&[ColumnId::Index(col_idx)]);
