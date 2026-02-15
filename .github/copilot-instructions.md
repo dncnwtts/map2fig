@@ -106,5 +106,11 @@ cargo run -- -f data.fits --hist --min 0.1 --max 0.9
 - `fitsrs`: FITS file reading
 - `cairo-rs`: PDF rendering
 - `image`: PNG/image processing
-- `clap`: CLI argument parsing</content>
+- `clap`: CLI argument parsing
+
+## ⛔ KNOWN FAILED OPTIMIZATIONS (Do Not Retry)
+
+**F32 Precision Reduction (Feb 15, 2026):** Attempted to speed up math by casting f64→f32→f64 or using native f32 arithmetic. **RESULT: Both approaches were SLOWER by 2-3.7%** due to conversion overhead exceeding any math speedup. Math is only 11.8% of CPU time and is already well-optimized by LLVM. The real bottleneck is Mollweide projection algorithm (77.5%) and Cairo rasterization (3.57× slower than PNG).
+
+See `docs/F32_OPTIMIZATION_RESULTS.md` for full analysis. **DO NOT attempt precision reduction again.**</content>
 <parameter name="filePath">/home/dwatts/projects/healpix_plotter/.github/copilot-instructions.md

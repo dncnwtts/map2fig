@@ -826,6 +826,9 @@ The benchmark script gracefully handles missing map2png dependencies and will re
 - ✅ **map2fig advantages:** Faster, more projections (Hammer), coordinate systems, data masking, PDF output, LaTeX support, 80+ colormaps
 - ✅ **map2png advantages:** Simpler CLI, multi-panel output in single command
 
+### ⛔ Known Optimization Attempts (Do Not Retry)
+
+**F32 Precision Reduction (Feb 2026):** Attempted to speed up math using single-precision (f32) casting. **Result: Slower by 2-3.7%.** Conversion overhead exceeded any math speedup. See [docs/F32_OPTIMIZATION_RESULTS.md](docs/F32_OPTIMIZATION_RESULTS.md) for details. **Never attempt precision reduction again.**
 
 
 ## Troubleshooting

@@ -163,6 +163,38 @@ cargo build --release
 
 ---
 
+## \u26d4 Failed Optimizations (DO NOT RETRY)
+
+### F32 Precision Reduction Experiment (Feb 15, 2026)
+
+**Attempt:** Convert math operations to single-precision (f32) for speed  
+**Result:** \u274c **SLOWER, not faster**  
+**Why:** See [F32_OPTIMIZATION_RESULTS.md](../F32_OPTIMIZATION_RESULTS.md)
+
+**Benchmark Data:**
+```
+Baseline (f64):           10.62s average
+Fast_math (f64\u2192f32\u2192f64):  11.01s (+3.7% slower) \u274c
+F32_math (native f32):    10.83s (+2.0% slower) \u274c
+```
+
+**Root Cause:** Conversion overhead exceeded math speedup. Type casting (f64\u2194f32) disrupted CPU pipeline more than any libm speedup gained.
+
+**Key Insight:** Math is only 11.8% of CPU time\u2014optimizing it won't help unless the optimization itself is faster. Precision reduction via casting is not faster; it's slower due to register manipulation and type conversion pipeline delays.
+
+**Do Not Attempt:**
+- \u274c Cast f64 to f32, do math, cast back (3.7% regression)
+- \u274c Use native f32 arithmetic throughout projection (2.0% regression)
+- \u274c Assume single-precision math is a free speedup
+
+**Future Optimizations Should Focus On:**
+- \u2705 Cairo batching (Phase 2) - confirmed 3.57\u00d7 difference vs PNG
+- \u2705 Algorithmic improvements in projection
+- \u2705 Cache locality and memory layout
+- \u274c Precision reduction (proven ineffective)
+
+---
+
 ## Notes for Next Session
 
 If resuming optimization work:
@@ -171,3 +203,4 @@ If resuming optimization work:
 3. Reference this document for optimization strategy
 4. Update PERFORMANCE_TRACKING.md with new baseline timings
 5. Implement highest-ROI option from Phase 2 options
+6. **Review [F32_OPTIMIZATION_RESULTS.md](../F32_OPTIMIZATION_RESULTS.md) to understand what NOT to try**
