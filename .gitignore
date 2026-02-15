@@ -18,6 +18,15 @@ perf.data*
 /test_edge/
 /examples/output/
 
+# Performance profiling data
+perf*.data
+
+# Local optimization documentation (development only)
+OPTIMIZATION_MASTER_INDEX.md
+OPTIMIZATION_ROADMAP_FINAL.md
+TIER3_OPTIMIZATION_PLAN.md
+TILE_PARALLELIZATION_DESIGN.md
+
 # Python artifacts
 __pycache__/
 *.py[cod]
