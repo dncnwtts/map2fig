@@ -29,7 +29,7 @@
 //! ```
 
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 
 use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
 use fitsrs::{Fits, HDU, card::Value};
@@ -62,10 +62,16 @@ use rayon::prelude::*;
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     // Tier 2 Optimization: Use memory-mapped I/O instead of buffered reads
     // Eliminates kernel memcpy overhead (rep_movs_alternative) and improves cache locality
-    let reader = crate::mmap_reader::MmapFitsReader::open(filename)
-        .unwrap_or_else(|_| panic!("Failed to open FITS file: {}", filename));
+    use std::io::Cursor;
+    use memmap2::Mmap;
 
-    let mut fits = Fits::from_reader(reader);
+    let f = File::open(filename).expect("Failed to open FITS file");
+    let mmap = unsafe {
+        Mmap::map(&f).expect("Failed to mmap FITS file")
+    };
+
+    let cursor = Cursor::new(&mmap[..]);
+    let mut fits = Fits::from_reader(cursor);
     let mut result: Vec<f64> = Vec::new();
     let mut nside: i64 = 0;
 
@@ -247,95 +253,12 @@ fn save_cache(filepath: &str, nside: i64, ordering: &str, indxschm: &str) {
 /// This function attempts to use cached metadata to avoid expensive header parsing
 /// When MAP2FIG_PROFILE environment variable is set, outputs diagnostic timing info
 pub fn read_healpix_meta_cached(filename: &str) -> Option<(i64, String, String)> {
-    // Check if mmap mode is enabled
-    let use_mmap = std::env::var("MAP2FIX_USE_MMAP").is_ok();
-    if use_mmap {
-        return read_healpix_meta_cached_mmap(filename);
-    }
-
-    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
-
-    // Try cache first
-    let cache_start = std::time::Instant::now();
-    if let Some((nside, order, indxschm)) = try_load_cache(filename) {
-        if enable_profile {
-            let elapsed = cache_start.elapsed();
-            eprintln!(
-                "[I/O DIAG] Cache HIT: {} ({:.3}µs)",
-                filename,
-                elapsed.as_micros()
-            );
-        }
-        return Some((nside, order, indxschm));
-    }
-
-    // Cache miss: parse FITS file
-    if enable_profile {
-        let elapsed = cache_start.elapsed();
-        eprintln!(
-            "[I/O DIAG] Cache MISS: {} (lookup took {:.3}µs)",
-            filename,
-            elapsed.as_micros()
-        );
-    }
-
-    let parse_start = std::time::Instant::now();
-    let f = File::open(filename).ok()?;
-    let reader = BufReader::with_capacity(256 * 1024, f);
-    let mut fits = Fits::from_reader(reader);
-    let mut nside: i64 = 0;
-    let mut ordering = String::new();
-    let mut indxschm = String::from("IMPLICIT");
-
-    while let Some(Ok(hdu)) = fits.next() {
-        if let HDU::XBinaryTable(hdu) = hdu {
-            let header = hdu.get_header();
-
-            // Get NSIDE
-            if nside == 0 {
-                nside = match header.get("NSIDE") {
-                    Some(Value::Integer { value, .. }) => *value,
-                    _ => 0,
-                };
-            }
-
-            // Get ordering
-            if ordering.is_empty() {
-                ordering = match header.get("ORDERING") {
-                    Some(Value::String { value, .. }) => value.trim().to_string(),
-                    _ => String::from("RING"),
-                };
-            }
-
-            // Get index scheme (sparse maps)
-            indxschm = match header.get("INDXSCHM") {
-                Some(Value::String { value, .. }) => value.trim().to_string(),
-                _ => String::from("IMPLICIT"),
-            };
-
-            // Found what we need
-            if nside > 0 {
-                break;
-            }
-        }
-    }
-
-    let parse_elapsed = parse_start.elapsed();
-    if enable_profile {
-        eprintln!(
-            "[I/O DIAG] FITS parse took {:.2}ms",
-            parse_elapsed.as_secs_f64() * 1000.0
-        );
-    }
-
-    if nside > 0 {
-        // Cache for next time
-        save_cache(filename, nside, &ordering, &indxschm);
-        Some((nside, ordering, indxschm))
-    } else {
-        None
-    }
+    // Tier 2b Optimization: Always use memory-mapped I/O for metadata reading
+    // This eliminates kernel memcpy overhead and page fault overhead from BufReader
+    read_healpix_meta_cached_mmap(filename)
 }
+
+// Dead code removed (Tier 2b optimization: metadata now uses mmap)
 
 // ============================================================================
 // Tier 5.2.1: Column Data Caching
