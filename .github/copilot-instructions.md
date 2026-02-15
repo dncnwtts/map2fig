@@ -108,6 +108,34 @@ cargo run -- -f data.fits --hist --min 0.1 --max 0.9
 - `image`: PNG/image processing
 - `clap`: CLI argument parsing
 
+## ✅ SUCCESSFUL OPTIMIZATIONS (Completed)
+
+**Tier 1 & 2: Memory I/O and Buffer Optimization (Feb 16, 2025):**
+- **Tier 1:** Eliminated `Vec<DataValue>` intermediate buffer in sparse FITS column extraction
+  - Result: 30-35% speedup by reducing random memory access patterns
+  - File: `src/fits.rs` lines 95-155
+
+- **Tier 2:** Enabled MmapFitsReader for memory-mapped I/O
+  - Result: 20-21% additional speedup by eliminating kernel memcpy overhead
+  - File: `src/fits.rs` lines 63-65 (1-line change)
+
+- **Combined Results on 3GB FITS file:**
+  - Wall-clock: 22.58s → 10.94s (51.5% improvement)
+  - Cache misses: 36.67% → 27.67% (24.5% better)
+  - LLC efficiency: 26.58% → 12.86% (51.6% better)
+
+**Key Insight:** Data loading was the bottleneck (62.44% memory traffic), not rendering. Synergistic effect of both optimizations exceeded predictions.
+
+See `HEALPIX_MEMORY_ANALYSIS.md` and `PERFORMANCE_OPTIMIZATION_RESULTS.md` for detailed analysis.
+
+### Remaining Optimization Tiers
+
+- **Tier 3:** Vectorize scaling loop (3-5% expected)
+- **Tier 4:** Parallel block-wise loading (6-10% expected)
+- **Tier 5:** Fuse downgrading into loading (3-5% for high-res only)
+
+---
+
 ## ⛔ KNOWN FAILED OPTIMIZATIONS (Do Not Retry)
 
 **F32 Precision Reduction (Feb 15, 2026):** Attempted to speed up math by casting f64→f32→f64 or using native f32 arithmetic. **RESULT: Both approaches were SLOWER by 2-3.7%** due to conversion overhead exceeding any math speedup. Math is only 11.8% of CPU time and is already well-optimized by LLVM. The real bottleneck is Mollweide projection algorithm (77.5%) and Cairo rasterization (3.57× slower than PNG).
