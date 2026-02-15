@@ -28,7 +28,7 @@ image = "0.24"
 imageproc = "0.23"
 rusttype = "0.9"
 fitsrs = "0.4"
-rand = "0.8"
+rand = "0.10"
 clap = { version = "4", features = ["derive"] }
 cairo-rs = { version = "0.19", features = ["pdf"] }
 sha2 = "0.10"
