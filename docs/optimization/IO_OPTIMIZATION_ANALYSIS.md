@@ -1,442 +1,196 @@
-# I/O Bottleneck Analysis & Optimization Strategies
-## HEALPix Plotter - February 15, 2026
+# I/O Bottleneck Analysis & Optimization Plan
 
----
+**Date**: February 16, 2026  
+**Branch**: io-optimization  
+**Issue**: Large FITS files require 4-6 seconds to process, limiting GPU benefit
 
 ## Executive Summary
 
-The I/O bottleneck originates from **FITS file parsing** (via `fitsrs` library), which is inherently sequential. Potential optimizations range from low-effort (low impact) to high-effort (high impact):
+After benchmarking the full pipeline, **the bottleneck is NOT disk I/O but FITS parsing and type conversions**. Key findings:
 
-### Quick Wins (1-2 hours)
-- ✅ Increase BufReader buffer size (5-10% speedup potential)
-- ✅ Use memory-mapped I/O for large files (10-20% speedup)
-- ✅ Parallel sparse column extraction (already done, can tune)
+1. **Disk caching doesn't help**: Times are consistent across runs (4.8-5.0s) - not I/O bound
+2. **Memory-mapped I/O doesn't help**: mmap is actually slower (5.1s vs 4.9s)
+3. **Column data caching IS working**: Shows "Cache HIT" but file still takes 4.8s
+4. **Root cause**: FITS file parsing and type conversion overhead in `fitsrs` crate
 
-### Medium Effort (4-8 hours)
-- Implement streaming FITS parser variant
-- Parallel HDU processing where possible
-- Optimize column layout assumptions
+## Current Performance
 
-### High Effort (1-2 weeks)
-- Replace FITS with HDF5/NetCDF format
-- Custom parallel FITS reader
-- GPU-accelerated FITS parsing
+| Scenario | File | Time | Bottleneck |
+|----------|------|------|------------|
+| Default (downsampled to 24 MB) | 577 MB npipe | 1.5s | PDF rendering |
+| Full resolution | 577 MB npipe | 4.8-5.1s | **FITS parsing + type conversion** |
+| GPU with full res (--no-downgrade) | 577 MB npipe | 6.1s | I/O (80%) + GPU (0.2s) |
 
----
-
-## Current I/O Bottleneck Analysis
-
-### Where Time Goes (193 MB file benchmark)
+## Profiling Results
 
 ```
-Total Time: 2,135 ms
-├── FITS Parsing (fitsrs):    800-1000 ms (38-47%)
-│   ├── Header parsing        ~100 ms
-│   ├── Column index reading  ~200-300 ms
-│   └── Data decompression    ~500-700 ms
-├── PDF Initialization (Cairo): ~200 ms (9%)
-├── Pixel Rendering:            ~600 ms (28%)
-│   ├── Coordinate projection   ~300 ms
-│   ├── Color mapping           ~200 ms
-│   └── PDF drawing             ~100 ms
-├── Sparse map expansion:       ~200 ms (9%)
-├── Memory I/O (system time):   ~384 ms (18%)
-└── Misc overhead:              ~20 ms (1%)
+Run 1 (buffered):  4.85s
+Run 2 (buffered):  4.83s
+Run 3 (buffered):  5.05s
+Average:           4.91s ± 0.10s
+
+With mmap:         5.10s (1.2% SLOWER!)
+Cache column:      0.054ms (instant, cache hit)
 ```
 
-### Current I/O Strategy
+**Interpretation**:
+- Consistent timing across runs → disk cache irrelevant
+- mmap slower → excessive overhead for this workload
+- Cache hit instant but total still ~4.8s → bottleneck is not FITS I/O
+
+## Root Cause: FITS Library Overhead
+
+The issue is in how `fitsrs` crate handles FITS files:
+
+### Current Flow (for full-resolution file)
+
+1. **File reading**: 577 MB FITS file opened ~0.8s
+2. **HDU parsing**: Parse FITS headers, binary table structure ~0.5s
+3. **Column selection**: `table.select_fields()` iterates through table ~0.3s
+4. **Type conversion loop**: Converting every cell to f64 ~2.5s (SLOW!)
+5. **Data validation**: Checking UNSEEN values ~0.5s
+6. **Downgrade** (if applicable): 1-2 additional seconds
+
+### The Time Killer: Type Conversions
+
+Most of the slowdown occurs in this loop:
 
 ```rust
-// Current approach (src/fits.rs, src/healpix.rs)
-let f = File::open(filename)?;
-let reader = BufReader::new(f);      // Default 8 KB buffer
-let mut fits = Fits::from_reader(reader);
-// Sequential parsing of entire FITS structure
+for cell in values {
+    match cell {
+        DataValue::Double { value, .. } => result.push(value),
+        DataValue::Float { value, .. } => result.push(value as f64),
+        DataValue::Integer { value, .. } => result.push(value as f64),
+        other => panic!("Unsupported column type in FITS table: {:?}", other),
+    }
+}
 ```
 
-**Limitations:**
-- `fitsrs` library doesn't support streaming reads
-- Header parsing is sequential before accessing data
-- All HDU extensions processed even if not needed
+**Problem**: This processes **50 million pixels** one by one with match statement overhead for each cell.
 
----
+## Optimization Opportunities
 
-## Optimization Strategy 1: Increase Buffer Size ⭐ QUICK WIN
+### Tier 1: Direct Column Reading Without Type Conversion (Est. 30-40% speedup)
 
-**Effort:** 5 minutes  
-**Expected Impact:** 5-10% improvement  
-**Risk:** None
+**Current approach**: Read generic DataValue from table, then match-case convert each pixel  
+**Better approach**: Request column as specific type directly from fitsrs (if API supports)
 
-### Current Code
+**Constraint**: fitsrs `select_fields()` returns generic DataValue enum. Possible solutions:
+1. Check if fitsrs has type-aware column reading
+2. Implement FITS binary table parsing directly (bypass fitsrs type system)
+3. Use unsafe pointer casting from raw bytes
+
+**Difficulty**: Medium - requires understanding fitsrs internals or writing custom parser
+
+### Tier 2: Vectorize Type Conversion (Est. 15-25% speedup)
+
+Use SIMD to batch-convert values:
+
 ```rust
-let reader = BufReader::new(f);
+// Instead of pixel-by-pixel conversion, batch process
+// Use simdjson or similar for vectorized float parsing if data is ASCII
+// Or use explicit_simd for f32→f64 conversion on binary data
 ```
 
-### Optimized Code
+**Difficulty**: Medium - requires SIMD knowledge, dependency additions
+
+### Tier 3: Parallel FITS Parsing (Est. 10-20% speedup)
+
+Parse multiple HDUs or table chunks in parallel:
+
 ```rust
-let reader = BufReader::with_capacity(256 * 1024, f);  // 256 KB buffer
+// rayon parallel iteration over HDU blocks
+HDUs
+    .into_par_iter()
+    .flat_map(|hdu| parse_hdu_column(&hdu))
+    .collect()
 ```
 
-### Why This Works
-- Default BufReader: 8 KB
-- FITS records: 2880 bytes (most HDU extensions)
-- Current setup: ~2.8 records per buffer fill
-- Optimized: ~90 records per buffer fill
-- Reduces syscalls by 30-40x on column reads
+**Difficulty**: Medium - requires thread-safe FITS parsing
 
-### Implementation
+### Tier 4: Downgrade During Parsing (Est. 3-5% speedup)
+
+Fuse downgrade operation into the initial loading:
+
 ```rust
-// src/fits.rs::read_healpix_column()
+// Instead of: load 500M → downgrade → use
+// Do: load full but only store downsampled pixels
+```
+
+**Difficulty**: Low - mostly refactoring, already partially designed
+
+### Tier 5: Alternative FITS Library (Est. ??? - risky)
+
+Current: `fitsrs` provides safe Rust interface but with overhead  
+Alternative: `cfitsio` via FFI (faster but less safe)
+
+**Risk**: FFI complexity, safety issues, maintenance burden
+
+## Recommended Approach
+
+**Short term (io-optimization branch)**:
+1. Implement Tier 4 (downgrade during parsing) - quick win, 3-5% improvement
+2. Profile to confirm bottleneck is type conversion loop
+3. Implement Tier 1 or 2 based on profiling results
+
+**Long term**:
+1. Consider replacing `fitsrs` with faster FITS reader (possibly custom)
+2. Implement parallel HDU parsing if applicable
+3. Add per-column type caching to avoid repeated conversions
+
+## Implementation Plan
+
+### Step 1: Confirm Type Conversion Bottleneck
+
+Add detailed timing instrumentation to `read_healpix_column`:
+
+```rust
 pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
-    let f = File::open(filename).expect("Failed to open FITS file");
-    let reader = BufReader::with_capacity(256 * 1024, f);  // ← Add this
+    let t_start = std::time::Instant::now();
+    // ... file opening and parsing ...
+    let t_parsed = std::time::Instant::now();
+    eprintln!("FITS parsing: {:?}", t_parsed.duration_since(t_start));
     
-    let mut fits = Fits::from_reader(reader);
-    // ... rest unchanged
-}
-
-// src/healpix.rs::read_healpix_meta()
-pub fn read_healpix_meta(filename: &str) -> Result<HealpixMeta, String> {
-    let f = File::open(filename)
-        .map_err(|e| format!("Cannot open {}: {}", filename, e))?;
-    let reader = BufReader::with_capacity(256 * 1024, f);  // ← Add this
-    
-    let mut fits = Fits::from_reader(reader);
-    // ... rest unchanged
+    // Match and convert
+    for cell in values {
+        // ... conversion ...
+    }
+    let t_converted = std::time::Instant::now();
+    eprintln!("Type conversion: {:?}", t_converted.duration_since(t_parsed));
 }
 ```
 
----
+### Step 2: Implement Downgrade-During-Parsing
 
-## Optimization Strategy 2: Memory-Mapped I/O ⭐⭐ GOOD IMPACT
-
-**Effort:** 1-2 hours  
-**Expected Impact:** 10-20% improvement  
-**Risk:** Low (isolated to I/O layer)  
-**Compatibility:** Works on Linux/Mac/Windows
-
-### Why mmap Helps
-- Eliminates buffering overhead
-- OS kernel handles page caching
-- Large sequential reads become "free" (cached data)
-- Particularly effective for 193 MB file (many page cache hits)
-
-### Implementation Sketch
+Modify loading to optionally downsample on the fly:
 
 ```rust
-// Add to Cargo.toml
-memmap2 = "0.9"  // Modern fork of memmap with safety improvements
-
-// Create wrapper function
-use memmap2::Mmap;
-use std::fs::File;
-
-fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
-    let file = File::open(filename)?;
-    let mmap = unsafe { Mmap::map(&file)? };  // Safe if file not modified
-    
-    // Create in-memory reader from mmap
-    let cursor = std::io::Cursor::new(&mmap[..]);
-    let mut fits = fitsrs::Fits::from_reader(cursor);
-    
-    // Rest of parsing logic unchanged
-    // Benefits from ~zero-copy access to file data
+pub fn read_healpix_column_with_downgrade(
+    filename: &str, 
+    col_idx: usize,
+    target_nside: Option<i64>
+) -> Vec<f64> {
+    // If target_nside provided, collect into downsampled map instead of full
 }
 ```
 
-### Performance Characteristics
+### Step 3: Benchmark and Document
 
-| File Size | BufReader (8KB) | BufReader (256KB) | mmap | Improvement |
-|-----------|---|---|---|---|
-| 6.8 MB | 305 ms | 285 ms (-7%) | 260 ms (-15%) | 45 ms |
-| 25 MB | 595 ms | 530 ms (-11%) | 475 ms (-20%) | 120 ms |
-| 73 MB | 592 ms | 520 ms (-12%) | 470 ms (-21%) | 122 ms |
-| 193 MB | 2,135 ms | 1,920 ms (-10%) | 1,710 ms (-20%) | 425 ms |
+Compare:
+- Standard reading (full resolution)
+- Downgrade-during-parsing (with downgrade)
+- Current downgrade-after-parsing
 
-**Estimated Speedup:** 10-20% across all file sizes
+Target: 3-5% improvement from Tier 4 enough to make --no-downgrade viable for moderately large files.
 
----
+## Conclusion
 
-## Optimization Strategy 3: Parallel Column Reading ⭐⭐ MEDIUM EFFORT
+The "slow I/O" is actually **slow FITS parsing due to generic type system overhead**. The path forward:
 
-**Effort:** 2-3 hours  
-**Expected Impact:** 15-25% improvement (if needed)  
-**Risk:** Medium (coordination complexity)  
-**Works for:** Files with multiple data columns
+1. ✅ Confirmed mmap won't help (not I/O bound)
+2. ⏳ Profile to confirm type conversion is bottleneck
+3. ⏳ Implement downgrade-during-parsing optimization
+4. ⏳ Consider vectorizing type conversions if viable
+5. ⏳ Evaluate alternative FITS libraries for long-term solution
 
-### Current Situation
-- Sparse maps: Column extraction already parallelized via rayon (good!)
-- Dense maps: Single column extraction is sequential (potential here)
-
-### When to Use This
-If you're reading **multiple columns from same FITS file**, we can read them in parallel:
-
-```rust
-// Hypothetical future feature
-let columns: Vec<usize> = vec![0, 1, 2];  // Read 3 columns
-let data = columns.par_iter()  // Parallel via rayon
-    .map(|&col| read_healpix_column(filename, col))
-    .collect();
-```
-
-### Challenge
-- `fitsrs` library doesn't support multiple simultaneous readers
-- Would require:
-  - Open file multiple times (expensive)
-  - OR coordinate reads with mutex
-  - OR refactor FITS parsing layer
-
-**Verdict:** Not worth it right now. Skip this.
-
----
-
-## Optimization Strategy 4: Streaming FITS Parser ⭐⭐⭐ HIGH EFFORT
-
-**Effort:** 1-2 weeks  
-**Expected Impact:** 30-40% improvement  
-**Risk:** High (requires parser rewrite)  
-**Complexity:** Very high
-
-### Challenge
-Current `fitsrs` design:
-1. Parse ALL extensions into memory
-2. Build index
-3. Access via index (fast random access)
-
-Alternative approach (streaming):
-1. Parse header only
-2. Seek to data start
-3. Stream column data on demand
-4. Never load unused extensions
-
-### Implementation Complexity
-- Requires forking `fitsrs` or implementing custom parser
-- Must understand FITS binary table format intimately
-- Must handle edge cases (variable-length columns, checksums)
-- Risks: Data corruption if seeking is off by 1 byte
-
-**Verdict:** Not recommended unless you have a specialized use case
-
----
-
-## Optimization Strategy 5: Alternative File Formats ⭐⭐⭐⭐ BEST LONG-TERM
-
-**Effort:** 2-4 weeks (including format conversion)  
-**Expected Impact:** 40-60% improvement  
-**Risk:** Format compatibility issues  
-**Benefit:** Future-proof, better ecosystem
-
-### Option A: HDF5
-```
-Pros:
-  ✅ Native compression support
-  ✅ Fast random access
-  ✅ Chunked storage (read only needed chunks)
-  ✅ Parallel I/O support (h5py, h5py-mpi)
-  ✅ Better for large files
-
-Cons:
-  ❌ Less common in astronomy (but growing)
-  ❌ Requires conversion from FITS
-  ❌ Library size larger
-```
-
-### Option B: NetCDF4 (HDF5-based)
-```
-Pros:
-  ✅ Astronomy-friendly format
-  ✅ cf_conventions standard
-  ✅ Excellent time-series/spatial support
-  ✅ Built on HDF5 (fast I/O)
-
-Cons:
-  ❌ Less standard than FITS in astronomy
-  ❌ Conversion pipeline complexity
-```
-
-### Option C: Parquet (Apache)
-```
-Pros:
-  ✅ Extremely fast column-oriented reads
-  ✅ Excellent compression
-  ✅ Standard in Big Data world
-  ✅ Columnar format matches HEALPix naturally
-
-Cons:
-  ❌ Not astronomical standard
-  ❌ Metadata limitations
-```
-
-### Code Estimate for HDF5 Migration
-
-```rust
-// Would need approximately:
-// - h5 crate integration (200 lines refactoring)
-// - Format conversion script (100 lines Python)
-// - Metadata mapping for HEALPix headers (150 lines)
-// - Tests/validation (200 lines)
-// Total: ~650 lines of work
-
-// Sample API (unchanged from user perspective)
-let data = read_healpix_column("map.h5", 0);  // Same function signature
-```
-
----
-
-## Recommended Action Plan
-
-### Phase 1: Quick Wins (1 hour, ~10% speedup)
-1. ✅ Increase BufReader buffer to 256 KB
-   - File: `src/fits.rs`, `src/healpix.rs`
-   - Change: `BufReader::with_capacity(256 * 1024, f)`
-2. Test and verify 5-10% improvement
-
-### Phase 2: mmap Evaluation (2-3 hours, additional 10% speedup)
-1. Create feature flag: `use-mmap`
-2. Implement mmap variant with safety guards
-3. Benchmark both approaches
-4. Decision: Keep, make default, or remove based on platform
-
-### Phase 3: Monitor & Profile (ongoing)
-1. Add instrumentation to identify bottlenecks
-2. If FITS parsing > 40% of time, consider:
-   - Parallel column reading (if multiple columns)
-   - Streaming reader (if many files)
-3. Periodically check if `fitsrs` adds streaming support
-
-### Phase 4: Long-term (if time permits)
-1. Evaluate HDF5 format for new projects
-2. Create conversion utilities for existing FITS files
-3. Parallel HDF5 I/O with h5py-mpi
-
----
-
-## Code Changes Required
-
-### Option 1: BufReader Buffer Size (Recommended)
-
-**File:** `src/fits.rs`
-```diff
-  pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
-      let f = File::open(filename).expect("Failed to open FITS file");
--     let reader = BufReader::new(f);
-+     let reader = BufReader::with_capacity(256 * 1024, f);
-      
-      let mut fits = Fits::from_reader(reader);
-```
-
-**File:** `src/healpix.rs`
-```diff
-  pub fn read_healpix_meta(filename: &str) -> Result<HealpixMeta, String> {
-      let f = File::open(filename)
-          .map_err(|e| format!("Cannot open {}: {}", filename, e))?;
--     let reader = BufReader::new(f);
-+     let reader = BufReader::with_capacity(256 * 1024, f);
-      
-      let mut fits = Fits::from_reader(reader);
-```
-
-**Result:** 5-10% speedup, zero risk
-
-### Option 2: Memory-Mapped I/O (if motivated)
-
-**Cargo.toml:**
-```diff
-  [dependencies]
-+ memmap2 = "0.9"
-```
-
-**New module:** `src/io/mmap.rs`
-```rust
-use memmap2::Mmap;
-use std::fs::File;
-use std::io::Cursor;
-
-pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
-    let file = File::open(filename).expect("Failed to open file");
-    // SAFETY: FITS file is not modified during read
-    let mmap = unsafe { Mmap::map(&file) }
-        .expect("Failed to map file");
-    
-    let cursor = Cursor::new(&mmap[..]);
-    let mut fits = fitsrs::Fits::from_reader(cursor);
-    
-    // Rest of logic identical to read_healpix_column()
-    // ... implementation ...
-}
-```
-
-**Result:** Additional 10-20% speedup, adds complexity
-
----
-
-## Performance Projection
-
-### Without any changes
-```
-193 MB file: 2,135 ms
-├── I/O: 1,000 ms (47%)
-├── Rendering: 600 ms (28%)
-├── System: 384 ms (18%)
-└── Other: 151 ms (7%)
-```
-
-### With BufReader optimization
-```
-193 MB file: 1,920 ms (-10%)
-├── I/O: 850 ms (44%)     ← Reduced
-├── Rendering: 600 ms (31%)
-├── System: 384 ms (20%)
-└── Other: 86 ms (4%)
-```
-
-### With BufReader + mmap
-```
-193 MB file: 1,710 ms (-20%)
-├── I/O: 650 ms (38%)     ← Further reduced
-├── Rendering: 600 ms (35%)
-├── System: 384 ms (22%)
-└── Other: 76 ms (4%)
-```
-
-### Ceiling (optimal case)
-```
-193 MB file: ~1,200 ms (-44%)  ← Requires streaming parser or format change
-├── I/O: 100 ms (8%)       ← Requires streaming/chunked reads
-├── Rendering: 600 ms (50%)
-├── System: 384 ms (32%)
-└── Other: 116 ms (10%)
-```
-
----
-
-## Recommendation
-
-**For immediate adoption:** Implement BufReader buffer size increase
-- **Effort:** 5 minutes
-- **Risk:** None
-- **Benefit:** 5-10% speedup
-- **Cost-benefit:** Excellent
-
-**For next sprint (if motivated):** Add mmap variant
-- **Effort:** 2-3 hours
-- **Risk:** Low
-- **Benefit:** Additional 10-20%
-- **Cost-benefit:** Good
-
-**For long-term (future project):** Evaluate HDF5
-- **Effort:** 2-4 weeks
-- **Risk:** Medium
-- **Benefit:** 40-60% improvement
-- **Cost-benefit:** Excellent for large-scale use
-
-**Skip:** Parallel column reading, streaming parser (not cost-effective)
-
----
-
-## References
-
-- **memmap2 crate:** https://crates.io/crates/memmap2
-- **fitsrs documentation:** https://docs.rs/fitsrs/
-- **FITS standard:** https://fits.gsfc.nasa.gov/fits_standard.html
-- **HDF5 Rust bindings:** https://crates.io/crates/hdf5
+This analysis shows GPU acceleration was limited not by rendering performance, but by the fundamental FITS data loading architecture - a separate concern that should be addressed independently.
