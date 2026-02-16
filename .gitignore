@@ -32,3 +32,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.lock
+callgrind.out.*
+cachegrind.out.*
+perf.data*
