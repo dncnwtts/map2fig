@@ -1165,17 +1165,25 @@ fn downgrade_healpix_map_ang(
     result
 }
 
-fn downgrade_healpix_map_xyf(
+/// Optimized downsampling: iterate source pixels efficiently
+/// 
+/// Instead of the usual nested-loop approach where we iterate targets
+/// and look up sources (randomizing cache), we iterate source pixels
+/// and update their contributing target pixels.
+///
+/// For a ratio of 16:1 (8192→512), this changes from:
+///   target_npix iterations × 256 random source accesses
+/// to:
+///   source_npix iterations × 1 target update
+///
+/// For large maps, source_npix >> target_npix, so this is worse!
+/// Reverting to original approach which is faster.
+fn downgrade_healpix_map_xyf_original(
     map: &[f64],
     source_nside: i64,
     target_nside: i64,
     ordering: HealpixOrdering,
 ) -> Vec<f64> {
-    if source_nside <= target_nside {
-        return map.to_vec();
-    }
-    assert_eq!(source_nside % target_nside, 0);
-
     let fact = source_nside / target_nside;
     let min_hits = 1;
     let target_npix = (12 * target_nside * target_nside) as usize;
@@ -1216,6 +1224,21 @@ fn downgrade_healpix_map_xyf(
     }
 
     result
+}
+
+fn downgrade_healpix_map_xyf(
+    map: &[f64],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<f64> {
+    if source_nside <= target_nside {
+        return map.to_vec();
+    }
+    assert_eq!(source_nside % target_nside, 0);
+
+    // Use original (proven fast) algorithm
+    downgrade_healpix_map_xyf_original(map, source_nside, target_nside, ordering)
 }
 
 pub fn downgrade_healpix_map(
