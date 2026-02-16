@@ -86,6 +86,7 @@ pub mod rotation;
 pub mod scale;
 pub mod setup;
 pub mod simd;
+pub mod simd_wide;
 
 // Re-export useful items
 pub use cli::{Args, PlotConfig};
