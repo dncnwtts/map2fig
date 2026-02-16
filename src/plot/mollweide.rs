@@ -19,6 +19,56 @@ use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
 use std::path::Path;
 
+/// Compute percentile memory-efficiently without allocating full copy for large maps
+/// Uses sampling for maps > 50M pixels to avoid 12+ GB allocations
+fn compute_percentile_from_map(map: &[f64], percentile_pct: f64, max_sample_size: usize) -> f64 {
+    use std::cmp::Ordering;
+    
+    // For very large maps, sample instead of allocating full vector
+    let skip_rate = if map.len() > max_sample_size {
+        (map.len() as f64 / max_sample_size as f64).ceil() as usize
+    } else {
+        1
+    };
+    
+    // Collect samples (avoids allocating full 6.4 GB vector for 806M pixel maps)
+    let estimated_samples = (map.len() + skip_rate - 1) / skip_rate;
+    let mut samples = Vec::with_capacity(estimated_samples.min(max_sample_size * 2));
+    
+    for (i, &val) in map.iter().enumerate() {
+        if is_seen(val) && (i % skip_rate == 0 || skip_rate == 1) {
+            samples.push(val);
+        }
+    }
+    
+    if samples.is_empty() {
+        return 0.0;
+    }
+    
+    // Sort only the sample (much faster than sorting 806M pixels)
+    samples.sort_unstable_by(|a, b| {
+        if a < b {
+            Ordering::Less
+        } else if a > b {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    });
+    
+    // Compute percentile of samples
+    let n = samples.len();
+    let rank = (percentile_pct / 100.0) * (n - 1) as f64;
+    let idx = rank.floor() as usize;
+    let frac = rank - idx as f64;
+    
+    if idx + 1 < n {
+        samples[idx] * (1.0 - frac) + samples[idx + 1] * frac
+    } else {
+        samples[idx]
+    }
+}
+
 pub fn compute_mollweide_scale(
     map: &[f64],
     minv: Option<f64>,
@@ -26,16 +76,46 @@ pub fn compute_mollweide_scale(
     gamma: f64,
     scale: Scale,
 ) -> MollweideScale {
-    let mut values: Vec<f64> = map.iter().filter(|v| is_seen(**v)).copied().collect();
-
-    if values.is_empty() {
-        panic!("Map contains no valid HEALPix values");
-    }
-
-    values.sort_unstable_by(unsafe_float_cmp);
-
-    let data_min = *values.first().unwrap();
-    let data_max = *values.last().unwrap();
+    const MAX_PERCENTILE_SAMPLE_SIZE: usize = 10_000_000; // 10M samples = 80 MB, not 6.4 GB
+    
+    // **Tier 1.2: Memory optimization for huge maps**
+    // For maps > 50M pixels, use sampling instead of allocating full vector
+    // Reduces 806M pixel map memory from 6.4 GB to 80 MB
+    let (data_min, data_max, p5, p95) = if map.len() > 50_000_000 {
+        // Large map: use efficient streaming computation
+        let mut min = f64::INFINITY;
+        let mut max = f64::NEG_INFINITY;
+        
+        for &val in map.iter() {
+            if is_seen(val) {
+                if val < min { min = val; }
+                if val > max { max = val; }
+            }
+        }
+        
+        if min.is_infinite() {
+            panic!("Map contains no valid HEALPix values");
+        }
+        
+        let p5 = compute_percentile_from_map(map, 5.0, MAX_PERCENTILE_SAMPLE_SIZE);
+        let p95 = compute_percentile_from_map(map, 95.0, MAX_PERCENTILE_SAMPLE_SIZE);
+        (min, max, p5, p95)
+    } else {
+        // Small map: use original accurate method
+        let mut values: Vec<f64> = map.iter().filter(|v| is_seen(**v)).copied().collect();
+        
+        if values.is_empty() {
+            panic!("Map contains no valid HEALPix values");
+        }
+        
+        values.sort_unstable_by(unsafe_float_cmp);
+        
+        let data_min = *values.first().unwrap();
+        let data_max = *values.last().unwrap();
+        let p5 = percentile(&values, 5.0);
+        let p95 = percentile(&values, 95.0);
+        (data_min, data_max, p5, p95)
+    };
 
     let (minv, maxv) = match scale {
         // 🔴 Histogram scale overrides percentiles
@@ -47,7 +127,7 @@ pub fn compute_mollweide_scale(
         // 🟢 All other scales keep percentile default
         _ => match (minv, maxv) {
             (Some(lo), Some(hi)) => (lo, hi),
-            _ => (percentile(&values, 5.0), percentile(&values, 95.0)),
+            _ => (p5, p95),
         },
     };
 
@@ -151,35 +231,6 @@ where
         show_colorbar,
         params.display.tick_direction.clone(),
     );
-
-    let mut values: Vec<f64> = map.iter().filter(|&v| is_seen(*v)).copied().collect();
-
-    if values.is_empty() {
-        // Diagnostic: check what we actually have
-        let n_maps = map.len();
-        let n_finite = map.iter().filter(|v| v.is_finite()).count();
-        let n_gt_neg1e30 = map.iter().filter(|v| **v > -1e30).count();
-        let n_inf = map.iter().filter(|v| v.is_infinite()).count();
-        let n_nan = map.iter().filter(|v| v.is_nan()).count();
-
-        eprintln!("\n=== DEBUG: No valid HEALPix values found ===");
-        eprintln!("Total pixels in map: {}", n_maps);
-        eprintln!("Finite values: {}", n_finite);
-        eprintln!("Values > -1e30: {}", n_gt_neg1e30);
-        eprintln!("Infinite values: {}", n_inf);
-        eprintln!("NaN values: {}", n_nan);
-        if !map.is_empty() {
-            eprintln!(
-                "Min: {:.6e}, Max: {:.6e}",
-                map.iter().copied().fold(f64::INFINITY, f64::min),
-                map.iter().copied().fold(f64::NEG_INFINITY, f64::max)
-            );
-            eprintln!("First 5 values: {:?}", &map[..5.min(map.len())]);
-        }
-        panic!("Map contains no valid HEALPix values");
-    }
-
-    values.sort_unstable_by(unsafe_float_cmp);
 
     let surface_pdf = PdfSurface::new(layout.width, layout.height, filename)
         .expect("Failed to create PDF surface");

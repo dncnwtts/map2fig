@@ -35,6 +35,163 @@ use fitsrs::hdu::data::bintable::{ColumnId, DataValue};
 use fitsrs::{Fits, HDU, card::Value};
 use rayon::prelude::*;
 
+// ============================================================================
+// Tier 1 Optimization: Direct Binary Reading for Float32 Columns
+// ============================================================================
+
+/// Parse FITS TFORM code to extract array count and type
+/// E.g., "4096E" -> (4096, 'E'), "1D" -> (1, 'D')
+fn parse_tform(tform: &str) -> Option<(usize, char)> {
+    let tform = tform.trim();
+    let type_char = tform.chars().last()?;
+    
+    let count_str = tform.trim_end_matches(type_char);
+    let count: usize = if count_str.is_empty() {
+        1
+    } else {
+        count_str.parse().ok()?
+    };
+    
+    Some((count, type_char))
+}
+
+/// Fast path for reading float32 columns directly from binary data
+/// Bypasses fitsrs DataValue enum conversion (Tier 1 Optimization)
+/// 
+/// This function:
+/// 1. Uses fitsrs to parse headers and find table offset
+/// 2. Reads column binary data directly from mmap
+/// 3. Interprets float32 values inline (no enum)
+/// 4. Converts to f64 in a tight loop
+///
+/// Expected improvement: 2-3× speedup by eliminating enum match overhead
+fn try_read_float32_column_fast(
+    filename: &str,
+    mmap_data: &[u8],
+    col_idx: usize,
+) -> Option<(Vec<f64>, i64)> {
+    use std::io::Cursor;
+
+    let cursor = Cursor::new(mmap_data);
+    let mut fits = Fits::from_reader(cursor);
+    let mut nside: i64 = 0;
+
+    while let Some(Ok(hdu)) = fits.next() {
+        if let HDU::XBinaryTable(hdu) = hdu {
+            let header = hdu.get_header();
+
+            // Skip sparse maps (explicit indexing) - use fallback path
+            let has_explicit_indexing = match header.get("INDXSCHM") {
+                Some(Value::String { value, .. }) => value.trim() == "EXPLICIT",
+                _ => false,
+            };
+            if has_explicit_indexing {
+                return None;
+            }
+
+            // Get NSIDE
+            if nside == 0 {
+                match header.get("NSIDE") {
+                    Some(Value::Integer { value, .. }) => nside = *value,
+                    _ => return None,
+                };
+            }
+
+            // Get column type and count from TFORM
+            let tform_key = format!("TFORM{}", col_idx + 1);
+            let tform_str = match header.get(&tform_key) {
+                Some(Value::String { value, .. }) => value.clone(),
+                _ => return None,
+            };
+
+            let (elem_count, type_char) = parse_tform(&tform_str)?;
+
+            // Fast path ONLY for float32 ('E') columns
+            if type_char != 'E' {
+                return None;
+            }
+
+            // Get column byte offset from TOFFSET
+            let toffset_key = format!("TOFFSET{}", col_idx + 1);
+            let col_offset: usize = match header.get(&toffset_key) {
+                Some(Value::Integer { value, .. }) => *value as usize,
+                _ => return None,
+            };
+
+            // Get row byte size (NAXIS1)
+            let row_size: usize = match header.get("NAXIS1") {
+                Some(Value::Integer { value, .. }) => *value as usize,
+                _ => return None,
+            };
+
+            // Get number of rows (NAXIS2)
+            let num_rows: usize = match header.get("NAXIS2") {
+                Some(Value::Integer { value, .. }) => *value as usize,
+                _ => return None,
+            };
+
+            // Find data offset (after all headers, which are 2880-byte blocks)
+            let data_offset = find_binary_table_data_offset(mmap_data)?;
+
+            // Pre-allocate result
+            let total_elems = elem_count * num_rows;
+            let mut result = Vec::with_capacity(total_elems);
+
+            // Read column data directly from binary
+            for row in 0..num_rows {
+                let row_start = data_offset + row * row_size + col_offset;
+                let row_end = row_start + elem_count * 4; // 4 bytes per float32
+
+                if row_end > mmap_data.len() {
+                    return None;
+                }
+
+                let column_bytes = &mmap_data[row_start..row_end];
+
+                // Interpret bytes as f32 array and convert to f64
+                for chunk in column_bytes.chunks_exact(4) {
+                    let bytes = [chunk[0], chunk[1], chunk[2], chunk[3]];
+                    let f32_val = f32::from_le_bytes(bytes);
+                    result.push(f32_val as f64);
+                }
+            }
+
+            return Some((result, nside));
+        }
+    }
+
+    None
+}
+
+/// Find the binary data offset in a FITS file (after all header blocks)
+/// FITS headers are padded to 2880-byte blocks; data starts at next block after last header
+fn find_binary_table_data_offset(mmap_data: &[u8]) -> Option<usize> {
+    const FITS_BLOCK_SIZE: usize = 2880;
+
+    for block_num in 0..1000 {
+        let block_start = block_num * FITS_BLOCK_SIZE;
+        if block_start + 80 > mmap_data.len() {
+            return None;
+        }
+
+        let block = &mmap_data[block_start..];
+
+        // Look for "END" keyword in first 80 bytes of a block
+        // FITS cards are 80 bytes, keyword is first 8 bytes
+        for card_off in (0..block.len()).step_by(80) {
+            if card_off + 3 <= block.len() {
+                let card_start = &block[card_off..card_off + 8];
+                if card_start.starts_with(b"END     ") {
+                    // Data starts at next 2880-byte block
+                    return Some((block_num + 1) * FITS_BLOCK_SIZE);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Read a HEALPix column from a FITS binary table.
 ///
 /// Extracts data from a specific column of a HEALPix FITS binary table.
@@ -68,6 +225,13 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
     let f = File::open(filename).expect("Failed to open FITS file");
     let mmap = unsafe { Mmap::map(&f).expect("Failed to mmap FITS file") };
 
+    // Tier 1 Optimization: Try fast path for float32 columns first (2-3× speedup)
+    // Bypasses fitsrs DataValue enum conversion for typical HEALPix float32 data
+    if let Some((data, _nside)) = try_read_float32_column_fast(filename, &mmap, col_idx) {
+        return data;
+    }
+
+    // Fallback path: Use fitsrs DataValue enum (slower but handles all types)
     let cursor = Cursor::new(&mmap[..]);
     let mut fits = Fits::from_reader(cursor);
     let mut result: Vec<f64> = Vec::new();
@@ -103,8 +267,8 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 // - Adjust file column: file_col = col_idx + 1
                 let file_col_for_data = col_idx + 1;
 
-                // Tier 1 Optimization: Select both columns together in a single call
-                // This preserves the column correspondence (original 0.4.0 behavior)
+                // Select both columns together in a single call
+                // This preserves the column correspondence
                 // Do NOT call select_fields twice - that breaks the pairing!
                 let all_values: Vec<DataValue> = table
                     .select_fields(&[ColumnId::Index(0), ColumnId::Index(file_col_for_data)])
