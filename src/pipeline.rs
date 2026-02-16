@@ -21,6 +21,9 @@ pub fn load_and_process_data(
     verbose: bool,
     no_downgrade: bool,
 ) -> Result<ProcessedData, String> {
+    use std::time::Instant;
+    let phase_start = Instant::now();
+    
     let Some(new_fits_path) = fits_path else {
         let map = generate_index_map(1);
         let meta = HealpixMeta {
@@ -42,7 +45,10 @@ pub fn load_and_process_data(
     // Note: Zero-valued pixels are treated as masked/unseen pixels.
     // This is important for files with explicit masking where 0.0 represents bad/masked data.
     // We check for zero values BEFORE scaling, and also preserve existing HPX_UNSEEN values.
+    let fits_read_start = Instant::now();
     let mut map = read_healpix_column_cached(new_fits_path, col);
+    let fits_read_time = fits_read_start.elapsed();
+    
     for v in &mut map {
         // Skip already-unseen pixels (from FITS file with explicit HPX_UNSEEN values)
         if !is_seen(*v) {
@@ -73,8 +79,16 @@ pub fn load_and_process_data(
                 );
             }
 
+            let downgrade_start = Instant::now();
             let downgraded_map =
                 downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering);
+            let downgrade_time = downgrade_start.elapsed();
+            
+            if verbose {
+                eprintln!("  FITS read:      {:.3}s", fits_read_time.as_secs_f64());
+                eprintln!("  Downgrade:      {:.3}s", downgrade_time.as_secs_f64());
+            }
+            
             (
                 downgraded_map,
                 HealpixMeta {
