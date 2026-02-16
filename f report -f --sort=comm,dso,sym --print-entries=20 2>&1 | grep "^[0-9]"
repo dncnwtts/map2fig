@@ -1,0 +1,23 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 611  of event 'cycles:u'
+# Event count (approx.): 49701249986
+#
+# Overhead  Command  Shared Object     Symbol                                                                                               
+# ........  .......  ................  .....................................................................................................
+#
+  [31m  61.48%[m  map2fig  map2fig           [.] map2fig::pipeline::load_and_process_data
+  [31m  30.78%[m  map2fig  map2fig           [.] <fitsrs::hdu::data::bintable::data::TableData<R> as core::iter::traits::iterator::Iterator>::next
+  [31m   5.87%[m  map2fig  map2fig           [.] map2fig::fits::read_healpix_column_cached
+  [32m   1.15%[m  map2fig  [unknown]         [k] 0xffffffffad000b90
+     0.35%  map2fig  libm.so.6         [.] __cos_fma
+     0.19%  map2fig  libm.so.6         [.] __ieee754_asin_fma
+     0.18%  map2fig  map2fig           [.] map2fig::healpix::ang2pix_ring
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

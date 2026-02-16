@@ -315,7 +315,7 @@ pub fn render_projection_to_grid<P: crate::projection::Projection>(
             let (lons_lo, lats_lo, proj_mask_lo) =
                 params
                     .proj
-                    .pixel_to_ang_batch(&px_array_lo, &py_array_lo, grid);
+                    .pixel_to_ang_batch_simd(&px_array_lo, &py_array_lo, grid);
 
             // Convert latitudes to theta values
             let mut thetas_lo = [0.0_f64; 8];
@@ -356,7 +356,7 @@ pub fn render_projection_to_grid<P: crate::projection::Projection>(
             let (lons_hi, lats_hi, proj_mask_hi) =
                 params
                     .proj
-                    .pixel_to_ang_batch(&px_array_hi, &py_array_hi, grid);
+                    .pixel_to_ang_batch_simd(&px_array_hi, &py_array_hi, grid);
 
             // Convert latitudes to theta values
             let mut thetas_hi = [0.0_f64; 8];
@@ -786,9 +786,9 @@ pub fn render_projection_to_grid<P: crate::projection::Projection>(
                 *item = px + i as u32;
             }
 
-            // Batch projection
+            // Batch projection (using SIMD-accelerated version)
             let (lons, lats, proj_mask) =
-                params.proj.pixel_to_ang_batch(&px_array, &py_array, grid);
+                params.proj.pixel_to_ang_batch_simd(&px_array, &py_array, grid);
 
             // Convert to theta
             let mut thetas = [0.0_f64; 8];
