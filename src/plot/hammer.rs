@@ -38,6 +38,8 @@ fn render_hammer_pixels(
             view: params.view,
             mask: params.mask,
             scale_cache: params.scale_cache,
+            underflow: (255, 0, 0),
+            overflow: (0, 0, 255),
         },
         &mut grid,
     );

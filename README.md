@@ -434,7 +434,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 ```bash
 ./map2fig -f masked_map.fits \
   --neg-mode unseen \
-  --bad-color "200,200,200" \
+  --bad-color "200,200,200,255" \
   --min 0.01 --max 100 \
   --log \
   -o masked_clean.pdf
@@ -442,7 +442,7 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 
 **Parameters**:
 - `--neg-mode unseen`: Treat negative/masked pixels as UNSEEN (not included in scale calculation)
-- `--bad-color`: Render masked pixels in light gray (RGB: 200,200,200)
+- `--bad-color`: Render masked pixels in light gray (RGBA: 200,200,200,255 or hex: #C8C8C8)
 
 **Alternative**: `--neg-mode zero` treats negatives as 0.
 

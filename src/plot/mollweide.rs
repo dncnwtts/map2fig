@@ -94,6 +94,8 @@ pub fn render_mollweide_pixels(
             view: params.view,
             mask: params.mask,
             scale_cache: params.scale_cache,
+            underflow: (255, 0, 0),
+            overflow: (0, 0, 255),
         },
         &mut grid,
     );
@@ -153,6 +155,27 @@ where
     let mut values: Vec<f64> = map.iter().filter(|&v| is_seen(*v)).copied().collect();
 
     if values.is_empty() {
+        // Diagnostic: check what we actually have
+        let n_maps = map.len();
+        let n_finite = map.iter().filter(|v| v.is_finite()).count();
+        let n_gt_neg1e30 = map.iter().filter(|v| **v > -1e30).count();
+        let n_inf = map.iter().filter(|v| v.is_infinite()).count();
+        let n_nan = map.iter().filter(|v| v.is_nan()).count();
+
+        eprintln!("\n=== DEBUG: No valid HEALPix values found ===");
+        eprintln!("Total pixels in map: {}", n_maps);
+        eprintln!("Finite values: {}", n_finite);
+        eprintln!("Values > -1e30: {}", n_gt_neg1e30);
+        eprintln!("Infinite values: {}", n_inf);
+        eprintln!("NaN values: {}", n_nan);
+        if !map.is_empty() {
+            eprintln!(
+                "Min: {:.6e}, Max: {:.6e}",
+                map.iter().copied().fold(f64::INFINITY, f64::min),
+                map.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+            );
+            eprintln!("First 5 values: {:?}", &map[..5.min(map.len())]);
+        }
         panic!("Map contains no valid HEALPix values");
     }
 
@@ -451,6 +474,27 @@ pub fn _plot_mollweide_png_impl_projected<F>(
     let mut values: Vec<f64> = map.iter().filter(|&v| is_seen(*v)).copied().collect();
 
     if values.is_empty() {
+        // Diagnostic: check what we actually have
+        let n_maps = map.len();
+        let n_finite = map.iter().filter(|v| v.is_finite()).count();
+        let n_gt_neg1e30 = map.iter().filter(|v| **v > -1e30).count();
+        let n_inf = map.iter().filter(|v| v.is_infinite()).count();
+        let n_nan = map.iter().filter(|v| v.is_nan()).count();
+
+        eprintln!("\n=== DEBUG: No valid HEALPix values found ===");
+        eprintln!("Total pixels in map: {}", n_maps);
+        eprintln!("Finite values: {}", n_finite);
+        eprintln!("Values > -1e30: {}", n_gt_neg1e30);
+        eprintln!("Infinite values: {}", n_inf);
+        eprintln!("NaN values: {}", n_nan);
+        if !map.is_empty() {
+            eprintln!(
+                "Min: {:.6e}, Max: {:.6e}",
+                map.iter().copied().fold(f64::INFINITY, f64::min),
+                map.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+            );
+            eprintln!("First 5 values: {:?}", &map[..5.min(map.len())]);
+        }
         panic!("Map contains no valid HEALPix values");
     }
 

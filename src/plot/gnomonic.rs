@@ -178,6 +178,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
             view,
             mask,
             scale_cache: Some(&scale_cache),
+            underflow: (255, 0, 0),
+            overflow: (0, 0, 255),
         },
         &mut grid,
     );
@@ -674,6 +676,8 @@ pub fn plot_gnomonic_pdf(params: GnomonicParams) {
             view,
             mask,
             scale_cache: Some(&scale_cache),
+            underflow: (255, 0, 0),
+            overflow: (0, 0, 255),
         },
         &mut grid,
     );

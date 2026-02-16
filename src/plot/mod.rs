@@ -8,7 +8,6 @@ use ab_glyph::{FontRef, PxScale};
 use cairo::{Context, Format, ImageSurface};
 use image::Rgba;
 use imageproc::drawing::draw_text_mut;
-use rayon::prelude::*;
 
 /// Tile structure for parallel rendering
 /// Represents a rectangular region of the output image
@@ -28,8 +27,8 @@ struct Tile {
 #[allow(dead_code)]
 fn partition_tiles(total_width: u32, total_height: u32, tile_size: u32) -> Vec<Tile> {
     let mut tiles = Vec::new();
-    let tiles_per_row = (total_width + tile_size - 1) / tile_size;
-    let tiles_per_col = (total_height + tile_size - 1) / tile_size;
+    let tiles_per_row = total_width.div_ceil(tile_size);
+    let tiles_per_col = total_height.div_ceil(tile_size);
 
     for ty in 0..tiles_per_col {
         for tx in 0..tiles_per_row {
@@ -285,7 +284,10 @@ pub fn draw_figure_labels_png(
 }
 
 /// Render projection to grid
-pub fn render_projection_to_grid(params: crate::params::RenderGridParams, grid: &mut RasterGrid) {
+pub fn render_projection_to_grid<P: crate::projection::Projection>(
+    params: crate::params::RenderGridParams<P>,
+    grid: &mut RasterGrid,
+) {
     let width = grid.width;
     let height = grid.height;
 

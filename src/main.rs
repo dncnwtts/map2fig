@@ -12,6 +12,8 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    use std::time::Instant;
+
     let args = Args::parse();
 
     // Validate PDF backend argument
@@ -24,14 +26,22 @@ fn run() -> Result<(), String> {
         ));
     }
 
+    let total_start = Instant::now();
+
     // Setup: Initialize configuration and load data
+    let setup_start = Instant::now();
     let setup_result = setup::setup_initialization(&args, args.verbose)?;
+    let setup_time = setup_start.elapsed();
+
+    let load_start = Instant::now();
     let data = setup::load_data(&args, args.verbose)?;
+    let load_time = load_start.elapsed();
 
     // Create mask if specified
     let mask = cli_builder::create_pixel_mask(&args, &data, args.verbose)?;
 
     // Execute: Perform the actual plotting
+    let exec_start = Instant::now();
     let exec_config = ExecutionConfig {
         args: &args,
         plot_config: &setup_result.config,
@@ -41,9 +51,29 @@ fn run() -> Result<(), String> {
     };
 
     executor::execute_plot(&exec_config, args.verbose)?;
+    let exec_time = exec_start.elapsed();
+
+    let total_time = total_start.elapsed();
 
     if args.verbose {
         println!("Plot generation completed successfully\n");
+        eprintln!("\n=== Performance Breakdown ===");
+        eprintln!(
+            "Setup time:      {:.3}s ({:.1}%)",
+            setup_time.as_secs_f64(),
+            100.0 * setup_time.as_secs_f64() / total_time.as_secs_f64()
+        );
+        eprintln!(
+            "Data load time:  {:.3}s ({:.1}%)",
+            load_time.as_secs_f64(),
+            100.0 * load_time.as_secs_f64() / total_time.as_secs_f64()
+        );
+        eprintln!(
+            "Rendering time:  {:.3}s ({:.1}%)",
+            exec_time.as_secs_f64(),
+            100.0 * exec_time.as_secs_f64() / total_time.as_secs_f64()
+        );
+        eprintln!("Total time:      {:.3}s", total_time.as_secs_f64());
     }
 
     Ok(())

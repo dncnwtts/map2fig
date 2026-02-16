@@ -123,9 +123,10 @@ pub struct RenderMollweideParams<'a> {
 }
 
 /// Grid rendering parameters for projection sampling.
-pub struct RenderGridParams<'a> {
+/// Generic over the projection type to enable Send+Sync trait bounds for parallelization.
+pub struct RenderGridParams<'a, P: crate::projection::Projection> {
     pub map: &'a [f64],
-    pub proj: &'a dyn crate::projection::Projection,
+    pub proj: &'a P,
     pub scale: &'a crate::plot::MollweideScale,
     pub cmap: &'a Colormap,
     pub scale_type: Scale,
@@ -137,6 +138,8 @@ pub struct RenderGridParams<'a> {
     pub view: &'a crate::rotation::ViewTransform,
     pub mask: Option<&'a crate::mask::PixelMask>,
     pub scale_cache: Option<&'a crate::scale::ScaleCache>,
+    pub underflow: (u8, u8, u8),
+    pub overflow: (u8, u8, u8),
 }
 
 /// Colorbar rendering parameters for PDF output.

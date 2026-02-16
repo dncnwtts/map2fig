@@ -103,26 +103,29 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                 // - Adjust file column: file_col = col_idx + 1
                 let file_col_for_data = col_idx + 1;
 
-                // Tier 1 Optimization: Eliminate intermediate Vec<DataValue>
-                // Directly zip columns and process without intermediate buffer
-                let npix = (12 * nside * nside) as usize;
-                let mut full_map = vec![f64::NEG_INFINITY; npix];
+                // Tier 1 Optimization: Select both columns together in a single call
+                // This preserves the column correspondence (original 0.4.0 behavior)
+                // Do NOT call select_fields twice - that breaks the pairing!
+                let all_values: Vec<DataValue> = table
+                    .select_fields(&[ColumnId::Index(0), ColumnId::Index(file_col_for_data)])
+                    .collect();
 
-                // Extract columns directly as iterators, then process
-                let pixel_col = table
-                    .select_fields(&[ColumnId::Index(0)])
-                    .collect::<Vec<_>>();
-                let value_col = table
-                    .select_fields(&[ColumnId::Index(file_col_for_data)])
-                    .collect::<Vec<_>>();
+                if all_values.is_empty() {
+                    result = vec![crate::healpix::HPX_UNSEEN; (12 * nside * nside) as usize];
+                } else {
+                    let n_rows = all_values.len() / 2;
+                    let npix = (12 * nside * nside) as usize;
+                    let mut full_map = vec![crate::healpix::HPX_UNSEEN; npix];
 
-                if !pixel_col.is_empty() && !value_col.is_empty() {
                     // Tier 4.2b: Parallel extraction of pixel indices and values
-                    // Extract pairs from separate columns in parallel
-                    let pairs: Vec<(usize, f64)> = (0..pixel_col.len())
+                    // Extract pairs from interleaved columns
+                    let pairs: Vec<(usize, f64)> = (0..n_rows)
                         .into_par_iter()
                         .filter_map(|row_idx| {
-                            let pix = match &pixel_col[row_idx] {
+                            let pix_idx = row_idx * 2;
+                            let data_idx = row_idx * 2 + 1;
+
+                            let pix = match &all_values[pix_idx] {
                                 DataValue::Integer { value, .. } => *value as i64,
                                 DataValue::Long { value, .. } => *value,
                                 DataValue::Float { value, .. } => *value as i64,
@@ -130,17 +133,13 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                                 _ => -1,
                             };
 
-                            let val = if row_idx < value_col.len() {
-                                match &value_col[row_idx] {
-                                    DataValue::Double { value, .. } => *value,
-                                    DataValue::Float { value, .. } => *value as f64,
-                                    DataValue::Integer { value, .. } => *value as f64,
-                                    other => {
-                                        panic!("Unsupported column type in FITS table: {:?}", other)
-                                    }
+                            let val = match &all_values[data_idx] {
+                                DataValue::Double { value, .. } => *value,
+                                DataValue::Float { value, .. } => *value as f64,
+                                DataValue::Integer { value, .. } => *value as f64,
+                                other => {
+                                    panic!("Unsupported column type in FITS table: {:?}", other)
                                 }
-                            } else {
-                                return None;
                             };
 
                             if pix >= 0 && (pix as usize) < npix {
@@ -155,9 +154,9 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> Vec<f64> {
                     for (pix_idx, val) in pairs {
                         full_map[pix_idx] = val;
                     }
-                }
 
-                result = full_map;
+                    result = full_map;
+                }
             } else {
                 // Regular dense map: read column directly
                 let values = table.select_fields(&[ColumnId::Index(col_idx)]);
@@ -380,6 +379,57 @@ fn save_column_cache(filepath: &str, col_idx: usize, data: &[f64]) -> Option<()>
     Some(())
 }
 
+/// Enforce cache size limit (2 GB max)
+/// Deletes oldest files first if cache exceeds the limit
+fn enforce_cache_size_limit() {
+    const MAX_CACHE_SIZE: u64 = 2_000_000_000; // 2 GB in bytes
+
+    let cache_dir = match get_cache_dir() {
+        Some(d) => d,
+        None => return,
+    };
+
+    // Calculate total cache size
+    let mut total_size = 0u64;
+    let mut files = Vec::new();
+
+    for entry in std::fs::read_dir(&cache_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let path = entry.path();
+        if let Ok(metadata) = entry.metadata() {
+            let size = metadata.len();
+            total_size += size;
+            if let Ok(modified) = metadata.modified() {
+                files.push((path, modified, size));
+            }
+        }
+    }
+
+    // Only prune if we exceed the limit
+    if total_size <= MAX_CACHE_SIZE {
+        return;
+    }
+
+    // Sort by modification time (oldest first)
+    files.sort_by_key(|f| f.1);
+
+    // Delete oldest files until we're under the limit (target: 90% of max)
+    let target_size = (MAX_CACHE_SIZE as f64 * 0.9) as u64;
+    let mut freed = 0u64;
+
+    for (path, _, size) in files.iter() {
+        if total_size - freed <= target_size {
+            break;
+        }
+        let _ = std::fs::remove_file(path);
+        freed += size;
+    }
+}
+
 /// Read a HEALPix column with caching support (Tier 5.2.1 optimization)
 ///
 /// This function reads column data from cache if available, otherwise reads from FITS
@@ -412,6 +462,9 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
 
     // Save to cache for next time (ignore if save fails)
     let _ = save_column_cache(filename, col_idx, &data);
+
+    // Enforce cache size limit (2 GB max)
+    enforce_cache_size_limit();
 
     data
 }
@@ -483,11 +536,11 @@ pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> Vec<f64> {
                     .collect();
 
                 if all_values.is_empty() {
-                    result = vec![f64::NEG_INFINITY; (12 * nside * nside) as usize];
+                    result = vec![crate::healpix::HPX_UNSEEN; (12 * nside * nside) as usize];
                 } else {
                     let n_rows = all_values.len() / 2;
                     let npix = (12 * nside * nside) as usize;
-                    let mut full_map = vec![f64::NEG_INFINITY; npix];
+                    let mut full_map = vec![crate::healpix::HPX_UNSEEN; npix];
 
                     let pairs: Vec<(usize, f64)> = (0..n_rows)
                         .into_par_iter()
@@ -617,5 +670,137 @@ pub fn read_healpix_meta_cached_mmap(filename: &str) -> Option<(i64, String, Str
         Some((nside, ordering, indxschm))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_sparse_fit_explicit_indexing() {
+        // Test loading the minimal sparse NSIDE=1 FITS file
+        // This verifies the regression fix: sparse maps must use HPX_UNSEEN
+        // initialization, not f64::NEG_INFINITY
+
+        let test_file =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sparse_nside1.fits");
+
+        if !test_file.exists() {
+            eprintln!(
+                "Skipping test: sparse FITS fixture not found at {}",
+                test_file.display()
+            );
+            return;
+        }
+
+        // Load the sparse column data
+        let data = read_healpix_column(test_file.to_str().unwrap(), 0);
+
+        // NSIDE=1 has 12 pixels
+        assert_eq!(
+            data.len(),
+            12,
+            "NSIDE=1 should have 12 pixels, got {}",
+            data.len()
+        );
+
+        // The test file has pixels 0, 3, 6, 9 populated with values 1.0, 2.0, 3.0, 4.0
+        let expected_values = vec![(0, 1.0), (3, 2.0), (6, 3.0), (9, 4.0)];
+
+        for (idx, expected_val) in expected_values {
+            let actual = data[idx];
+            assert!(
+                (actual - expected_val).abs() < 0.01,
+                "Pixel {} should be {}, got {}",
+                idx,
+                expected_val,
+                actual
+            );
+        }
+
+        // Unpopulated pixels should be HPX_UNSEEN
+        let unseen_indices = vec![1, 2, 4, 5, 7, 8, 10, 11];
+        for idx in unseen_indices {
+            let actual = data[idx];
+            // Use relative tolerance for UNSEEN comparison (healpy may have slight precision differences)
+            let diff = (actual - crate::healpix::HPX_UNSEEN).abs();
+            let tolerance = (crate::healpix::HPX_UNSEEN.abs() * 1e-6).max(1e-20);
+            assert!(
+                diff < tolerance,
+                "Pixel {} should be HPX_UNSEEN ({}), got {} (diff: {:.2e})",
+                idx,
+                crate::healpix::HPX_UNSEEN,
+                actual,
+                diff
+            );
+        }
+
+        println!("✓ Sparse FITS explicit indexing test passed");
+    }
+
+    #[test]
+    fn test_sparse_map_regression_fix() {
+        // Regression test for the v0.5.0 bug where sparse maps were
+        // initialized with f64::NEG_INFINITY instead of HPX_UNSEEN.
+        //
+        // The bug manifestation:
+        // - Sparse maps initialized with NEG_INFINITY (-inf)
+        // - is_seen() filter rejected all pixels (both populated and unpopulated)
+        // - Result: "Map contains no valid HEALPix values" panic
+        //
+        // The fix:
+        // - Initialize sparse maps with HPX_UNSEEN (-1.6375e30)
+        // - Populated pixels loaded correctly
+        // - Unpopulated pixels marked as UNSEEN (filtered out correctly)
+        // - is_seen() allows both populated pixels and properly-marked unseen pixels
+
+        let test_file =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sparse_nside1.fits");
+
+        if !test_file.exists() {
+            eprintln!(
+                "Skipping test: sparse FITS fixture not found at {}",
+                test_file.display()
+            );
+            return;
+        }
+
+        let data = read_healpix_column(test_file.to_str().unwrap(), 0);
+
+        // Count populated (finite + significant) vs unseen (near HPX_UNSEEN)
+        let populated_count = data
+            .iter()
+            .filter(|&&v| v > -1e29) // HPX_UNSEEN is around -1.6375e30
+            .count();
+        let unseen_count = data
+            .iter()
+            .filter(|&&v| v < -1e29) // Values close to HPX_UNSEEN
+            .count();
+
+        // Should have 4 populated distinct values from the test file
+        assert_eq!(
+            populated_count, 4,
+            "Expected 4 populated pixel values, got {}",
+            populated_count
+        );
+
+        // Should have 8 unseen pixels
+        assert_eq!(
+            unseen_count, 8,
+            "Expected 8 unseen pixels, got {}",
+            unseen_count
+        );
+
+        // The critical regression check: no NEG_INFINITY values
+        let inf_count = data.iter().filter(|&&v| v == f64::NEG_INFINITY).count();
+        assert_eq!(
+            inf_count, 0,
+            "No pixels should be NEG_INFINITY, got {}",
+            inf_count
+        );
+
+        println!("✓ Sparse map regression fix verified");
     }
 }
