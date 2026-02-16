@@ -43,6 +43,7 @@ wide = "0.7"
 [features]
 debug_overlay = []
 simd = []
+nightly_simd = []
 uncompressed-pdf = []
 
 [dev-dependencies]

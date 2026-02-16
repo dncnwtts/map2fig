@@ -1,3 +1,5 @@
+#![cfg_attr(all(feature = "nightly_simd"), feature(portable_simd))]
+
 //! # HEALPix Plotter
 //!
 //! A Rust library for rendering HEALPix celestial maps in multiple projections (Mollweide, Hammer, Gnomonic).
@@ -87,6 +89,8 @@ pub mod scale;
 pub mod setup;
 pub mod simd;
 pub mod simd_wide;
+#[cfg(feature = "nightly_simd")]
+pub mod simd_portable;
 
 // Re-export useful items
 pub use cli::{Args, PlotConfig};
