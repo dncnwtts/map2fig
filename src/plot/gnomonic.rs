@@ -326,12 +326,8 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
                 format_tick_label_with_units(val, scale, Some(t), latex_rendering, units, false);
             let font_scale = PxScale::from(cb_layout.tick_font_size as f32);
 
-            // Measure actual text width using font metrics
-            let mut text_width = 0.0;
-            for ch in label.chars() {
-                let glyph_id = font.glyph_id(ch);
-                text_width += font.h_advance_unscaled(glyph_id) * font_scale.x;
-            }
+            // Estimate text width: approximately 0.6 * font_size per character
+            let text_width = label.len() as f32 * cb_layout.tick_font_size as f32 * 0.6;
             let text_x = px as i32 - (text_width / 2.0) as i32;
 
             // For outward ticks, shift labels down past the ticks
