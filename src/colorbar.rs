@@ -454,10 +454,10 @@ pub fn fill_triangle_with_clamp(
                     }
 
                     // Clamp Y to the allowed range if specified
-                    if let Some((clamp_min, clamp_max)) = clamp_y
-                        && (y < clamp_min || y > clamp_max)
-                    {
-                        continue;
+                    if let Some((clamp_min, clamp_max)) = clamp_y {
+                        if y < clamp_min || y > clamp_max {
+                            continue;
+                        }
                     }
 
                     // Find where the slanted edge (from tip to either top or bottom base) intersects this Y

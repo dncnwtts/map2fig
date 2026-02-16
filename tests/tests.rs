@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use map2fig::{NegMode, PixelValue, RgbaArg, cli::InputColor, generate_index_map};
+use map2fig::{cli::InputColor, generate_index_map, NegMode, PixelValue, RgbaArg};
 
-use map2fig::scale::{Scale, scale_value};
+use map2fig::scale::{scale_value, Scale};
 
 /// ----------------------------
 /// Test RGBAArg parsing
