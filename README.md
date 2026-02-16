@@ -425,6 +425,8 @@ Symlog creates a linear region in the middle (±linthresh) and logarithmic scali
 
 The tool automatically rotates the data and graticule to ecliptic coordinates.
 
+**Output**: Generates `ecliptic_view.pdf`—full-sky map transformed to ecliptic coordinates with ecliptic graticule overlay. [View PDF](examples/outputs/example10_ecliptic_rotation.pdf)
+
 ---
 
 ### 11. Negative/Invalid Data Handling
@@ -445,6 +447,8 @@ The tool automatically rotates the data and graticule to ecliptic coordinates.
 - `--bad-color`: Render masked pixels in light gray (RGBA: 200,200,200,255 or hex: #C8C8C8)
 
 **Alternative**: `--neg-mode zero` treats negatives as 0.
+
+**Output**: Generates `masked_clean.pdf`—map with log scaling and masked pixels filled with light gray, suitable for handling survey maps with masked regions. [View PDF](examples/outputs/example11_negative_data.pdf)
 
 ---
 
@@ -494,6 +498,8 @@ Generate consistent publication figures for all data products.
 - `--linthresh 10`: Linear region around zero (±10 μK) to avoid log(0)
 - RdBu reversed colormap (Red-Blue): Red for hot, Blue for cold
 
+**Output**: Generates `cmb_symlog.pdf`—full-sky map with symlog scaling ideal for bipolar data like CMB temperature maps. [View PDF](examples/outputs/example13_asymmetric_scaling.pdf)
+
 ---
 
 ### 14. Masking Regions by Value Range
@@ -517,7 +523,7 @@ Generate consistent publication figures for all data products.
   - Hex color: `#FF6B6B` (custom red)
   - RGB tuple: `128,128,128` (explicit gray)
 
-**Output**: Generates `masked_by_threshold.pdf`—map with pixels outside the range hidden and filled with gray background.
+**Output**: Generates `masked_by_threshold.pdf`—map with pixels outside the range hidden and filled with gray background. [View PDF](examples/outputs/example14_masking_by_range.pdf)
 
 ---
 
@@ -578,7 +584,7 @@ See all available mask generation options:
 python3 tools/create_mask_example.py --help
 ```
 
-**Output**: Generates `cmb_with_mask.pdf`—map with pixels masked by external FITS file, useful for applying pre-computed masks across multiple visualizations.
+**Output**: Generates `cmb_with_mask.pdf`—map with pixels masked by external FITS file, useful for applying pre-computed masks across multiple visualizations. [View PDF](examples/outputs/example15_masking_thresholds.pdf)
 
 ---
 
@@ -599,7 +605,7 @@ python3 tools/create_mask_example.py --help
 
 Combines logarithmic scaling for dynamic range with masking to hide invalid pixels. The mask is applied after scaling, ensuring consistent color limits across unmasked regions.
 
-**Output**: Generates `sensitivity_masked.pdf`—map with log-scaled colors and transparent masked regions, ideal for publication figures.
+**Output**: Generates `sensitivity_masked.pdf`—map with log-scaled colors and transparent masked regions, ideal for publication figures. [View PDF](examples/outputs/example16_combined_masking_scaling.pdf)
 
 ---
 
