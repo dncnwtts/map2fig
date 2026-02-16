@@ -22,7 +22,6 @@ pub fn load_and_process_data(
     no_downgrade: bool,
 ) -> Result<ProcessedData, String> {
     use std::time::Instant;
-    let phase_start = Instant::now();
     
     let Some(new_fits_path) = fits_path else {
         let map = generate_index_map(1);

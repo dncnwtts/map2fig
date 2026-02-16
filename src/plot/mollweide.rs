@@ -13,7 +13,7 @@ use crate::scale::{
     HistogramRange, Scale, build_histogram_scale, generate_colorbar_ticks, unsafe_float_cmp,
 };
 use crate::{PixelSink, PngSink};
-use ab_glyph::{Font, FontRef, PxScale};
+use ab_glyph::{FontRef, PxScale};
 use cairo::{Context, Format, ImageSurface, PdfSurface};
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
