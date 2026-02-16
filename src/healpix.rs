@@ -1165,20 +1165,69 @@ fn downgrade_healpix_map_ang(
     result
 }
 
-/// Optimized downsampling: iterate source pixels efficiently
+/// Optimized downsampling: parallel iteration over target pixels
 /// 
-/// Instead of the usual nested-loop approach where we iterate targets
-/// and look up sources (randomizing cache), we iterate source pixels
-/// and update their contributing target pixels.
+/// Uses Rayon to split the work across CPU cores. Each core processes
+/// a range of target pixels independently, which reduces memory bus contention
+/// and improves cache locality per-core.
 ///
-/// For a ratio of 16:1 (8192→512), this changes from:
-///   target_npix iterations × 256 random source accesses
-/// to:
-///   source_npix iterations × 1 target update
-///
-/// For large maps, source_npix >> target_npix, so this is worse!
-/// Reverting to original approach which is faster.
-fn downgrade_healpix_map_xyf_original(
+/// Expected improvement: 1.1-1.2× for 8-core CPU (accounts for parallelization overhead)
+fn downgrade_healpix_map_xyf_parallel(
+    map: &[f64],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<f64> {
+    use rayon::prelude::*;
+    
+    let fact = source_nside / target_nside;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    
+    // Process each target pixel in parallel
+    let result: Vec<f64> = (0..target_npix)
+        .into_par_iter()
+        .map(|target_pix| {
+            // Convert target pixel to (x, y, face)
+            let (x, y, face) = match ordering {
+                HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+                HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+            };
+
+            let mut sum = 0.0;
+            let mut hits = 0usize;
+
+            // Loop over corresponding source pixels
+            let x0 = fact * x;
+            let y0 = fact * y;
+
+            for j in y0..(y0 + fact) {
+                for i in x0..(x0 + fact) {
+                    let source_pix = match ordering {
+                        HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                        HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                    } as usize;
+
+                    let val = map[source_pix];
+                    if is_seen(val) {
+                        sum += val;
+                        hits += 1;
+                    }
+                }
+            }
+
+            if hits >= 1 {
+                sum / hits as f64
+            } else {
+                HPX_UNSEEN
+            }
+        })
+        .collect();
+    
+    result
+}
+
+/// Original scalar downsampling for comparison/fallback
+fn downgrade_healpix_map_xyf_scalar(
     map: &[f64],
     source_nside: i64,
     target_nside: i64,
@@ -1237,8 +1286,15 @@ fn downgrade_healpix_map_xyf(
     }
     assert_eq!(source_nside % target_nside, 0);
 
-    // Use original (proven fast) algorithm
-    downgrade_healpix_map_xyf_original(map, source_nside, target_nside, ordering)
+    // Use parallel version for large maps, scalar for small ones
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    
+    // Only parallelize if it's worth it (>50K pixels = overhead is negligible)
+    if target_npix > 50_000 {
+        downgrade_healpix_map_xyf_parallel(map, source_nside, target_nside, ordering)
+    } else {
+        downgrade_healpix_map_xyf_scalar(map, source_nside, target_nside, ordering)
+    }
 }
 
 pub fn downgrade_healpix_map(
