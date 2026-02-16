@@ -44,20 +44,20 @@ use rayon::prelude::*;
 fn parse_tform(tform: &str) -> Option<(usize, char)> {
     let tform = tform.trim();
     let type_char = tform.chars().last()?;
-    
+
     let count_str = tform.trim_end_matches(type_char);
     let count: usize = if count_str.is_empty() {
         1
     } else {
         count_str.parse().ok()?
     };
-    
+
     Some((count, type_char))
 }
 
 /// Fast path for reading float32 columns directly from binary data
 /// Bypasses fitsrs DataValue enum conversion (Tier 1 Optimization)
-/// 
+///
 /// This function:
 /// 1. Uses fitsrs to parse headers and find table offset
 /// 2. Reads column binary data directly from mmap
@@ -66,7 +66,7 @@ fn parse_tform(tform: &str) -> Option<(usize, char)> {
 ///
 /// Expected improvement: 2-3× speedup by eliminating enum match overhead
 fn try_read_float32_column_fast(
-    filename: &str,
+    _filename: &str,
     mmap_data: &[u8],
     col_idx: usize,
 ) -> Option<(Vec<f64>, i64)> {

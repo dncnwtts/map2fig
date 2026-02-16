@@ -23,28 +23,28 @@ use std::path::Path;
 /// Uses sampling for maps > 50M pixels to avoid 12+ GB allocations
 fn compute_percentile_from_map(map: &[f64], percentile_pct: f64, max_sample_size: usize) -> f64 {
     use std::cmp::Ordering;
-    
+
     // For very large maps, sample instead of allocating full vector
     let skip_rate = if map.len() > max_sample_size {
         (map.len() as f64 / max_sample_size as f64).ceil() as usize
     } else {
         1
     };
-    
+
     // Collect samples (avoids allocating full 6.4 GB vector for 806M pixel maps)
-    let estimated_samples = (map.len() + skip_rate - 1) / skip_rate;
+    let estimated_samples = map.len().div_ceil(skip_rate);
     let mut samples = Vec::with_capacity(estimated_samples.min(max_sample_size * 2));
-    
+
     for (i, &val) in map.iter().enumerate() {
         if is_seen(val) && (i % skip_rate == 0 || skip_rate == 1) {
             samples.push(val);
         }
     }
-    
+
     if samples.is_empty() {
         return 0.0;
     }
-    
+
     // Sort only the sample (much faster than sorting 806M pixels)
     samples.sort_unstable_by(|a, b| {
         if a < b {
@@ -55,13 +55,13 @@ fn compute_percentile_from_map(map: &[f64], percentile_pct: f64, max_sample_size
             Ordering::Equal
         }
     });
-    
+
     // Compute percentile of samples
     let n = samples.len();
     let rank = (percentile_pct / 100.0) * (n - 1) as f64;
     let idx = rank.floor() as usize;
     let frac = rank - idx as f64;
-    
+
     if idx + 1 < n {
         samples[idx] * (1.0 - frac) + samples[idx + 1] * frac
     } else {
@@ -77,7 +77,7 @@ pub fn compute_mollweide_scale(
     scale: Scale,
 ) -> MollweideScale {
     const MAX_PERCENTILE_SAMPLE_SIZE: usize = 10_000_000; // 10M samples = 80 MB, not 6.4 GB
-    
+
     // **Tier 1.2: Memory optimization for huge maps**
     // For maps > 50M pixels, use sampling instead of allocating full vector
     // Reduces 806M pixel map memory from 6.4 GB to 80 MB
@@ -85,31 +85,35 @@ pub fn compute_mollweide_scale(
         // Large map: use efficient streaming computation
         let mut min = f64::INFINITY;
         let mut max = f64::NEG_INFINITY;
-        
+
         for &val in map.iter() {
             if is_seen(val) {
-                if val < min { min = val; }
-                if val > max { max = val; }
+                if val < min {
+                    min = val;
+                }
+                if val > max {
+                    max = val;
+                }
             }
         }
-        
+
         if min.is_infinite() {
             panic!("Map contains no valid HEALPix values");
         }
-        
+
         let p5 = compute_percentile_from_map(map, 5.0, MAX_PERCENTILE_SAMPLE_SIZE);
         let p95 = compute_percentile_from_map(map, 95.0, MAX_PERCENTILE_SAMPLE_SIZE);
         (min, max, p5, p95)
     } else {
         // Small map: use original accurate method
         let mut values: Vec<f64> = map.iter().filter(|v| is_seen(**v)).copied().collect();
-        
+
         if values.is_empty() {
             panic!("Map contains no valid HEALPix values");
         }
-        
+
         values.sort_unstable_by(unsafe_float_cmp);
-        
+
         let data_min = *values.first().unwrap();
         let data_max = *values.last().unwrap();
         let p5 = percentile(&values, 5.0);

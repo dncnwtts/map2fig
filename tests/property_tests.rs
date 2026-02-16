@@ -4,7 +4,7 @@
 //! across thousands of randomly-generated inputs. Unlike unit tests,
 //! property tests discover edge cases humans wouldn't think of.
 
-use map2fig::scale::{scale_value, Scale};
+use map2fig::scale::{Scale, scale_value};
 use map2fig::{NegMode, PixelValue};
 use proptest::prelude::*;
 
