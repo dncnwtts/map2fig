@@ -251,7 +251,7 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     (theta, phi)
 }
 
-fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
+pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
     assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();
@@ -291,7 +291,7 @@ fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
     }
 }
 
-fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
+pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     let npix = 12 * nside * nside;
     let nl4 = 4 * nside;
     let fact2 = 4.0 / npix as f64;
@@ -327,7 +327,7 @@ fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     (theta, phi)
 }
 
-fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
+pub fn ang2pix_nest(nside: i64, theta: f64, phi: f64) -> i64 {
     assert!((0.0..=PI).contains(&theta));
 
     let z = theta.cos();

@@ -48,6 +48,8 @@ uncompressed-pdf = []
 
 [dev-dependencies]
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+divan = "0.1"
 
 [profile.release]
 opt-level = 3
@@ -56,3 +58,11 @@ codegen-units = 1
 strip = false
 debug = true
 panic = "abort"
+
+[[bench]]
+name = "criterion_benchmarks"
+harness = false
+
+[[bench]]
+name = "divan_benchmarks"
+harness = false

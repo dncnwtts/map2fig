@@ -1,0 +1,71 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmark:
+    name: Performance Regression Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libglib2.0-dev
+      
+      - name: Build optimized binary
+        run: cargo build --release
+      
+      # Criterion benchmarks (detailed, HTML reports)
+      - name: Run Criterion micro-benchmarks
+        run: cargo bench --bench criterion_benchmarks -- --verbose
+        continue-on-error: true
+      
+      # Divan benchmarks (quick, cycle-accurate)
+      - name: Run Divan micro-benchmarks
+        run: cargo bench --bench divan_benchmarks --release
+        continue-on-error: true
+      
+      # Upload benchmark results
+      - name: Upload Criterion HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-reports
+          path: target/criterion
+      
+      # Bencher integration for performance tracking
+      - name: Store benchmark result
+        uses: bencherdev/bencher@main
+        if: github.event_name == 'push'
+        with:
+          project-slug: healpix-plotter
+          token: ${{ secrets.BENCHER_API_TOKEN }}
+          testbed-slug: "github-actions"
+          adapter: json
+          file: target/criterion/output.json
+          err-on-fail: false
+      
+      - name: Publish PR comment with results
+        if: github.event_name == 'pull_request'
+        uses: bencherdev/bencher@main
+        with:
+          project-slug: healpix-plotter
+          token: ${{ secrets.BENCHER_API_TOKEN }}
+          testbed-slug: "github-actions"
+          adapter: json
+          file: target/criterion/output.json
+          github-pages-branch: benches
+          comment-on-pr: true
+          err-on-fail: false

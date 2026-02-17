@@ -1,0 +1,89 @@
+# Bencher configuration for continuous benchmarking
+# 
+# This enables performance regression detection in CI/CD pipelines.
+# See https://bencher.dev for details.
+
+[project]
+# Project slug for Bencher
+slug = "healpix-plotter"
+
+# Git branch configuration
+[project.branches]
+# Main branch is the baseline
+[project.branches.main]
+# Track these metrics from benchmark results
+tracked = true
+
+# Branches for development
+[project.branches."dev/*"]
+tracked = true
+
+# Testbed configuration (hardware used for benchmarking)
+[project.testbeds]
+[project.testbeds."i9-10885h-8core"]
+name = "Intel i9-10885H (8-core)"
+software = "Linux + Rust"
+hardware = "CPU: i9-10885H, RAM: 32GB"
+
+# Benchmark configuration
+[project.benchmarks]
+
+# End-to-end benchmarks (Hyperfine)
+[project.benchmarks.e2e_small_nside128]
+name = "E2E: Small file (nside=128, 6.8MB)"
+category = "end-to-end"
+
+[project.benchmarks.e2e_medium_nside512]
+name = "E2E: Medium file (nside=512, 72MB)"
+category = "end-to-end"
+
+[project.benchmarks.e2e_large_nside512]
+name = "E2E: Large file (nside=512, 576MB)"
+category = "end-to-end"
+
+[project.benchmarks.e2e_huge_nside8192]
+name = "E2E: Huge file (nside=8192, 3.1GB)"
+category = "end-to-end"
+
+# Micro-benchmarks (Criterion)
+[project.benchmarks.micro_pix2ang_ring]
+name = "Micro: pix2ang_ring coordinate conversion"
+category = "micro"
+
+[project.benchmarks.micro_ang2pix_ring]
+name = "Micro: ang2pix_ring coordinate conversion"
+category = "micro"
+
+[project.benchmarks.micro_downgrade_medium]
+name = "Micro: Downgrade nside=512→256"
+category = "micro"
+
+# Alert configuration
+[project.alerts]
+# Warn if performance degrades by 5%
+[project.alerts.regression_5pct]
+threshold = {value = 0.05, type = "percentage"}
+direction = "negative"
+action = "alert"
+
+# Fail CI if performance degrades by 10%
+[project.alerts.regression_10pct]
+threshold = {value = 0.10, type = "percentage"}
+direction = "negative"
+action = "fail"
+
+# Improvement tracking
+[project.alerts.improvement_10pct]
+threshold = {value = 0.10, type = "percentage"}
+direction = "positive"
+action = "comment"
+
+# Results summarization
+[results]
+# How to combine multiple measurements
+aggregation = {type = "median"}
+
+# Generate HTML reports
+[reports]
+enable = true
+artifact = "target/benches/report.html"
