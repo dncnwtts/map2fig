@@ -1184,7 +1184,8 @@ fn downgrade_healpix_map_xyf_parallel(
     let target_npix = (12 * target_nside * target_nside) as usize;
     
     // Process in chunks to reduce rayon task overhead
-    // Each task processes 10,000+ pixels instead of 1 pixel
+    // Each task processes 10,000 pixels (optimal balance: large enough to amortize
+    // rayon overhead, small enough to maintain cache locality and load balance)
     const CHUNK_SIZE: usize = 10_000;
     
     // Collect chunk start indices
