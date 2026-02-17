@@ -132,7 +132,7 @@ impl DataArray {
 
     /// Get underlying f64 vec if this is Float64, otherwise convert
     ///
-    /// Used for compatibility with existing code that expects Vec<f64>.
+    /// Used for compatibility with existing code that expects `Vec<f64>`.
     /// For f32 data, this allocates a new vector with conversions.
     pub fn as_f64_vec(&self) -> std::borrow::Cow<'_, Vec<f64>> {
         match self {
@@ -182,7 +182,7 @@ impl fmt::Display for DataArray {
     }
 }
 
-/// Temporary compatibility wrapper: convert DataArray to Vec<f64>
+/// Temporary compatibility wrapper: convert DataArray to `Vec<f64>`
 /// Used for gradual migration of existing code
 #[inline]
 pub fn to_f64_vec(data: &DataArray) -> Vec<f64> {
