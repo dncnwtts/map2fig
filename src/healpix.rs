@@ -1183,45 +1183,69 @@ fn downgrade_healpix_map_xyf_parallel(
     let fact = source_nside / target_nside;
     let target_npix = (12 * target_nside * target_nside) as usize;
     
-    // Process each target pixel in parallel
-    let result: Vec<f64> = (0..target_npix)
+    // Process in chunks to reduce rayon task overhead
+    // Each task processes 10,000+ pixels instead of 1 pixel
+    const CHUNK_SIZE: usize = 10_000;
+    
+    // Collect chunk start indices
+    let chunk_starts: Vec<usize> = (0..target_npix)
+        .step_by(CHUNK_SIZE)
+        .collect();
+    
+    // Process chunks in parallel
+    let chunks: Vec<Vec<f64>> = chunk_starts
         .into_par_iter()
-        .map(|target_pix| {
-            // Convert target pixel to (x, y, face)
-            let (x, y, face) = match ordering {
-                HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
-                HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
-            };
+        .map(|chunk_start| {
+            let chunk_end = (chunk_start + CHUNK_SIZE).min(target_npix);
+            let mut chunk_result = vec![HPX_UNSEEN; chunk_end - chunk_start];
+            
+            for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
+                // Convert target pixel to (x, y, face)
+                let (x, y, face) = match ordering {
+                    HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+                    HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+                };
 
-            let mut sum = 0.0;
-            let mut hits = 0usize;
+                let mut sum = 0.0;
+                let mut hits = 0usize;
 
-            // Loop over corresponding source pixels
-            let x0 = fact * x;
-            let y0 = fact * y;
+                // Loop over corresponding source pixels
+                let x0 = fact * x;
+                let y0 = fact * y;
 
-            for j in y0..(y0 + fact) {
-                for i in x0..(x0 + fact) {
-                    let source_pix = match ordering {
-                        HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
-                        HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
-                    } as usize;
+                for j in y0..(y0 + fact) {
+                    for i in x0..(x0 + fact) {
+                        let source_pix = match ordering {
+                            HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                            HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                        } as usize;
 
-                    let val = map[source_pix];
-                    if is_seen(val) {
-                        sum += val;
-                        hits += 1;
+                        let val = map[source_pix];
+                        if is_seen(val) {
+                            sum += val;
+                            hits += 1;
+                        }
                     }
                 }
-            }
 
-            if hits >= 1 {
-                sum / hits as f64
-            } else {
-                HPX_UNSEEN
+                if hits >= 1 {
+                    chunk_result[local_idx] = sum / hits as f64;
+                }
             }
+            
+            chunk_result
         })
         .collect();
+    
+    // Merge chunks back into result vector
+    let mut result = vec![HPX_UNSEEN; target_npix];
+    let mut result_idx = 0;
+    for chunk in chunks {
+        for value in chunk {
+            result[result_idx] = value;
+            result_idx += 1;
+        }
+    }
     
     result
 }
