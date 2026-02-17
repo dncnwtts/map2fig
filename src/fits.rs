@@ -73,18 +73,12 @@ fn try_read_float32_column_native(
 ) -> Option<(Vec<f32>, i64)> {
     use std::io::Cursor;
 
-    eprintln!(
-        "[f32] Entering try_read_float32_column_native, col_idx={}",
-        col_idx
-    );
-
     let cursor = Cursor::new(mmap_data);
     let mut fits = Fits::from_reader(cursor);
     let mut nside: i64 = 0;
 
     while let Some(Ok(hdu)) = fits.next() {
         if let HDU::XBinaryTable(hdu) = hdu {
-            eprintln!("[f32] Found XBinaryTable");
             let header = hdu.get_header();
 
             // Skip sparse maps (explicit indexing) - use fallback path
@@ -93,7 +87,6 @@ fn try_read_float32_column_native(
                 _ => false,
             };
             if has_explicit_indexing {
-                eprintln!("[f32] Has EXPLICIT indexing, returning None");
                 return None;
             }
 
@@ -101,37 +94,23 @@ fn try_read_float32_column_native(
             if nside == 0 {
                 match header.get("NSIDE") {
                     Some(Value::Integer { value, .. }) => nside = *value,
-                    _ => {
-                        eprintln!("[f32] No NSIDE, returning None");
-                        return None;
-                    }
+                    _ => return None,
                 };
             }
-            eprintln!("[f32] NSIDE={}", nside);
 
             //Get column type and count from TFORM
             let tform_key = format!("TFORM{}", col_idx + 1);
             let tform_str = match header.get(&tform_key) {
                 Some(Value::String { value, .. }) => value.clone(),
-                _ => {
-                    eprintln!("[f32] No TFORM found, returning None");
-                    return None;
-                }
+                _ => return None,
             };
 
-            eprintln!("[f32] TFORM={:?}", tform_str);
             let (elem_count, type_char) = parse_tform(&tform_str)?;
-            eprintln!(
-                "[f32] Parsed: elem_count={}, type_char={}",
-                elem_count, type_char
-            );
 
             // Fast path ONLY for float32 ('E') columns
             if type_char != 'E' {
-                eprintln!("[f32] Type is '{}', not 'E', returning None", type_char);
                 return None;
             }
-            eprintln!("[f32] ✓ Type is float32 (E)");
 
             // Get column byte offset from TOFFSET (defaults to 0 for first column per FITS standard)
             let toffset_key = format!("TOFFSET{}", col_idx + 1);
@@ -180,7 +159,6 @@ fn try_read_float32_column_native(
             //
             // Sequential read pattern: Process each row in order, extract our column
             let file_data = &mmap_data[data_offset..];
-            let read_start = std::time::Instant::now();
 
             for (row_idx, row_chunk) in file_data.chunks(row_size).enumerate() {
                 if row_idx >= num_rows {
@@ -203,14 +181,6 @@ fn try_read_float32_column_native(
                     result[row_idx * elem_count + elem_idx] = f32_val;
                 }
             }
-
-            let read_elapsed = read_start.elapsed();
-            eprintln!(
-                "[FITS-SEQ] Read {} f32 values in {:.3}s ({:.1} GB/s)",
-                total_elems,
-                read_elapsed.as_secs_f64(),
-                (total_elems as f64 * 4.0) / 1e9 / read_elapsed.as_secs_f64()
-            );
 
             return Some((result, nside));
         }
@@ -415,20 +385,15 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
 
     // **NEW: Preserve float32 precision without conversion (6.8s + 3.2 GB saved)**
     // Tier 1b Optimization: Try native f32 reader first
-    eprintln!("[DEBUG] Trying f32 reader for {}", filename);
     if let Some((data, _nside)) = try_read_float32_column_native(filename, &mmap, col_idx) {
-        eprintln!("[DEBUG] ✓ Successfully read as f32, returning DataArray::Float32");
         return DataArray::from_f32(data);
     }
-    eprintln!("[DEBUG] f32 reader returned None, trying f64");
 
     // **NEW: Preserve float64 precision**
     // Try native f64 reader
     if let Some((data, _nside)) = try_read_float64_column_native(filename, &mmap, col_idx) {
-        eprintln!("[DEBUG] ✓ Successfully read as f64, returning DataArray::Float64");
         return DataArray::from_f64(data);
     }
-    eprintln!("[DEBUG] f64 reader also returned None, using fallback fitsrs path");
 
     // Fallback path: Use fitsrs DataValue enum (slower but handles all types)
     let cursor = Cursor::new(&mmap[..]);
