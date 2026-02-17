@@ -1,13 +1,26 @@
 [build]
 # Native CPU optimizations (take advantage of target machine features)
+# This enables SIMD and other CPU-specific features on the compilation machine
 rustflags = [
     "-C", "target-cpu=native",
-    # Use faster linker on Linux (lld is default since Rust 1.90, but be explicit)
+    # Use faster linker on Linux (lld is ~20-50% faster than default ld)
+    # It becomes default in LLVM 15+, but being explicit helps portability
     "-C", "link-arg=-fuse-ld=lld",
 ]
 
-# Try to use mold if available (alternative faster linker)
-# Note: If mold is not installed, cargo will fall back to lld silently
-# To use mold instead, change above to:
+# Uncomment to use mold linker instead of lld (even faster on Linux)
+# mold: Only on Linux, requires installation: apt install mold
+# lld:  Cross-platform, faster than ld, may be slower than mold
 # rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=mold"]
 
+# Parallel compiler frontend (Rust nightly only, 50% potential speedup)
+# Uncomment to enable. Requires: rustup +nightly
+# RUSTFLAGS = "-Z threads=8"
+
+# Alternative: Use sccache for distributed caching (if sharing dependencies across multiple projects)
+# rustc-wrapper = "sccache"
+
+[profile.dev]
+# Use separate target directories for different tools to prevent cache invalidation
+# This is a VS Code rust-analyzer-specific optimization
+# Uncomment in .vscode/settings.json instead: "rust-analyzer.cargo.targetDir": true
