@@ -1183,21 +1183,33 @@ fn downgrade_healpix_map_xyf_parallel(
     let fact = source_nside / target_nside;
     let target_npix = (12 * target_nside * target_nside) as usize;
     
-    // Process in chunks to reduce rayon task overhead
-    // Each task processes 10,000 pixels (optimal balance: large enough to amortize
-    // rayon overhead, small enough to maintain cache locality and load balance)
-    const CHUNK_SIZE: usize = 10_000;
+    // Adaptive chunking: balance task overhead vs cache locality
+    // 
+    // Problem: Fixed 10K chunks create 310K tasks for 3GB files (310K × 10µs = 3.1s overhead)
+    // Solution: Scale chunk size with input size to keep task count reasonable
+    //
+    // Strategy:
+    // - < 10M pixels (~80MB): 10K chunks → better cache locality for small files
+    // - 10M-100M pixels (80MB-800MB): 50K chunks → balance
+    // - > 100M pixels (>800MB): 100K chunks → reduce scheduling overhead
+    let chunk_size = if target_npix < 10_000_000 {
+        10_000   // Small files: maximize cache locality
+    } else if target_npix < 100_000_000 {
+        50_000   // Medium files: moderate balance
+    } else {
+        100_000  // Large files (3.1B pixels → 31K tasks): reduce overhead
+    };
     
     // Collect chunk start indices
     let chunk_starts: Vec<usize> = (0..target_npix)
-        .step_by(CHUNK_SIZE)
+        .step_by(chunk_size)
         .collect();
     
     // Process chunks in parallel
     let chunks: Vec<Vec<f64>> = chunk_starts
         .into_par_iter()
         .map(|chunk_start| {
-            let chunk_end = (chunk_start + CHUNK_SIZE).min(target_npix);
+            let chunk_end = (chunk_start + chunk_size).min(target_npix);
             let mut chunk_result = vec![HPX_UNSEEN; chunk_end - chunk_start];
             
             for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
