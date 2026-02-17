@@ -73,12 +73,17 @@ fn try_read_float32_column_native(
 ) -> Option<(Vec<f32>, i64)> {
     use std::io::Cursor;
 
+    eprintln!("[f32] Entering try_read_float32_column_native, col_idx={}", col_idx);
+    
     let cursor = Cursor::new(mmap_data);
     let mut fits = Fits::from_reader(cursor);
     let mut nside: i64 = 0;
+    let mut found_table = false;
 
     while let Some(Ok(hdu)) = fits.next() {
         if let HDU::XBinaryTable(hdu) = hdu {
+            found_table = true;
+            eprintln!("[f32] Found XBinaryTable");
             let header = hdu.get_header();
 
             // Skip sparse maps (explicit indexing) - use fallback path
@@ -87,6 +92,7 @@ fn try_read_float32_column_native(
                 _ => false,
             };
             if has_explicit_indexing {
+                eprintln!("[f32] Has EXPLICIT indexing, returning None");
                 return None;
             }
 
@@ -94,23 +100,34 @@ fn try_read_float32_column_native(
             if nside == 0 {
                 match header.get("NSIDE") {
                     Some(Value::Integer { value, .. }) => nside = *value,
-                    _ => return None,
+                    _ => {
+                        eprintln!("[f32] No NSIDE, returning None");
+                        return None;
+                    }
                 };
             }
+            eprintln!("[f32] NSIDE={}", nside);
 
-            // Get column type and count from TFORM
+            //Get column type and count from TFORM
             let tform_key = format!("TFORM{}", col_idx + 1);
             let tform_str = match header.get(&tform_key) {
                 Some(Value::String { value, .. }) => value.clone(),
-                _ => return None,
+                _ => {
+                    eprintln!("[f32] No TFORM found, returning None");
+                    return None;
+                }
             };
 
+            eprintln!("[f32] TFORM={:?}", tform_str);
             let (elem_count, type_char) = parse_tform(&tform_str)?;
+            eprintln!("[f32] Parsed: elem_count={}, type_char={}", elem_count, type_char);
 
             // Fast path ONLY for float32 ('E') columns
             if type_char != 'E' {
+                eprintln!("[f32] Type is '{}', not 'E', returning None", type_char);
                 return None;
             }
+            eprintln!("[f32] ✓ Type is float32 (E)");
 
             // Get column byte offset from TOFFSET
             let toffset_key = format!("TOFFSET{}", col_idx + 1);
@@ -334,15 +351,20 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
 
     // **NEW: Preserve float32 precision without conversion (6.8s + 3.2 GB saved)**
     // Tier 1b Optimization: Try native f32 reader first
+    eprintln!("[DEBUG] Trying f32 reader for {}", filename);
     if let Some((data, _nside)) = try_read_float32_column_native(filename, &mmap, col_idx) {
+        eprintln!("[DEBUG] ✓ Successfully read as f32, returning DataArray::Float32");
         return DataArray::from_f32(data);
     }
+    eprintln!("[DEBUG] f32 reader returned None, trying f64");
 
     // **NEW: Preserve float64 precision**
     // Try native f64 reader
     if let Some((data, _nside)) = try_read_float64_column_native(filename, &mmap, col_idx) {
+        eprintln!("[DEBUG] ✓ Successfully read as f64, returning DataArray::Float64");
         return DataArray::from_f64(data);
     }
+    eprintln!("[DEBUG] f64 reader also returned None, using fallback fitsrs path");
 
     // Fallback path: Use fitsrs DataValue enum (slower but handles all types)
     let cursor = Cursor::new(&mmap[..]);
@@ -1036,7 +1058,7 @@ mod tests {
         let expected_values = vec![(0, 1.0), (3, 2.0), (6, 3.0), (9, 4.0)];
 
         for (idx, expected_val) in expected_values {
-            let actual = data[idx];
+            let actual = data.get(idx).expect("pixel out of bounds");
             assert!(
                 (actual - expected_val).abs() < 0.01,
                 "Pixel {} should be {}, got {}",
@@ -1049,7 +1071,7 @@ mod tests {
         // Unpopulated pixels should be HPX_UNSEEN
         let unseen_indices = vec![1, 2, 4, 5, 7, 8, 10, 11];
         for idx in unseen_indices {
-            let actual = data[idx];
+            let actual = data.get(idx).expect("pixel out of bounds");
             // Use relative tolerance for UNSEEN comparison (healpy may have slight precision differences)
             let diff = (actual - crate::healpix::HPX_UNSEEN).abs();
             let tolerance = (crate::healpix::HPX_UNSEEN.abs() * 1e-6).max(1e-20);
@@ -1098,11 +1120,11 @@ mod tests {
         // Count populated (finite + significant) vs unseen (near HPX_UNSEEN)
         let populated_count = data
             .iter()
-            .filter(|&&v| v > -1e29) // HPX_UNSEEN is around -1.6375e30
+            .filter(|&v| v > -1e29) // HPX_UNSEEN is around -1.6375e30
             .count();
         let unseen_count = data
             .iter()
-            .filter(|&&v| v < -1e29) // Values close to HPX_UNSEEN
+            .filter(|&v| v < -1e29) // Values close to HPX_UNSEEN
             .count();
 
         // Should have 4 populated distinct values from the test file
@@ -1120,7 +1142,7 @@ mod tests {
         );
 
         // The critical regression check: no NEG_INFINITY values
-        let inf_count = data.iter().filter(|&&v| v == f64::NEG_INFINITY).count();
+        let inf_count = data.iter().filter(|v| v == &f64::NEG_INFINITY).count();
         assert_eq!(
             inf_count, 0,
             "No pixels should be NEG_INFINITY, got {}",
