@@ -49,6 +49,10 @@ simd = []
 nightly_simd = []
 uncompressed-pdf = []
 
+# Suppress false positives from cargo-machete (these are used indirectly)
+[package.metadata.cargo-machete]
+ignored = ["cdshealpix", "libm"]
+
 [dev-dependencies]
 proptest = "1.4"
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -60,6 +64,7 @@ debug = "line-tables-only"
 # Speed up linking for dev builds
 split-debuginfo = "packed"
 
+# Standard release profile for maximum optimization
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -67,6 +72,22 @@ codegen-units = 1
 strip = false
 debug = true
 panic = "abort"
+
+# Fast release profile for quicker compilation (use with --profile release-fast)
+# Useful for CI/CD when you don't need maximum optimization
+[profile.release-fast]
+inherits = "release"
+opt-level = 2          # Reduce optimization level for faster compilation
+lto = "thin"           # Use thin LTO for 80% of optimization benefit, 30% faster
+codegen-units = 16    # More parallelism at slight optimization cost
+strip = true           # Remove debug symbols for smaller binary
+
+# Optimized profile for build scripts and proc-macros (from corrode.dev tips)
+[profile.dev.build-override]
+opt-level = 2
+
+[profile.release.build-override]
+opt-level = 3
 
 [[bench]]
 name = "criterion_benchmarks"

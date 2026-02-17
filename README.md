@@ -882,6 +882,65 @@ The repository includes sample FITS files for testing:
 - `npipe_nodip.fits`: Planck NPipe map (dipole removed)
 - Other test files for various scenarios
 
+## Development
+
+### Building for Development
+
+```bash
+# Fast debug build (optimized for compilation speed)
+cargo build    # 1.5-2 seconds
+
+# Check syntax without compiling
+cargo check    # <1 second
+
+# Run tests
+cargo test     # Run all unit tests
+
+# Format code
+cargo fmt      # Auto-format all source files
+```
+
+### Build Time Optimization
+
+For **25-35% faster release builds**, see [COMPILATION_OPTIMIZATION.md](COMPILATION_OPTIMIZATION.md) for detailed configuration including:
+- Faster linker (lld) setup
+- Optimized build profiles  
+- Release-fast profile for CI
+- Benchmarking tools
+
+**Quick benchmark:**
+```bash
+./build_benchmark.sh compare    # Compare build times across profiles
+./build_benchmark.sh profile    # Show crate-level timing data
+```
+
+### Performance Profiling
+
+Profile runtime performance:
+```bash
+# Generate flamegraph (requires flamegraph installation)
+cargo flamegraph --release -- -f data.fits -o out.pdf
+
+# Quick timing analysis
+time cargo run --release -- -f data.fits -o out.pdf
+```
+
+### Code Quality
+
+```bash
+# Check for issues
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Check for unused dependencies
+cargo machete
+
+# Find duplicate dependency versions
+cargo tree --duplicate
+
+# Generate documentation
+cargo doc --no-deps --open
+```
+
 ## Contributing
 
 **Development Roadmap:** See [ROADMAP.md](docs/comparison/ROADMAP.md) for planned features and priorities.

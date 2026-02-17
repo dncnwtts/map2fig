@@ -11,6 +11,7 @@
 ### 🚀 Getting Started
 - [README.md](README.md) - Build & run instructions
 - [Installation Guide](#installation) - Setup steps
+- [COMPILATION_OPTIMIZATION.md](COMPILATION_OPTIMIZATION.md) - **NEW:** Speed up compile times by 25-35%
 
 ### 📊 Documentation
 - [GPU_STATUS_REPORT.md](GPU_STATUS_REPORT.md) **← CURRENT: Full framework analysis**
