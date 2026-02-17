@@ -34,7 +34,7 @@ jobs:
       
       # Divan benchmarks (quick, cycle-accurate)
       - name: Run Divan micro-benchmarks
-        run: cargo bench --bench divan_benchmarks --release
+        run: cargo bench --bench divan_benchmarks -- --release
         continue-on-error: true
       
       # Upload benchmark results

@@ -1056,10 +1056,15 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[cfg(not(miri))]
     fn test_sparse_fit_explicit_indexing() {
         // Test loading the minimal sparse NSIDE=1 FITS file
         // This verifies the regression fix: sparse maps must use HPX_UNSEEN
         // initialization, not f64::NEG_INFINITY
+        //
+        // NOTE: This test is skipped under Miri because it uses file system
+        // operations (Path::exists) which call statx syscall that Miri's
+        // isolation mode doesn't support.
 
         let test_file =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sparse_nside1.fits");
