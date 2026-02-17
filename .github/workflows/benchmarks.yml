@@ -34,7 +34,7 @@ jobs:
       
       # Divan benchmarks (quick, cycle-accurate)
       - name: Run Divan micro-benchmarks
-        run: cargo bench --bench divan_benchmarks -- --release
+        run: cargo bench --bench divan_benchmarks
         continue-on-error: true
       
       # Upload benchmark results
@@ -45,27 +45,6 @@ jobs:
           name: criterion-reports
           path: target/criterion
       
-      # Bencher integration for performance tracking
-      - name: Store benchmark result
-        uses: bencherdev/bencher@main
-        if: github.event_name == 'push'
-        with:
-          project-slug: healpix-plotter
-          token: ${{ secrets.BENCHER_API_TOKEN }}
-          testbed-slug: "github-actions"
-          adapter: json
-          file: target/criterion/output.json
-          err-on-fail: false
-      
-      - name: Publish PR comment with results
-        if: github.event_name == 'pull_request'
-        uses: bencherdev/bencher@main
-        with:
-          project-slug: healpix-plotter
-          token: ${{ secrets.BENCHER_API_TOKEN }}
-          testbed-slug: "github-actions"
-          adapter: json
-          file: target/criterion/output.json
-          github-pages-branch: benches
-          comment-on-pr: true
-          err-on-fail: false
+      # Note: Bencher integration disabled due to API changes
+      # The current main branch only accepts 'version' input parameter
+      # Previous inputs (project-slug, token, testbed-slug, etc.) are deprecated
