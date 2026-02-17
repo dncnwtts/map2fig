@@ -18,10 +18,16 @@
 - [HEALPIX_MEMORY_ANALYSIS.md](HEALPIX_MEMORY_ANALYSIS.md) - Memory optimization results
 - [PERFORMANCE_OPTIMIZATION_RESULTS.md](PERFORMANCE_OPTIMIZATION_RESULTS.md) - Benchmark data
 
+### 🔬 Recent Optimization Work (Feb 2026)
+- [docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) **← LATEST: Session summary & lessons**
+- [docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md](docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md) - Prefetch hints (+3.2% improvement) ✅
+- [docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md](docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md) - Why tiling failed (-12% regression) ❌
+- [docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md](docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md) - Root cause analysis (updated)
+
 ### 🔧 Technical Details
-- [COMPARISON.md](COMPARISON.md) - HEALPix plotter vs healpy comparison
-- [GNOMONIC_GRATICULE_DESIGN.md](GNOMONIC_GRATICULE_DESIGN.md) - Graticule implementation
-- [HEALPY_COMPARISON.md](HEALPY_COMPARISON.md) - Feature parity analysis
+- [docs/reports/COMPARISON.md](docs/reports/COMPARISON.md) - HEALPix plotter vs healpy comparison
+- [docs/architecture/GNOMONIC_GRATICULE_DESIGN.md](docs/architecture/GNOMONIC_GRATICULE_DESIGN.md) - Graticule implementation
+- [docs/reports/HEALPY_COMPARISON.md](docs/reports/HEALPY_COMPARISON.md) - Feature parity analysis
 
 ### 📁 Code Organization
 - `src/gpu/cuda/` - GPU acceleration code (Phase 1.6.3)
@@ -278,7 +284,7 @@ tools/
 
 ### ❌ Failed (Do Not Retry)
 
-**F32 Precision Reduction** - SLOWER by 2-3.7% due to conversion costs (see [docs/F32_OPTIMIZATION_RESULTS.md](docs/F32_OPTIMIZATION_RESULTS.md))
+**F32 Precision Reduction** - SLOWER by 2-3.7% due to conversion costs (see [docs/dev/](docs/dev/))
 
 ---
 
@@ -336,7 +342,7 @@ See [GPU_STATUS_REPORT.md](GPU_STATUS_REPORT.md) for detailed analysis and [CUDA
 cargo test
 ```
 
-**Note**: Some tests currently fail due to API mismatches. See [FIXES_SUMMARY.md](FIXES_SUMMARY.md#known-issues) for details.
+**Note**: Some tests currently may fail due to API mismatches. See documentation for details.
 
 ### Manual Testing
 

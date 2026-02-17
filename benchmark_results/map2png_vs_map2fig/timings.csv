@@ -1,7 +1,0 @@
-Tool,Time(ms),Size(bytes),FITS_File
-map2png,191,12648,m_test
-map2fig,157,70345,m_test
-map2png,333,596280,class_dr1_40GHz_skymap_n128
-map2fig,167,1083857,class_dr1_40GHz_skymap_n128
-map2png,1430,156253,npipe_nodip
-map2fig,1104,1192465,npipe_nodip

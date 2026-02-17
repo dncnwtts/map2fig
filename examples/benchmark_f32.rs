@@ -1,10 +1,12 @@
-use std::time::Instant;
 use std::fs::File;
-use memmap2::Mmap;
+use std::time::Instant;
 
 fn main() {
     let test_files = vec![
-        ("Small (7 MB, f32)", "tests/data/class_dr1_40GHz_skymap_n128.fits"),
+        (
+            "Small (7 MB, f32)",
+            "tests/data/class_dr1_40GHz_skymap_n128.fits",
+        ),
         ("Large (576 MB, f32)", "tests/data/npipe6v20_217_map_K.fits"),
     ];
 
@@ -14,18 +16,18 @@ fn main() {
     for (label, filename) in test_files {
         let f = File::open(filename).expect("Failed to open FITS file");
         let file_size = f.metadata().unwrap().len() as f64 / (1024.0 * 1024.0);
-        
+
         // Warm up
         let _ = map2fig::read_healpix_column(filename, 0);
-        
+
         // Measure
         let start = Instant::now();
         let data = map2fig::read_healpix_column(filename, 0);
         let elapsed = start.elapsed();
-        
+
         let n_pixels = data.len();
         let gbps = (file_size / elapsed.as_secs_f64()) / 1024.0;
-        
+
         println!("{}", label);
         println!("  File size: {:.1} MB", file_size);
         println!("  Pixels: {} ({})", n_pixels, format_count(n_pixels as u64));
