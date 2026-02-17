@@ -500,6 +500,23 @@ fn try_load_column_cache(filepath: &str, col_idx: usize) -> Option<Vec<f64>> {
 
 /// Save column data to cache
 fn save_column_cache(filepath: &str, col_idx: usize, data: &[f64]) -> Option<()> {
+    // Skip caching very large columns (>1GB of data)
+    // These are rarely reused and would blow the cache size limit (2GB max)
+    const MAX_CACHE_COLUMN_SIZE: usize = 128_000_000; // ~1GB of data
+    if data.len() > MAX_CACHE_COLUMN_SIZE {
+        let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+        if enable_profile {
+            eprintln!(
+                "[I/O DIAG] Column cache SKIP (too large): {} col#{} ({} pixels > {}M)",
+                filepath,
+                col_idx,
+                data.len(),
+                MAX_CACHE_COLUMN_SIZE / 1_000_000
+            );
+        }
+        return None; // Skip, don't cache
+    }
+
     let cache_dir = get_cache_dir()?;
     let _ = std::fs::create_dir_all(&cache_dir);
 
@@ -624,8 +641,25 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
         read_healpix_column(filename, col_idx)
     };
 
-    // Save to cache for next time (ignore if save fails)
-    let _ = save_column_cache(filename, col_idx, &data);
+    // Save to cache for next time (with error reporting)
+    match save_column_cache(filename, col_idx, &data) {
+        Some(_) => {
+            if enable_profile {
+                eprintln!(
+                    "[I/O DIAG] Column cache SAVE SUCCESS: {} col#{}",
+                    filename, col_idx
+                );
+            }
+        }
+        None => {
+            if enable_profile {
+                eprintln!(
+                    "[I/O DIAG] Column cache SAVE FAILED: {} col#{}",
+                    filename, col_idx
+                );
+            }
+        }
+    }
 
     // Enforce cache size limit (2 GB max)
     enforce_cache_size_limit();
