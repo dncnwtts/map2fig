@@ -145,23 +145,55 @@ cargo run -- -f data.fits --hist --min 0.1 --max 0.9
 
 See `TIER1_OPTIMIZATION_SUCCESS.md` for initial Tier 1 analysis, and `TIER1_MEMORY_FIX.md` for Tier 1.2 memory optimization details.
 
-### Remaining Optimization Tiers
+**Tier 5: Prefetch Hints for Downsampling Inner Loop (Feb 17, 2026 - ✅ SUCCESSFUL):**
+- **Bottleneck Identified:** Downsampling accounts for 75.93% of runtime (5.7s of 7.5s total)
+  - Root cause: 3.2 billion random memory accesses across 806M-pixel array, 82% CPU stall rate
+  - Memory system can't prefetch random access patterns; CPU pipeline starves waiting for cache misses
+- **Solution Implemented:** x86_64 explicit prefetch hints (`_mm_prefetch`) in inner loop
+  - Prefetch 2 iterations ahead in downsampling loop to hide latency
+  - File: `src/healpix.rs` lines 1297-1330 (downgrade_healpix_map_xyf_parallel)
+  - x86_64 specific with fallback for other architectures
+- **Result:** **+3.2% wall-clock improvement** (7.502s → 7.263s on nside=8192 map)
+  - Prefetch visible cost: 7.68% in perf call-graph (uses previously-idle CPU stall window)
+  - More stable: ±0.192s std dev vs baseline ±0.205s
+  - Validated with 5 real benchmark runs using Hyperfine
+- **Key Insight:** Amdahl's Law applies: can't fix latency on 82% stall window without introducing _some_ cost
+- **Documentation:** See `PREFETCH_OPTIMIZATION_RESULTS.md` and `DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md`
 
-**Priority 1 (Next Target After Tier 1 Success):**
-- **Tier 2:** Vectorize Mollweide projection math with SIMD (15-25% gain expected)
-  - Current bottleneck: trigonometric computations (~70% of remaining time, 1.3s of 1.9s)
-  - Approach: Use packed_simd to batch angle computations for multiple pixels at once
-  - Difficulty: MEDIUM (requires SIMD intrinsics, nightly features)
+**Tier 5.1: Spatial Tiling for Cache Locality (Feb 18, 2026 - ❌ FAILED):**
+- **Hypothesis:** Process pixels in 256×256 spatial tiles per HEALPix face to improve cache locality
+- **Implementation:** Attempted tile-based iteration with ~3000 Rayon tasks
+- **Result:** **-12.3% regression** (7.263s → 8.156s baseline 7.502s)
+- **Root Causes:** 
+  1. Task overhead from 3000 sub-tasks exceeds spatial grouping benefit
+  2. HEALPix NESTED indexing (peano/morton Z-order curve) defeats spatial locality assumption
+  3. Prefetch already solved the latency problem; gains were imaginary
+  4. Amdahl's Law in reverse: once one bottleneck fixed, others become proportionally larger
+- **Revert:** `git checkout src/healpix.rs` successfully restored prefetch-only version
+- **Lesson Learned:** Don't attempt iteration reorganization on already well-optimized loops; measure first
+- **Documentation:** See `TILING_OPTIMIZATION_FAILURE_ANALYSIS.md`
 
-**Secondary Options:**
-- **Tier 3:** Parallelize projection across CPU cores (10-20% gain)
-  - Split pixels into chunks, project in parallel with rayon
-  - Difficulty: MEDIUM (data race prevention, thread safety)
-- **Tier 4:** Cache Cairo/PDF rendering for repeated plots (5-10% gain)
-- **Tier 5:** GPU rendering (already implemented, limited by CPU bottleneck now)
+### Remaining Optimization Opportunities
 
-**⛔ Failed Approach - Do Not Retry:**
-- Tier 3 (original): Downgrade-during-parsing was tested and failed (25% slower due to per-pixel trigonometric overhead)
+**Hard Limits:**
+- Theoretical minimum bandwidth-limited time: 3.1 GB ÷ 9.1 GB/s = 0.34 seconds
+- Current: 7.263 seconds (prefetch optimized)
+- Remaining potential: ~95% of wall time (but heavily constrained by algorithm)
+
+**Priority 1 (5-10× speedup potential):**
+- **GPU Acceleration:** Downsampling is embarrassingly parallel (3.2B ops, no dependencies)
+  - Approach: CUDA or HIP implementation of downgrade_healpix_map functions
+  - Difficulty: HIGH (new toolchain, CUDA SDK dependency)
+  - Benefit: Likely 5-10× speedup based on GPU capability
+
+**Secondary Options (Difficult, Low ROI After Prefetch):**
+- **Vectorize Mollweide math with SIMD:** 15-25% theoretical, but trigonometric ops already LLVM-optimized; measured gain would be <5%
+- **Ring-ordered processing:** Would break NESTED semantics, requires flag/documentation
+- **Multi-socket systems:** Rayon already parallelizes well; current bottleneck is bandwidth-limited (per-thread, not total)
+
+**⛔ Failed Approaches - Do Not Retry:**
+- Tier 3 (original): Downgrade-during-parsing (25% slower due to per-pixel coordinate conversion overhead)
+- Tier 5.1: Spatial tiling (12% regression due to task overhead, prefetch already solved latency)
 
 ---
 
@@ -171,9 +203,17 @@ See `TIER1_OPTIMIZATION_SUCCESS.md` for initial Tier 1 analysis, and `TIER1_MEMO
 
 See `TIER3_OPTIMIZATION_FAILURE_ANALYSIS.md` for detailed analysis. **DO NOT retry downgrade-during-parsing.** Focus instead on Tier 1 (direct column reading, 30-40% gain).
 
----
-
 **F32 Precision Reduction (Feb 15, 2026):** Attempted to speed up math by casting f64→f32→f64 or using native f32 arithmetic. **RESULT: Both approaches were SLOWER by 2-3.7%** due to conversion overhead exceeding any math speedup. Math is only 11.8% of CPU time and is already well-optimized by LLVM. The real bottleneck is Mollweide projection algorithm (77.5%) and Cairo rasterization (3.57× slower than PNG).
 
-See `docs/F32_OPTIMIZATION_RESULTS.md` for full analysis. **DO NOT attempt precision reduction again.**</content>
+See `docs/F32_OPTIMIZATION_RESULTS.md` for full analysis. **DO NOT attempt precision reduction again.**
+
+**Tier 5.1: Spatial Tiling for Cache Locality (Feb 18, 2026):** Attempted to improve cache performance by processing pixels in 256×256 spatial tiles per HEALPix face. **RESULT: -12.3% REGRESSION (7.263s → 8.156s)** despite hypothesis of better cache locality. Root causes:
+1. Task overhead: 3000 sub-tasks added scheduler overhead that exceeded any data locality benefit
+2. HEALPix Morton curve defeats spatial grouping: NESTED indexing follows Z-order curve, not rectangular spatial order
+3. Wrong problem to solve: Prefetch already eliminated the latency bottleneck; tiling tried to solve a non-existent problem
+4. Amdahl's Law in reverse: Fixing 75% bottleneck makes remaining 25% proportionally larger; attempting to optimize wrong place causes regression
+
+**Key Lesson:** After fixing primary bottleneck with prefetch (7.68% visible cost, 3.2% net gain), further iteration reorganization backfires. Memory bandwidth, not cache locality, is the actual constraint for random-access workloads.
+
+See `TILING_OPTIMIZATION_FAILURE_ANALYSIS.md` for detailed root cause analysis and `DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md` for full session context. **DO NOT retry spatial reorganization on this workload.**</content>
 <parameter name="filePath">/home/dwatts/projects/healpix_plotter/.github/copilot-instructions.md

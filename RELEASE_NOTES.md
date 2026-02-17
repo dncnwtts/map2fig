@@ -1,3 +1,46 @@
+# map2fig v0.7.0 Release Notes
+
+**Release Date:** February 18, 2026
+
+## Summary
+
+This release focuses on code quality, performance optimization validation, and repository organization. Achieves **3.2% performance improvement** through optimized prefetch hints while maintaining comprehensive documentation of all optimization work.
+
+## Major Changes
+
+### ✅ Code Quality Improvements
+- Fixed all Clippy warnings (7 instances across multiple files)
+  - Converted explicit loop counters to `.enumerate()`
+  - Removed unused imports and variables
+  - Simplified format!() calls
+  - Reorganized code structure for proper module ordering
+- **All 180 unit tests passing** (0 failures, 2 ignored)
+- `cargo fmt` formatting verified
+- Clean build: `cargo clippy --all-targets --all-features -- -D warnings`
+
+### 🔬 Performance Optimization Completion (Tier 5 - Prefetch)
+- **+3.2% wall-clock improvement** on nside=8192 maps (7.502s → 7.263s)
+- Implemented x86_64 prefetch hints in downsampling inner loop
+- Perf profiling validation confirms 7.68% prefetch cost in call-graph (uses idle CPU time)
+- Benchmark: 5 runs with ±0.192s std dev (tighter than baseline)
+
+### 📚 Repository Organization
+- Created comprehensive documentation structure
+  - `docs/optimization/` - All optimization analyses
+  - `docs/performance/` - Performance profiling results
+  - `docs/dev/` - Development notes
+  - Moved test artifacts to `target/` directory
+- Updated INDEX.md with new documentation links
+- `.github/copilot-instructions.md` includes latest optimization results
+
+### 📝 Detailed Optimization Documentation
+- **PREFETCH_OPTIMIZATION_RESULTS.md** - Validates +3.2% improvement
+- **TILING_OPTIMIZATION_FAILURE_ANALYSIS.md** - Documents why spatial tiling caused -12% regression
+- **DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md** - Full session replay with lessons learned
+- **OPTIMIZATION_AUDIT_2026.md** - Updated with Feb 17-18 work
+
+---
+
 # map2fig v0.6.0 Release Notes
 
 **Release Date:** February 17, 2026

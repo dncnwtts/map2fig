@@ -25,7 +25,6 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
 
     let cursor = Cursor::new(&mmap[..]);
     let mut fits = Fits::from_reader(cursor);
-    let mut nside: i64 = 0;
 
     while let Some(Ok(hdu)) = fits.next() {
         if let HDU::XBinaryTable(hdu) = hdu {
@@ -36,7 +35,10 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
                 Some(Value::String { value, .. }) => value.trim() == "EXPLICIT",
                 _ => false,
             };
-            output.push_str(&format!("  ✓ Explicit indexing check: {}\n", has_explicit_indexing));
+            output.push_str(&format!(
+                "  ✓ Explicit indexing check: {}\n",
+                has_explicit_indexing
+            ));
 
             if has_explicit_indexing {
                 output.push_str("  ✗ BLOCKED: Has explicit indexing (would use fallback)\n");
@@ -44,8 +46,8 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
             }
 
             // Check 2: Get NSIDE
-            match header.get("NSIDE") {
-                Some(Value::Integer { value, .. }) => nside = *value,
+            let nside = match header.get("NSIDE") {
+                Some(Value::Integer { value, .. }) => *value,
                 _ => {
                     output.push_str("  ✗ BLOCKED: No NSIDE found\n");
                     return Ok(output);
@@ -69,7 +71,10 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
             output.push_str(&format!("  Type char: {}\n", type_char));
 
             if type_char != 'E' {
-                output.push_str(&format!("  ✗ BLOCKED: Not f32 (type_char={}, need 'E' for f32)\n", type_char));
+                output.push_str(&format!(
+                    "  ✗ BLOCKED: Not f32 (type_char={}, need 'E' for f32)\n",
+                    type_char
+                ));
                 return Ok(output);
             }
             output.push_str("  ✓ Is f32\n");
@@ -113,7 +118,8 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
             for block_num in 0..1000 {
                 let block_start = block_num * FITS_BLOCK_SIZE;
                 if block_start + 80 > mmap.len() {
-                    output.push_str(&format!("  ✗ BLOCKED: Reached end of mmap without finding END keyword\n"));
+                    output
+                        .push_str("  ✗ BLOCKED: Reached end of mmap without finding END keyword\n");
                     return Ok(output);
                 }
 
@@ -124,7 +130,10 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
                         let card_start = &block[card_off..card_off + 8];
                         if card_start.starts_with(b"END     ") {
                             let data_offset = (block_num + 1) * FITS_BLOCK_SIZE;
-                            output.push_str(&format!("  ✓ Found END at block {}, data starts at offset {}\n", block_num, data_offset));
+                            output.push_str(&format!(
+                                "  ✓ Found END at block {}, data starts at offset {}\n",
+                                block_num, data_offset
+                            ));
                             found_end = true;
 
                             // Check 8: Verify we can read data
@@ -132,14 +141,21 @@ fn test_f32_detection(filepath: &str) -> Result<String, String> {
                             let test_read_end = test_read_start + 16; // try to read 4 f32 values
 
                             if test_read_end > mmap.len() {
-                                output.push_str("  ✗ BLOCKED: Data offset would read past end of file\n");
+                                output.push_str(
+                                    "  ✗ BLOCKED: Data offset would read past end of file\n",
+                                );
                             } else {
                                 output.push_str("  ✓ Data offset is valid\n");
-                                output.push_str("\n✅ ALL CHECKS PASSED - f32 native path SHOULD trigger!\n");
+                                output.push_str(
+                                    "\n✅ ALL CHECKS PASSED - f32 native path SHOULD trigger!\n",
+                                );
                                 output.push_str("\nIf it didn't, there may be an issue with:\n");
                                 output.push_str("- elem_count parsing from TFORM\n");
-                                output.push_str("- Endianness assumptions (file uses big-endian?)\n");
-                                output.push_str("- Multiple columns (f32 path only handles single column)\n");
+                                output
+                                    .push_str("- Endianness assumptions (file uses big-endian?)\n");
+                                output.push_str(
+                                    "- Multiple columns (f32 path only handles single column)\n",
+                                );
                             }
 
                             break;

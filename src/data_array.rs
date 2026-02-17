@@ -136,9 +136,7 @@ impl DataArray {
     /// For f32 data, this allocates a new vector with conversions.
     pub fn as_f64_vec(&self) -> std::borrow::Cow<'_, Vec<f64>> {
         match self {
-            DataArray::Float32(v) => {
-                std::borrow::Cow::Owned(v.iter().map(|&x| x as f64).collect())
-            }
+            DataArray::Float32(v) => std::borrow::Cow::Owned(v.iter().map(|&x| x as f64).collect()),
             DataArray::Float64(v) => std::borrow::Cow::Borrowed(v),
         }
     }

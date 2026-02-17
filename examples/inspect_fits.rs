@@ -1,6 +1,4 @@
 /// Debug tool to inspect FITS file structure and data types
-use std::io::Cursor;
-
 fn main() {
     let files = vec![
         "tests/data/combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits",
@@ -27,11 +25,8 @@ fn inspect_fits(filepath: &str) -> Result<String, String> {
     let mut fits = Fits::from_reader(f);
 
     let mut output = String::new();
-    let mut hdu_num = 0;
 
     while let Some(Ok(hdu)) = fits.next() {
-        hdu_num += 1;
-
         match &hdu {
             HDU::XBinaryTable(table) => {
                 output.push_str("✓ Binary Table HDU\n");
@@ -61,10 +56,12 @@ fn inspect_fits(filepath: &str) -> Result<String, String> {
                     if let Some(Value::String { value: tform, .. }) = header.get(&tform_key) {
                         let ttype = header
                             .get(&ttype_key)
-                            .and_then(|v| if let Value::String { value, .. } = v {
-                                Some(value.clone())
-                            } else {
-                                None
+                            .and_then(|v| {
+                                if let Value::String { value, .. } = v {
+                                    Some(value.clone())
+                                } else {
+                                    None
+                                }
                             })
                             .unwrap_or_else(|| "?".to_string());
 
@@ -77,7 +74,10 @@ fn inspect_fits(filepath: &str) -> Result<String, String> {
                             _ => "unknown",
                         };
 
-                        output.push_str(&format!("    Col {}: {} ({}, format: {})\n", i, ttype, dtype, tform));
+                        output.push_str(&format!(
+                            "    Col {}: {} ({}, format: {})\n",
+                            i, ttype, dtype, tform
+                        ));
                     } else {
                         break;
                     }

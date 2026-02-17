@@ -81,6 +81,7 @@ declare -a FITS_FILES=(
     "$DATA_DIR/m_test.fits:m_test (small)"
     "$DATA_DIR/class_dr1_40GHz_skymap_n128.fits:CLASS 40GHz (n128)"
     "$DATA_DIR/npipe_nodip.fits:NPIPE noDip"
+    "$DATA_DIR/combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits:SPT noptsrc"
 )
 
 # Function to get file size in human-readable format
