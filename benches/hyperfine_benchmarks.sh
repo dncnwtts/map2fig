@@ -20,39 +20,66 @@ echo "HEALPix Plotter - Hyperfine Benchmark Suite"
 echo "═══════════════════════════════════════════════════════════════"
 echo "Binary:      $BINARY"
 echo "Warmup runs: $WARMUP_RUNS"
-echo "Benchmark: $RUNS runs each"
+echo "Benchmark runs: $RUNS each"
 echo ""
 
 # Test suite: different file sizes and resolutions
 declare -a BENCHMARKS=(
-    "tests/data/class_dr1_40GHz_skymap_n128.fits:small_nside128"
-    "tests/data/cosmoglobe_clipped.fits:small_nside512"
-    "tests/data/cosmoglobe_DIRBE_06_I_n00512_DR2.fits:medium_nside512"
-    "tests/data/npipe_nodip.fits:medium_nside512"
-    "tests/data/npipe6v20_217_map_K.fits:large_nside512"
-    "tests/data/combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits:huge_nside8192"
+    "tests/data/class_dr1_40GHz_skymap_n128.fits"
+    "tests/data/cosmoglobe_clipped.fits"
+    "tests/data/cosmoglobe_DIRBE_06_I_n00512_DR2.fits"
+    "tests/data/npipe_nodip.fits"
+    "tests/data/npipe6v20_217_map_K.fits"
+    "tests/data/combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits"
 )
 
-# Build command strings
+# Build command strings and names separately
 declare -a COMMANDS
+declare -a NAMES
 
-for benchmark in "${BENCHMARKS[@]}"; do
-    IFS=':' read -r filepath label <<< "$benchmark"
+for filepath in "${BENCHMARKS[@]}"; do
     if [ -f "$filepath" ]; then
-        size_mb=$(( $(stat -f%z "$filepath" 2>/dev/null || stat -c%s "$filepath" 2>/dev/null) / 1048576 ))
-        COMMANDS+=("$BINARY -f $filepath -o /tmp/bench_${label}.pdf:$label (${size_mb}MB)")
+        filename=$(basename "$filepath")
+        size_bytes=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null)
+        size_mb=$((size_bytes / 1048576))
+        
+        # Extract nside from filename or estimate from size
+        if [[ $filename =~ nside([0-9]+) ]]; then
+            nside="${BASH_REMATCH[1]}"
+        else
+            nside="128"
+        fi
+        
+        outfile="/tmp/bench_$(basename "$filepath" .fits).pdf"
+        COMMANDS+=("$BINARY -f '$filepath' -o '$outfile'")
+        NAMES+=("$filename (${size_mb}MB, nside=$nside)")
     fi
 done
 
+# Build hyperfine arguments with labels
+HYPERFINE_ARGS=(
+    "--warmup" "$WARMUP_RUNS"
+    "--runs" "$RUNS"
+    "--min-benchmarking-time" "1"
+    "--prepare" "sync; sleep 0.5"
+    "--export-json" "/tmp/hyperfine_results.json"
+    "--export-markdown" "/tmp/hyperfine_results.md"
+)
+
+# Add command names
+for i in "${!COMMANDS[@]}"; do
+    HYPERFINE_ARGS+=("--command-name" "${NAMES[$i]}")
+done
+
+# Add the actual commands
+for cmd in "${COMMANDS[@]}"; do
+    HYPERFINE_ARGS+=("$cmd")
+done
+
 # Run hyperfine with statistical analysis
-hyperfine \
-    --warmup "$WARMUP_RUNS" \
-    --runs "$RUNS" \
-    --min-benchmarking-time 1 \
-    --prepare "sync; sleep 0.5" \
-    --export-json "/tmp/hyperfine_results.json" \
-    --export-markdown "/tmp/hyperfine_results.md" \
-    "${COMMANDS[@]}"
+echo "Running benchmarks (this may take 10-15 minutes)..."
+echo ""
+hyperfine "${HYPERFINE_ARGS[@]}"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
