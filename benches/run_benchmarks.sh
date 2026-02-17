@@ -63,7 +63,7 @@ fi
 # Check if binary is built
 if [ ! -f "target/release/map2fig" ]; then
     echo "Building release binary..."
-    cargo build --release
+    cargo build -- --release
 fi
 
 case "$1" in
@@ -71,7 +71,7 @@ case "$1" in
         echo -e "${BOLD}Running comprehensive benchmark suite...${NC}\n"
         
         echo -e "${BLUE}1. Divan micro-benchmarks (fast)${NC}"
-        cargo bench --bench divan_benchmarks --release
+        cargo bench --bench divan_benchmarks 
         echo ""
         
         echo -e "${BLUE}2. Criterion micro-benchmarks (detailed)${NC}"
@@ -102,7 +102,7 @@ case "$1" in
         
     divan)
         echo -e "${BOLD}Running Divan quick benchmarks...${NC}\n"
-        cargo bench --bench divan_benchmarks --release
+        cargo bench --bench divan_benchmarks 
         echo -e "\n${GREEN}✓ Complete (check output for cycle counts)${NC}"
         ;;
         
