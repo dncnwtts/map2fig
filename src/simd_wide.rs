@@ -202,22 +202,10 @@ pub fn simd_add_8_wide(a: [f64; 8], b: [f64; 8]) -> [f64; 8] {
 /// Vectorized fused multiply-add using f64x2
 #[inline]
 pub fn simd_madd_8_wide(a: [f64; 8], b: [f64; 8], c: [f64; 8]) -> [f64; 8] {
-    let v0 = f64x2::new([a[0], a[1]]).mul_add(
-        f64x2::new([b[0], b[1]]),
-        f64x2::new([c[0], c[1]]),
-    );
-    let v1 = f64x2::new([a[2], a[3]]).mul_add(
-        f64x2::new([b[2], b[3]]),
-        f64x2::new([c[2], c[3]]),
-    );
-    let v2 = f64x2::new([a[4], a[5]]).mul_add(
-        f64x2::new([b[4], b[5]]),
-        f64x2::new([c[4], c[5]]),
-    );
-    let v3 = f64x2::new([a[6], a[7]]).mul_add(
-        f64x2::new([b[6], b[7]]),
-        f64x2::new([c[6], c[7]]),
-    );
+    let v0 = f64x2::new([a[0], a[1]]).mul_add(f64x2::new([b[0], b[1]]), f64x2::new([c[0], c[1]]));
+    let v1 = f64x2::new([a[2], a[3]]).mul_add(f64x2::new([b[2], b[3]]), f64x2::new([c[2], c[3]]));
+    let v2 = f64x2::new([a[4], a[5]]).mul_add(f64x2::new([b[4], b[5]]), f64x2::new([c[4], c[5]]));
+    let v3 = f64x2::new([a[6], a[7]]).mul_add(f64x2::new([b[6], b[7]]), f64x2::new([c[6], c[7]]));
 
     let r0 = v0.to_array();
     let r1 = v1.to_array();

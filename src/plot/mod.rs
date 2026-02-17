@@ -787,8 +787,9 @@ pub fn render_projection_to_grid<P: crate::projection::Projection>(
             }
 
             // Batch projection (using SIMD-accelerated version)
-            let (lons, lats, proj_mask) =
-                params.proj.pixel_to_ang_batch_simd(&px_array, &py_array, grid);
+            let (lons, lats, proj_mask) = params
+                .proj
+                .pixel_to_ang_batch_simd(&px_array, &py_array, grid);
 
             // Convert to theta
             let mut thetas = [0.0_f64; 8];

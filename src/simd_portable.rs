@@ -2,9 +2,6 @@
 // On stable Rust, this just delegates to the wide crate
 // This module is only compiled when `nightly_simd` feature is enabled.
 
-#[cfg(feature = "nightly_simd")]
-use std::simd::{f64x8, SimdFloat};
-
 use crate::simd_wide as wide_simd;
 
 /// Vectorized sin for 8 f64 values

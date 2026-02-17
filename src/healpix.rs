@@ -41,16 +41,16 @@ use std::f64::consts::PI;
 pub const HPX_UNSEEN: f64 = -1.6375e30;
 use crate::rotation::ViewTransform;
 use crate::simd;
+use lru::LruCache;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use lru::LruCache;
 use std::num::NonZeroUsize;
 
 // Coordinate conversion cache - caches (nside, pix) -> (theta, phi) lookups
 // This reduces redundant trigonometric computations during projection
 // Hit rate varies by operation: ~60-80% for typical sky maps
-type CoordCacheEntry = (i64, i64);  // (nside, pix) key
-type CoordCacheValue = (f64, f64);  // (theta, phi) value
+type CoordCacheEntry = (i64, i64); // (nside, pix) key
+type CoordCacheValue = (f64, f64); // (theta, phi) value
 
 static PIX2ANG_RING_CACHE: Lazy<RwLock<LruCache<CoordCacheEntry, CoordCacheValue>>> =
     Lazy::new(|| {
@@ -59,9 +59,7 @@ static PIX2ANG_RING_CACHE: Lazy<RwLock<LruCache<CoordCacheEntry, CoordCacheValue
     });
 
 static PIX2ANG_NEST_CACHE: Lazy<RwLock<LruCache<CoordCacheEntry, CoordCacheValue>>> =
-    Lazy::new(|| {
-        RwLock::new(LruCache::new(NonZeroUsize::new(10_000).unwrap()))
-    });
+    Lazy::new(|| RwLock::new(LruCache::new(NonZeroUsize::new(10_000).unwrap())));
 
 const HALF_PI: f64 = PI / 2.0;
 const TWOPI: f64 = 2.0 * PI;
@@ -237,7 +235,7 @@ fn ang2pix(meta: HealpixMeta, theta: f64, phi: f64) -> i64 {
 /// For typical sky maps, cache hit rate is 60-80%, providing ~1.15-1.25× speedup.
 pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
     let key = (nside, ipix);
-    
+
     // Check cache
     {
         let mut cache = PIX2ANG_RING_CACHE.write();
@@ -245,14 +243,14 @@ pub fn pix2ang_ring(nside: i64, ipix: i64) -> (f64, f64) {
             return *result;
         }
     }
-    
+
     // Cache miss - compute and insert
     let result = pix2ang_ring_uncached(nside, ipix);
     {
         let mut cache = PIX2ANG_RING_CACHE.write();
         cache.put(key, result);
     }
-    
+
     result
 }
 
@@ -343,7 +341,7 @@ pub fn ang2pix_ring(nside: i64, theta: f64, phi: f64) -> i64 {
 
 pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
     let key = (nside, ipix);
-    
+
     // Check cache
     {
         let mut cache = PIX2ANG_NEST_CACHE.write();
@@ -351,14 +349,14 @@ pub fn pix2ang_nest(nside: i64, ipix: i64) -> (f64, f64) {
             return *result;
         }
     }
-    
+
     // Cache miss - compute and insert
     let result = pix2ang_nest_uncached(nside, ipix);
     {
         let mut cache = PIX2ANG_NEST_CACHE.write();
         cache.put(key, result);
     }
-    
+
     result
 }
 
@@ -1241,7 +1239,7 @@ fn downgrade_healpix_map_ang(
 }
 
 /// Optimized downsampling: parallel iteration over target pixels
-/// 
+///
 /// Uses Rayon to split the work across CPU cores. Each core processes
 /// a range of target pixels independently, which reduces memory bus contention
 /// and improves cache locality per-core.
@@ -1254,12 +1252,12 @@ fn downgrade_healpix_map_xyf_parallel(
     ordering: HealpixOrdering,
 ) -> Vec<f64> {
     use rayon::prelude::*;
-    
+
     let fact = source_nside / target_nside;
     let target_npix = (12 * target_nside * target_nside) as usize;
-    
+
     // Adaptive chunking: balance task overhead vs cache locality
-    // 
+    //
     // Problem: Fixed 10K chunks create 310K tasks for 3GB files (310K × 10µs = 3.1s overhead)
     // Solution: Scale chunk size with input size to keep task count reasonable
     //
@@ -1268,25 +1266,23 @@ fn downgrade_healpix_map_xyf_parallel(
     // - 10M-100M pixels (80MB-800MB): 50K chunks → balance
     // - > 100M pixels (>800MB): 100K chunks → reduce scheduling overhead
     let chunk_size = if target_npix < 10_000_000 {
-        10_000   // Small files: maximize cache locality
+        10_000 // Small files: maximize cache locality
     } else if target_npix < 100_000_000 {
-        50_000   // Medium files: moderate balance
+        50_000 // Medium files: moderate balance
     } else {
-        100_000  // Large files (3.1B pixels → 31K tasks): reduce overhead
+        100_000 // Large files (3.1B pixels → 31K tasks): reduce overhead
     };
-    
+
     // Collect chunk start indices
-    let chunk_starts: Vec<usize> = (0..target_npix)
-        .step_by(chunk_size)
-        .collect();
-    
+    let chunk_starts: Vec<usize> = (0..target_npix).step_by(chunk_size).collect();
+
     // Process chunks in parallel
     let chunks: Vec<Vec<f64>> = chunk_starts
         .into_par_iter()
         .map(|chunk_start| {
             let chunk_end = (chunk_start + chunk_size).min(target_npix);
             let mut chunk_result = vec![HPX_UNSEEN; chunk_end - chunk_start];
-            
+
             for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
                 // Convert target pixel to (x, y, face)
                 let (x, y, face) = match ordering {
@@ -1320,11 +1316,11 @@ fn downgrade_healpix_map_xyf_parallel(
                     chunk_result[local_idx] = sum / hits as f64;
                 }
             }
-            
+
             chunk_result
         })
         .collect();
-    
+
     // Merge chunks back into result vector
     let mut result = vec![HPX_UNSEEN; target_npix];
     let mut result_idx = 0;
@@ -1334,7 +1330,7 @@ fn downgrade_healpix_map_xyf_parallel(
             result_idx += 1;
         }
     }
-    
+
     result
 }
 
@@ -1400,7 +1396,7 @@ fn downgrade_healpix_map_xyf(
 
     // Use parallel version for large maps, scalar for small ones
     let target_npix = (12 * target_nside * target_nside) as usize;
-    
+
     // Only parallelize if it's worth it (>50K pixels = overhead is negligible)
     if target_npix > 50_000 {
         downgrade_healpix_map_xyf_parallel(map, source_nside, target_nside, ordering)
