@@ -17,7 +17,7 @@ pub struct Args {
     pub col: usize,
 
     /// Colormap name
-    #[arg(short = 'c', long, default_value = "viridis")]
+    #[arg(short = 'c', long, default_value = "planck")]
     pub cmap: String,
 
     /// Output width in pixels
