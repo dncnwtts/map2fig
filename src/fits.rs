@@ -78,11 +78,9 @@ fn try_read_float32_column_native(
     let cursor = Cursor::new(mmap_data);
     let mut fits = Fits::from_reader(cursor);
     let mut nside: i64 = 0;
-    let mut found_table = false;
 
     while let Some(Ok(hdu)) = fits.next() {
         if let HDU::XBinaryTable(hdu) = hdu {
-            found_table = true;
             eprintln!("[f32] Found XBinaryTable");
             let header = hdu.get_header();
 
@@ -129,11 +127,11 @@ fn try_read_float32_column_native(
             }
             eprintln!("[f32] ✓ Type is float32 (E)");
 
-            // Get column byte offset from TOFFSET
+            // Get column byte offset from TOFFSET (defaults to 0 for first column per FITS standard)
             let toffset_key = format!("TOFFSET{}", col_idx + 1);
             let col_offset: usize = match header.get(&toffset_key) {
                 Some(Value::Integer { value, .. }) => *value as usize,
-                _ => return None,
+                _ => if col_idx == 0 { 0 } else { return None },
             };
 
             // Get row byte size (NAXIS1)
@@ -167,9 +165,10 @@ fn try_read_float32_column_native(
                 let column_bytes = &mmap_data[row_start..row_end];
 
                 // Interpret bytes as f32 array - NO CONVERSION TO f64
+                // FITS format uses big-endian byte order (IEEE 754 network byte order)
                 for chunk in column_bytes.chunks_exact(4) {
                     let bytes = [chunk[0], chunk[1], chunk[2], chunk[3]];
-                    let f32_val = f32::from_le_bytes(bytes);
+                    let f32_val = f32::from_be_bytes(bytes);
                     result.push(f32_val);  // Keep as f32!
                 }
             }
@@ -229,11 +228,11 @@ fn try_read_float64_column_native(
                 return None;
             }
 
-            // Get column byte offset from TOFFSET
+            // Get column byte offset from TOFFSET (defaults to 0 for first column per FITS standard)
             let toffset_key = format!("TOFFSET{}", col_idx + 1);
             let col_offset: usize = match header.get(&toffset_key) {
                 Some(Value::Integer { value, .. }) => *value as usize,
-                _ => return None,
+                _ => if col_idx == 0 { 0 } else { return None },
             };
 
             // Get row byte size (NAXIS1)
@@ -267,10 +266,11 @@ fn try_read_float64_column_native(
                 let column_bytes = &mmap_data[row_start..row_end];
 
                 // Interpret bytes as f64 array
+                // FITS format uses big-endian byte order (IEEE 754 network byte order)
                 for chunk in column_bytes.chunks_exact(8) {
                     let bytes = [chunk[0], chunk[1], chunk[2], chunk[3], 
                                  chunk[4], chunk[5], chunk[6], chunk[7]];
-                    let f64_val = f64::from_le_bytes(bytes);
+                    let f64_val = f64::from_be_bytes(bytes);
                     result.push(f64_val);
                 }
             }
@@ -283,32 +283,43 @@ fn try_read_float64_column_native(
 }
 
 /// Find the binary data offset in a FITS file (after all header blocks)
-/// FITS headers are padded to 2880-byte blocks; data starts at next block after last header
+/// FITS headers are padded to 2880-byte blocks; data starts at next block after LAST header
+/// For multi-HDU files, we need to find the BINTABLE END, not the PRIMARY END
 fn find_binary_table_data_offset(mmap_data: &[u8]) -> Option<usize> {
     const FITS_BLOCK_SIZE: usize = 2880;
+    let mut last_end_block = None;
 
+    // Scan through entire file looking for all END keywords
+    // Track the LAST one (which marks the end of BINTABLE header)
     for block_num in 0..1000 {
         let block_start = block_num * FITS_BLOCK_SIZE;
-        if block_start + 80 > mmap_data.len() {
-            return None;
+        if block_start >= mmap_data.len() {
+            break;
         }
 
-        let block = &mmap_data[block_start..];
+        let block = if block_start + FITS_BLOCK_SIZE <= mmap_data.len() {
+            &mmap_data[block_start..block_start + FITS_BLOCK_SIZE]
+        } else {
+            // Partial block at end of file
+            &mmap_data[block_start..]
+        };
 
-        // Look for "END" keyword in first 80 bytes of a block
+        // Look for "END" keyword in FITS cards
         // FITS cards are 80 bytes, keyword is first 8 bytes
         for card_off in (0..block.len()).step_by(80) {
-            if card_off + 3 <= block.len() {
-                let card_start = &block[card_off..card_off + 8];
-                if card_start.starts_with(b"END     ") {
-                    // Data starts at next 2880-byte block
-                    return Some((block_num + 1) * FITS_BLOCK_SIZE);
+            if card_off + 8 <= block.len() {
+                let card = &block[card_off..card_off + 8];
+                if card == b"END     " {
+                    // Track this END as the latest we've seen
+                    last_end_block = Some(block_num);
+                    break; // Only one END per 2880-byte block
                 }
             }
         }
     }
 
-    None
+    // Data starts at next 2880-byte block after last END keyword
+    last_end_block.map(|block_num| (block_num + 1) * FITS_BLOCK_SIZE)
 }
 
 /// Read a HEALPix column from a FITS binary table.

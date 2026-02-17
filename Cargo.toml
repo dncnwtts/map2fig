@@ -54,6 +54,12 @@ proptest = "1.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 divan = "0.1"
 
+[profile.dev]
+# Faster dev builds - disable full debug info but keep line tables for stack traces
+debug = "line-tables-only"
+# Speed up linking for dev builds
+split-debuginfo = "packed"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

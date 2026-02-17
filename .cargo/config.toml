@@ -1,3 +1,13 @@
 [build]
-rustflags = ["-C", "target-cpu=native"]
+# Native CPU optimizations (take advantage of target machine features)
+rustflags = [
+    "-C", "target-cpu=native",
+    # Use faster linker on Linux (lld is default since Rust 1.90, but be explicit)
+    "-C", "link-arg=-fuse-ld=lld",
+]
+
+# Try to use mold if available (alternative faster linker)
+# Note: If mold is not installed, cargo will fall back to lld silently
+# To use mold instead, change above to:
+# rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=mold"]
 
