@@ -5,13 +5,13 @@ use image::Rgba;
 use std::str::FromStr;
 
 /// Fast, publication-quality HEALPix sky map visualization
-/// 
+///
 /// EXAMPLES:
 ///   map2fig input.fits                              # Auto-generates input.png
 ///   map2fig input.fits output.pdf                   # Explicit output filename
 ///   map2fig input.fits output.pdf -c viridis --log # With custom colormap and scaling
 ///   map2fig input.fits -c plasma --hist             # Auto-generates input.png with options
-/// 
+///
 /// ADVANCED OPTIONS:
 ///   Use --projection (mollweide/gnomonic/hammer), --graticule, --rotate-to,
 ///   --lon, --lat for coordinate system and view changes. Many more options
@@ -135,11 +135,21 @@ pub struct Args {
     pub projection: String,
 
     /// Center longitude in degrees (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true, required = false)]
+    #[arg(
+        long,
+        alias = "gnom-lon",
+        allow_negative_numbers = true,
+        required = false
+    )]
     pub lon: Option<f64>,
 
     /// Center latitude in degrees (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true, required = false)]
+    #[arg(
+        long,
+        alias = "gnom-lat",
+        allow_negative_numbers = true,
+        required = false
+    )]
     pub lat: Option<f64>,
 
     /// Field of view width in arcminutes (gnomonic projection only)
@@ -155,11 +165,23 @@ pub struct Args {
     pub local_graticule: bool,
 
     /// Graticule spacing for parallels [degrees] (gnomonic projection only)
-    #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0, hide = true, required = false)]
+    #[arg(
+        long,
+        alias = "gnom-grat-dlat",
+        default_value_t = 1.0,
+        hide = true,
+        required = false
+    )]
     pub local_grat_dlat: f64,
 
     /// Graticule spacing for meridians [degrees] (gnomonic projection only)
-    #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0, hide = true, required = false)]
+    #[arg(
+        long,
+        alias = "gnom-grat-dlon",
+        default_value_t = 1.0,
+        hide = true,
+        required = false
+    )]
     pub local_grat_dlon: f64,
 
     /// Graticule line width in pixels (applies to both local and mollweide graticules)

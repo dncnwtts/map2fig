@@ -12,8 +12,8 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    use std::time::Instant;
     use std::path::Path;
+    use std::time::Instant;
 
     let mut args = Args::parse();
 
@@ -21,11 +21,14 @@ fn run() -> Result<(), String> {
     if args.fits.is_none() {
         return Err("Usage: map2fig <FITS> [OUTPUT]".to_string());
     }
-    
+
     if args.out.is_none() {
         let fits_path = args.fits.as_ref().unwrap();
         let path = Path::new(fits_path);
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("output");
         args.out = Some(format!("{}.png", stem));
     }
 

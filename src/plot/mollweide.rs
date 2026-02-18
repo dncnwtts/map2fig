@@ -193,6 +193,7 @@ pub fn render_mollweide_pixels(
 }
 
 // Non-generic storage for PDF rendering setup
+#[allow(dead_code)]
 struct MollweidePdfSetup<'a> {
     surface_pdf: PdfSurface,
     cr_pdf: Context,
@@ -236,9 +237,7 @@ struct MollweidePdfSetup<'a> {
 }
 
 /// Non-generic setup for PDF rendering - only generic call is the pixel_renderer
-fn _mollweide_pdf_setup_impl<'a>(
-    params: &'a MollweideParams<'a>,
-) -> MollweidePdfSetup<'a> {
+fn _mollweide_pdf_setup_impl<'a>(params: &'a MollweideParams<'a>) -> MollweidePdfSetup<'a> {
     let map = params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename.to_string();
@@ -385,7 +384,10 @@ fn _mollweide_pdf_finalize_impl<'a>(
         setup.map_h_int as i32,
         setup.map_w_int as i32 * 4,
     ) {
-        let _ = setup.cr_pdf.set_source_surface(&pixel_surface, setup.layout.map_x, setup.layout.map_y);
+        let _ =
+            setup
+                .cr_pdf
+                .set_source_surface(&pixel_surface, setup.layout.map_x, setup.layout.map_y);
         setup.cr_pdf.paint().unwrap();
     }
 
@@ -534,7 +536,7 @@ where
         y0: 0,
     };
 
-    pixel_renderer(render_params, setup.layout, &mut sink, debug_overlay.clone());
+    pixel_renderer(render_params, setup.layout, &mut sink, debug_overlay);
 
     // Non-generic finalization - not duplicated per monomorphization
     _mollweide_pdf_finalize_impl(setup, debug_overlay);
