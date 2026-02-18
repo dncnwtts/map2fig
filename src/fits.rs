@@ -449,8 +449,8 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
                     // Batch rows into ~1M row chunks (≈16MB per chunk) to reduce Rayon task count
                     // from millions to hundreds
                     let chunk_size = 1_000_000; // 1M rows per parallelization unit
-                    let num_chunks = (n_rows + chunk_size - 1) / chunk_size;
-                    
+                    let num_chunks = n_rows.div_ceil(chunk_size);
+
                     let pairs: Vec<(usize, f64)> = (0..num_chunks)
                         .into_par_iter()
                         .flat_map(|chunk_idx| {
@@ -474,7 +474,10 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
                                         DataValue::Float { value, .. } => *value as f64,
                                         DataValue::Integer { value, .. } => *value as f64,
                                         other => {
-                                            panic!("Unsupported column type in FITS table: {:?}", other)
+                                            panic!(
+                                                "Unsupported column type in FITS table: {:?}",
+                                                other
+                                            )
                                         }
                                     };
 
@@ -932,8 +935,8 @@ pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> DataArray {
                     // Batch rows into ~1M row chunks (≈16MB per chunk) to reduce Rayon task count
                     // from millions to hundreds
                     let chunk_size = 1_000_000; // 1M rows per parallelization unit
-                    let num_chunks = (n_rows + chunk_size - 1) / chunk_size;
-                    
+                    let num_chunks = n_rows.div_ceil(chunk_size);
+
                     let pairs: Vec<(usize, f64)> = (0..num_chunks)
                         .into_par_iter()
                         .flat_map(|chunk_idx| {
@@ -957,7 +960,10 @@ pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> DataArray {
                                         DataValue::Float { value, .. } => *value as f64,
                                         DataValue::Integer { value, .. } => *value as f64,
                                         other => {
-                                            panic!("Unsupported column type in FITS table: {:?}", other)
+                                            panic!(
+                                                "Unsupported column type in FITS table: {:?}",
+                                                other
+                                            )
                                         }
                                     };
 

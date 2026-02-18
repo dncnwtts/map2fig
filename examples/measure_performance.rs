@@ -149,7 +149,10 @@ fn main() {
                 println!("\n❌ REGRESSION - Slower than expected!");
             }
 
-            println!("\nI/O Throughput: {:.1} MB/s (expected ~285 MB/s baseline)", throughput);
+            println!(
+                "\nI/O Throughput: {:.1} MB/s (expected ~285 MB/s baseline)",
+                throughput
+            );
             println!("\n📊 FULL PIPELINE TIME (with PNG rendering): ~7.5 seconds");
             println!("   (See 'benches/run_benchmarks.sh e2e' for detailed rendering benchmarks)")
         }

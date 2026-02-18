@@ -1272,8 +1272,7 @@ fn downgrade_healpix_map_xyf_parallel(
     } else {
         // Large files: batch by nside=512 equivalent (3.1M pixels) to reduce Rayon overhead
         // 806M pixels / 3.1M per batch ≈ 259 tasks vs millions with fine granularity
-        let nside_512_pixels = 12 * 512 * 512; // 3,145,728 pixels
-        nside_512_pixels
+        12 * 512 * 512 // 3,145,728 pixels
     };
 
     // Collect chunk start indices
