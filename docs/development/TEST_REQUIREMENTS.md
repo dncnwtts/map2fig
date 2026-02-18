@@ -2,7 +2,7 @@
 
 ## Test Suite Overview
 
-Comprehensive test suite added to `/home/dwatts/projects/healpix_plotter/tests/test_triangle_rendering.rs` to validate triangle rendering constraints and detect asymmetries.
+Comprehensive test suite added to `/home/dwatts/projects/map2fig/tests/test_triangle_rendering.rs` to validate triangle rendering constraints and detect asymmetries.
 
 ## Key Constraint Discovered
 
@@ -84,7 +84,7 @@ Testing heights 20-50 shows this pattern:
 ## Test Execution
 
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 cargo test --test test_triangle_rendering -- --nocapture
 ```
 

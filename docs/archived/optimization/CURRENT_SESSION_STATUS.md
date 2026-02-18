@@ -40,7 +40,7 @@ Multiple attempts at string replacement using `replace_string_in_file`:
 ## Recommended Next Steps
 
 ### Option A: Manual VS Code Find/Replace (PREFERRED)
-1. Open `/home/dwatts/projects/healpix_plotter/src/plot/mod.rs` in VS Code
+1. Open `/home/dwatts/projects/map2fig/src/plot/mod.rs` in VS Code
 2. Follow replacement #1-13 in TIER3B_PATCH.md
 3. Test compilation after each replacement: `cargo check`
 4. This gives feedback and prevents cascading errors

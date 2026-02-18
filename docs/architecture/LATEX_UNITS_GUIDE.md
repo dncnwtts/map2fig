@@ -116,7 +116,7 @@ Both PDF and PNG output formats now support LaTeX-formatted units labels on colo
 ### Rendering Time
 - LaTeX rendering adds **1-3 seconds** per plot (pdflatex compilation)
 - Results are cached, so repeated renders are fast
-- Cache location: `~/.cache/healpix_plotter/latex_render/`
+- Cache location: `~/.cache/map2fig/latex_render/`
 
 ### File Sizes
 - PNG with LaTeX: ~1.0-1.5 MB at 1200px (same as without LaTeX)
@@ -125,7 +125,7 @@ Both PDF and PNG output formats now support LaTeX-formatted units labels on colo
 ### Cache Management
 Clear LaTeX cache if needed:
 ```bash
-rm -rf ~/.cache/healpix_plotter/latex_render/
+rm -rf ~/.cache/map2fig/latex_render/
 ```
 
 ## Comparison with Other Tools
@@ -232,7 +232,7 @@ pdflatex --version
 pdftoppm -v
 
 # Check cache size
-du -sh ~/.cache/healpix_plotter/
+du -sh ~/.cache/map2fig/
 ```
 
 ## See Also

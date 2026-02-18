@@ -1,6 +1,6 @@
 # Compilation Time Optimizations
 
-This document describes the compilation time optimizations applied to the healpix_plotter project.
+This document describes the compilation time optimizations applied to the map2fig project.
 
 ## Applied Optimizations
 

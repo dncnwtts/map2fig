@@ -163,7 +163,7 @@ test result: ok. 11 passed; 0 failed
 
 ### 1. Verify Height Constraint Applied
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 cargo build --release
 cargo run --release -- -f class_dr1_40GHz_skymap_n128.fits -o /tmp/test.png --extend both
 ```

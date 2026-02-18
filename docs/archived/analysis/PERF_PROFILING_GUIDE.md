@@ -186,7 +186,7 @@ sudo pacman -S perf
 ## Example: Using This on Your FITS Files
 
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 
 # Profile on a small file (fast, <1s)
 perf stat ./target/release/map2fig -f tests/data/m_test.fits -o /tmp/test.pdf

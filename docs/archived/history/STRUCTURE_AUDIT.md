@@ -171,7 +171,7 @@ Status markers from development phases:
 ## Proposed New Structure
 
 ```
-healpix_plotter/
+map2fig/
 ├── README.md                          # Main entry (keep at root)
 ├── Cargo.toml                         # Build config (keep)
 ├── Cargo.lock                         # Lock file (keep)

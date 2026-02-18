@@ -107,7 +107,7 @@ With colorbar height now guaranteed to be a multiple of 3:
 
 ### Compile & Test
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 cargo build                          # Should compile without errors
 cargo test --test test_triangle_rendering -- --nocapture
 ```

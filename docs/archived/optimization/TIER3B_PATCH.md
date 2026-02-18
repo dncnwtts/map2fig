@@ -11,7 +11,7 @@ Pre-allocations have been successfully tested in isolation (compiles cleanly wit
 
 ## Exact Perl/Sed Replacement Commands
 
-Run these in order from /home/dwatts/projects/healpix_plotter/:
+Run these in order from /home/dwatts/projects/map2fig/:
 
 ```bash
 # 1. Add pre-allocations before loop

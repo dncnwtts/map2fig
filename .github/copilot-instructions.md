@@ -50,14 +50,14 @@ This creates `.rs` files in `colormap/` that get `include!()`'d in `colormap.rs`
 
 ### Colormap Access
 ```rust
-use healpix_plotter::get_colormap;
+use map2fig::get_colormap;
 let cmap = get_colormap("viridis");  // Case-insensitive, panics on invalid name
 let available = available_colormaps();  // Vec of names
 ```
 
 ### Scaling Values
 ```rust
-use healpix_plotter::scale::{Scale, scale_value};
+use map2fig::scale::{Scale, scale_value};
 let normalized = scale_value(value, min, max, Scale::Log, NegMode::Unseen, None);
 ```
 
@@ -216,4 +216,4 @@ See `docs/F32_OPTIMIZATION_RESULTS.md` for full analysis. **DO NOT attempt preci
 **Key Lesson:** After fixing primary bottleneck with prefetch (7.68% visible cost, 3.2% net gain), further iteration reorganization backfires. Memory bandwidth, not cache locality, is the actual constraint for random-access workloads.
 
 See `TILING_OPTIMIZATION_FAILURE_ANALYSIS.md` for detailed root cause analysis and `DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md` for full session context. **DO NOT retry spatial reorganization on this workload.**</content>
-<parameter name="filePath">/home/dwatts/projects/healpix_plotter/.github/copilot-instructions.md
+<parameter name="filePath">/home/dwatts/projects/map2fig/.github/copilot-instructions.md

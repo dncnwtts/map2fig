@@ -105,8 +105,8 @@ cargo build --release --features cuda
 **From Source**
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/healpix_plotter.git
-cd healpix_plotter
+git clone https://github.com/yourusername/map2fig.git
+cd map2fig
 
 # Build without GPU
 cargo build --release
@@ -398,7 +398,7 @@ time ./target/release/map2fig -f large_file.fits --gpu-accelerate -o gpu.pdf
 ```bash
 # Clone and setup
 git clone [repository]
-cd healpix_plotter
+cd map2fig
 rustup update  # Ensure Rust 1.70+
 
 # Build with all features

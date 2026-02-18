@@ -1,7 +1,7 @@
 # Code Cleanup Summary
 
 ## Overview
-Completed comprehensive code cleanup for healpix_plotter project, addressing test compilation errors, clippy warnings, and dead code.
+Completed comprehensive code cleanup for map2fig project, addressing test compilation errors, clippy warnings, and dead code.
 
 ## 1. Test Compilation Fixes ✅
 

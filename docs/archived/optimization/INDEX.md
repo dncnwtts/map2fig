@@ -169,7 +169,7 @@ CURRENT:
 
 ### Location Structure
 ```
-healpix_plotter/
+map2fig/
 ├── Root level (high-level session results)
 │   ├── TIER2B_RESULTS.md
 │   ├── TIER3A_RESULTS.md

@@ -172,7 +172,7 @@ This is **acceptable** because:
 - Results are cached, subsequent renders are instant
 
 ### Cache
-- Location: `~/.cache/healpix_plotter/latex_render/`
+- Location: `~/.cache/map2fig/latex_render/`
 - Size: Negligible (KBs)
 
 ### File Size

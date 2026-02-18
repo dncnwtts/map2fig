@@ -89,7 +89,7 @@ All figures have been generated and saved in this directory.
 
 To view the figures:
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 
 # View all images
 feh *.png

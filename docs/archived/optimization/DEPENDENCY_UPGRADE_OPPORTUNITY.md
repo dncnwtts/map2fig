@@ -229,7 +229,7 @@ Still 1.8x behind C++ at ~12s, but that's respectable for single-threaded CPU op
 Ready to test? Let's update cdshealpix and see if we get a free win:
 
 ```bash
-cd /home/dwatts/projects/healpix_plotter
+cd /home/dwatts/projects/map2fig
 
 # Create branch
 git checkout -b update-dependencies-cdshealpix

@@ -77,7 +77,7 @@ When `H % 3 == 0`: Mathematical structure aligns, errors cancel symmetrically
 
 ### Code Changes
 
-**File: `/home/dwatts/projects/healpix_plotter/src/layout.rs`**
+**File: `/home/dwatts/projects/map2fig/src/layout.rs`**
 
 Two functions modified to enforce `height % 3 == 0`:
 
@@ -119,7 +119,7 @@ Example: 28.8 → 29 → 30 (rounds up to nearest multiple of 3)
 
 ## Test Coverage
 
-### New Test Suite: `/home/dwatts/projects/healpix_plotter/tests/test_triangle_rendering.rs`
+### New Test Suite: `/home/dwatts/projects/map2fig/tests/test_triangle_rendering.rs`
 
 **8 comprehensive tests** documenting rendering requirements:
 
