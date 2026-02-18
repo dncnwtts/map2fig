@@ -1270,7 +1270,10 @@ fn downgrade_healpix_map_xyf_parallel(
     } else if target_npix < 100_000_000 {
         50_000 // Medium files: moderate balance
     } else {
-        100_000 // Large files (3.1B pixels → 31K tasks): reduce overhead
+        // Large files: batch by nside=512 equivalent (3.1M pixels) to reduce Rayon overhead
+        // 806M pixels / 3.1M per batch ≈ 259 tasks vs millions with fine granularity
+        let nside_512_pixels = 12 * 512 * 512; // 3,145,728 pixels
+        nside_512_pixels
     };
 
     // Collect chunk start indices

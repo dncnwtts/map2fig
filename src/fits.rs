@@ -445,36 +445,46 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
                     let npix = (12 * nside * nside) as usize;
                     let mut full_map = vec![crate::healpix::HPX_UNSEEN; npix];
 
-                    // Tier 4.2b: Parallel extraction of pixel indices and values
-                    // Extract pairs from interleaved columns
-                    let pairs: Vec<(usize, f64)> = (0..n_rows)
+                    // Tier 4.2b: Parallel extraction with row batching to reduce task overhead
+                    // Batch rows into ~1M row chunks (≈16MB per chunk) to reduce Rayon task count
+                    // from millions to hundreds
+                    let chunk_size = 1_000_000; // 1M rows per parallelization unit
+                    let num_chunks = (n_rows + chunk_size - 1) / chunk_size;
+                    
+                    let pairs: Vec<(usize, f64)> = (0..num_chunks)
                         .into_par_iter()
-                        .filter_map(|row_idx| {
-                            let pix_idx = row_idx * 2;
-                            let data_idx = row_idx * 2 + 1;
+                        .flat_map(|chunk_idx| {
+                            let start = chunk_idx * chunk_size;
+                            let end = std::cmp::min((chunk_idx + 1) * chunk_size, n_rows);
+                            (start..end)
+                                .filter_map(|row_idx| {
+                                    let pix_idx = row_idx * 2;
+                                    let data_idx = row_idx * 2 + 1;
 
-                            let pix = match &all_values[pix_idx] {
-                                DataValue::Integer { value, .. } => *value as i64,
-                                DataValue::Long { value, .. } => *value,
-                                DataValue::Float { value, .. } => *value as i64,
-                                DataValue::Double { value, .. } => *value as i64,
-                                _ => -1,
-                            };
+                                    let pix = match &all_values[pix_idx] {
+                                        DataValue::Integer { value, .. } => *value as i64,
+                                        DataValue::Long { value, .. } => *value,
+                                        DataValue::Float { value, .. } => *value as i64,
+                                        DataValue::Double { value, .. } => *value as i64,
+                                        _ => -1,
+                                    };
 
-                            let val = match &all_values[data_idx] {
-                                DataValue::Double { value, .. } => *value,
-                                DataValue::Float { value, .. } => *value as f64,
-                                DataValue::Integer { value, .. } => *value as f64,
-                                other => {
-                                    panic!("Unsupported column type in FITS table: {:?}", other)
-                                }
-                            };
+                                    let val = match &all_values[data_idx] {
+                                        DataValue::Double { value, .. } => *value,
+                                        DataValue::Float { value, .. } => *value as f64,
+                                        DataValue::Integer { value, .. } => *value as f64,
+                                        other => {
+                                            panic!("Unsupported column type in FITS table: {:?}", other)
+                                        }
+                                    };
 
-                            if pix >= 0 && (pix as usize) < npix {
-                                Some((pix as usize, val))
-                            } else {
-                                None
-                            }
+                                    if pix >= 0 && (pix as usize) < npix {
+                                        Some((pix as usize, val))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
                         })
                         .collect();
 
@@ -918,34 +928,46 @@ pub fn read_healpix_column_mmap(filename: &str, col_idx: usize) -> DataArray {
                     let npix = (12 * nside * nside) as usize;
                     let mut full_map = vec![crate::healpix::HPX_UNSEEN; npix];
 
-                    let pairs: Vec<(usize, f64)> = (0..n_rows)
+                    // Tier 4.2b: Parallel extraction with row batching to reduce task overhead
+                    // Batch rows into ~1M row chunks (≈16MB per chunk) to reduce Rayon task count
+                    // from millions to hundreds
+                    let chunk_size = 1_000_000; // 1M rows per parallelization unit
+                    let num_chunks = (n_rows + chunk_size - 1) / chunk_size;
+                    
+                    let pairs: Vec<(usize, f64)> = (0..num_chunks)
                         .into_par_iter()
-                        .filter_map(|row_idx| {
-                            let pix_idx = row_idx * 2;
-                            let data_idx = row_idx * 2 + 1;
+                        .flat_map(|chunk_idx| {
+                            let start = chunk_idx * chunk_size;
+                            let end = std::cmp::min((chunk_idx + 1) * chunk_size, n_rows);
+                            (start..end)
+                                .filter_map(|row_idx| {
+                                    let pix_idx = row_idx * 2;
+                                    let data_idx = row_idx * 2 + 1;
 
-                            let pix = match &all_values[pix_idx] {
-                                DataValue::Integer { value, .. } => *value as i64,
-                                DataValue::Long { value, .. } => *value,
-                                DataValue::Float { value, .. } => *value as i64,
-                                DataValue::Double { value, .. } => *value as i64,
-                                _ => -1,
-                            };
+                                    let pix = match &all_values[pix_idx] {
+                                        DataValue::Integer { value, .. } => *value as i64,
+                                        DataValue::Long { value, .. } => *value,
+                                        DataValue::Float { value, .. } => *value as i64,
+                                        DataValue::Double { value, .. } => *value as i64,
+                                        _ => -1,
+                                    };
 
-                            let val = match &all_values[data_idx] {
-                                DataValue::Double { value, .. } => *value,
-                                DataValue::Float { value, .. } => *value as f64,
-                                DataValue::Integer { value, .. } => *value as f64,
-                                other => {
-                                    panic!("Unsupported column type in FITS table: {:?}", other)
-                                }
-                            };
+                                    let val = match &all_values[data_idx] {
+                                        DataValue::Double { value, .. } => *value,
+                                        DataValue::Float { value, .. } => *value as f64,
+                                        DataValue::Integer { value, .. } => *value as f64,
+                                        other => {
+                                            panic!("Unsupported column type in FITS table: {:?}", other)
+                                        }
+                                    };
 
-                            if pix >= 0 && (pix as usize) < npix {
-                                Some((pix as usize, val))
-                            } else {
-                                None
-                            }
+                                    if pix >= 0 && (pix as usize) < npix {
+                                        Some((pix as usize, val))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
                         })
                         .collect();
 
