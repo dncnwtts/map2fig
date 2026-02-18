@@ -122,11 +122,11 @@ pub struct Args {
     #[arg(long, default_value = "gal", hide = true, required = false)]
     pub output_coord: String,
 
-    /// Rotate view so that (lon,lat) becomes the new center [degrees]
+    /// Rotate view so that (lon,lat) becomes the new center \[degrees\]
     #[arg(long, value_name = "LON,LAT", required = false)]
     pub rotate_to: Option<String>,
 
-    /// Roll angle around the new center [degrees]
+    /// Roll angle around the new center \[degrees\]
     #[arg(long, default_value_t = 0.0, required = false)]
     pub roll: f64,
 
@@ -164,7 +164,7 @@ pub struct Args {
     #[arg(long, alias = "gnom-graticule", hide = true, required = false)]
     pub local_graticule: bool,
 
-    /// Graticule spacing for parallels [degrees] (gnomonic projection only)
+    /// Graticule spacing for parallels \[degrees\] (gnomonic projection only)
     #[arg(
         long,
         alias = "gnom-grat-dlat",
@@ -174,7 +174,7 @@ pub struct Args {
     )]
     pub local_grat_dlat: f64,
 
-    /// Graticule spacing for meridians [degrees] (gnomonic projection only)
+    /// Graticule spacing for meridians \[degrees\] (gnomonic projection only)
     #[arg(
         long,
         alias = "gnom-grat-dlon",
@@ -235,11 +235,11 @@ pub struct Args {
     #[arg(long, hide = true, required = false)]
     pub grat_labels: bool,
 
-    /// Graticule spacing for parallels [degrees]
+    /// Graticule spacing for parallels \[degrees\]
     #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_par: f64,
 
-    /// Graticule spacing for meridians [degrees]
+    /// Graticule spacing for meridians \[degrees\]
     #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_mer: f64,
 
