@@ -379,19 +379,37 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
     // Eliminates kernel memcpy overhead (rep_movs_alternative) and improves cache locality
     use memmap2::Mmap;
     use std::io::Cursor;
+    use std::time::Instant;
 
+    let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
+
+    let mmap_start = Instant::now();
     let f = File::open(filename).expect("Failed to open FITS file");
     let mmap = unsafe { Mmap::map(&f).expect("Failed to mmap FITS file") };
+    let mmap_elapsed = mmap_start.elapsed();
+    if enable_profile {
+        eprintln!("[I/O DIAG] mmap() took: {:.3}s", mmap_elapsed.as_secs_f64());
+    }
 
     // **NEW: Preserve float32 precision without conversion (6.8s + 3.2 GB saved)**
     // Tier 1b Optimization: Try native f32 reader first
+    let f32_start = Instant::now();
     if let Some((data, _nside)) = try_read_float32_column_native(filename, &mmap, col_idx) {
+        let f32_elapsed = f32_start.elapsed();
+        if enable_profile {
+            eprintln!("[I/O DIAG] float32 read took: {:.3}s", f32_elapsed.as_secs_f64());
+        }
         return DataArray::from_f32(data);
     }
 
     // **NEW: Preserve float64 precision**
     // Try native f64 reader
+    let f64_start = Instant::now();
     if let Some((data, _nside)) = try_read_float64_column_native(filename, &mmap, col_idx) {
+        let f64_elapsed = f64_start.elapsed();
+        if enable_profile {
+            eprintln!("[I/O DIAG] float64 read took: {:.3}s", f64_elapsed.as_secs_f64());
+        }
         return DataArray::from_f64(data);
     }
 
@@ -813,29 +831,46 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
     let use_mmap = std::env::var("MAP2FIX_USE_MMAP").is_ok();
 
     // Cache miss: read from FITS (use mmap if enabled)
+    let fits_start = std::time::Instant::now();
     let data_array: DataArray = if use_mmap {
         read_healpix_column_mmap(filename, col_idx)
     } else {
         read_healpix_column(filename, col_idx)
     };
+    let fits_elapsed = fits_start.elapsed();
+    if enable_profile {
+        eprintln!("[I/O DIAG] FITS parsing took: {:.3}s", fits_elapsed.as_secs_f64());
+    }
 
     // Convert to Vec<f64> for caching (cache system uses f64)
+    // Note: For float32 FITS files, conversion from f32->f64 takes ~2.6s
+    // This is unavoidable as we need f64 for downsampling pipeline
+    let convert_start = std::time::Instant::now();
     let data = data_array.as_f64_vec().into_owned();
+    let convert_elapsed = convert_start.elapsed();
+    if enable_profile {
+        eprintln!("[I/O DIAG] DataArray->f64 conversion took: {:.3}s", convert_elapsed.as_secs_f64());
+    }
 
     // Save to cache for next time (with error reporting)
+    let cache_start = std::time::Instant::now();
     match save_column_cache(filename, col_idx, &data) {
         Some(_) => {
+            let cache_elapsed = cache_start.elapsed();
             if enable_profile {
                 eprintln!(
-                    "[I/O DIAG] Column cache SAVE SUCCESS: {} col#{}",
+                    "[I/O DIAG] Column cache SAVE SUCCESS ({:.3}s): {} col#{}",
+                    cache_elapsed.as_secs_f64(),
                     filename, col_idx
                 );
             }
         }
         None => {
+            let cache_elapsed = cache_start.elapsed();
             if enable_profile {
                 eprintln!(
-                    "[I/O DIAG] Column cache SAVE FAILED: {} col#{}",
+                    "[I/O DIAG] Column cache SAVE FAILED ({:.3}s): {} col#{}",
+                    cache_elapsed.as_secs_f64(),
                     filename, col_idx
                 );
             }
