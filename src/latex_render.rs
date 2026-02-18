@@ -623,9 +623,11 @@ mod tests {
         assert_eq!(h, 3);
     }
 
+    #[cfg(not(miri))]
     #[test]
     fn test_svg_rendering() {
         // Skip if pdflatex or conversion tools not available
+        // Note: This test requires file system access, so it's skipped under Miri
         if !check_pdflatex() || (!check_pdf2svg() && !check_convert()) {
             eprintln!("Skipping SVG test: pdflatex or conversion tools not available");
             return;
