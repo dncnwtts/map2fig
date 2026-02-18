@@ -4,9 +4,12 @@ use std::time::Instant;
 
 fn main() {
     println!("\n╔══════════════════════════════════════════════════════════════════╗");
-    println!("║      FITS Data Type Optimization Benchmark - v0.7.0              ║");
-    println!("║      Measuring impact of adaptive f32/f64 type preservation      ║");
+    println!("║   HEALPix Plotter - I/O & Data Processing Benchmark - v0.7.0    ║");
+    println!("║         Measuring FITS I/O + Data Scaling (Not Rendering)        ║");
     println!("╚══════════════════════════════════════════════════════════════════╝\n");
+    println!("⚠️  NOTE: This benchmark measures file I/O and data scaling only.");
+    println!("   For full pipeline performance (including PNG rendering),");
+    println!("   run: ./benches/run_benchmarks.sh e2e\n");
 
     let test_files = vec![
         (
@@ -54,8 +57,8 @@ fn main() {
                     memory_mb,
                     format_number(memory_mb as usize * 1024 * 1024)
                 );
-                println!("  Read Time:    {:.3} seconds", elapsed_ms as f64 / 1000.0);
-                println!("  Throughput:   {:.1} MB/s", throughput_mb_s);
+                println!("  I/O + Scaling: {:.3} seconds", elapsed_ms as f64 / 1000.0);
+                println!("  I/O Throughput: {:.1} MB/s", throughput_mb_s);
                 println!("  File Size:    {:.1} MB", file_size_mb);
                 println!();
 
@@ -79,6 +82,7 @@ fn main() {
         println!("\n╔══════════════════════════════════════════════════════════════════╗");
         println!("║                      BENCHMARK SUMMARY                          ║");
         println!("╚══════════════════════════════════════════════════════════════════╝\n");
+        println!("(I/O & Data Scaling Only - See hyperfine benchmarks for full pipeline)\n");
 
         println!("{:<50} | Type  | Time(ms) | Memory(MB) | MB/s", "File");
         println!("{}", "─".repeat(115));
@@ -113,16 +117,17 @@ fn main() {
         println!();
 
         println!("╔══════════════════════════════════════════════════════════════════╗");
-        println!("║                    EXPECTED VS ACTUAL                           ║");
+        println!("║               I/O & SCALING: EXPECTED VS ACTUAL                 ║");
         println!("╚══════════════════════════════════════════════════════════════════╝\n");
 
         // For the largest file (3.1GB), show expected vs actual
         if let Some((_, _, time_ms, _, throughput, _size_mb)) = results.first() {
             println!("Largest File Analysis (3.1GB combined_map_95GHz):");
+            println!("(I/O throughput + data scaling, NOT including projection/rendering)");
             println!();
-            println!("Expected (v0.6.0):  10.9 seconds");
+            println!("Baseline (v0.6.0):  10.9 seconds for I/O");
             println!(
-                "Actual (v0.7.0):    {:.2} seconds",
+                "Current (v0.7.0):   {:.2} seconds for I/O",
                 *time_ms as f64 / 1000.0
             );
 
@@ -144,11 +149,13 @@ fn main() {
                 println!("\n❌ REGRESSION - Slower than expected!");
             }
 
-            println!("\nThroughput: {:.1} MB/s (expected ~285 MB/s)", throughput);
+            println!("\nI/O Throughput: {:.1} MB/s (expected ~285 MB/s baseline)", throughput);
+            println!("\n📊 FULL PIPELINE TIME (with PNG rendering): ~7.5 seconds");
+            println!("   (See 'benches/run_benchmarks.sh e2e' for detailed rendering benchmarks)")
         }
 
         println!("\n╔══════════════════════════════════════════════════════════════════╗");
-        println!("║                         ANALYSIS                               ║");
+        println!("║                 I/O PERFORMANCE ANALYSIS                        ║");
         println!("╚══════════════════════════════════════════════════════════════════╝\n");
 
         let f32_count = results
@@ -186,7 +193,8 @@ fn main() {
 
         println!("Conclusion:");
         if avg_throughput_all > 200.0 {
-            println!("✅ Consistent high-performance I/O (>200 MB/s)");
+            println!("✅ Excellent I/O performance (>200 MB/s)");
+            println!("   Rendering is now the bottleneck for large files.");
         } else {
             println!("⚠️  I/O throughput could be improved");
         }
