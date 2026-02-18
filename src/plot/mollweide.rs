@@ -192,22 +192,56 @@ pub fn render_mollweide_pixels(
     blit_grid_to_sink(&grid, sink, 0, 0);
 }
 
-pub fn plot_mollweide_pdf(params: MollweideParams) {
-    _plot_mollweide_pdf_impl(params, render_mollweide_pixels);
+// Non-generic storage for PDF rendering setup
+struct MollweidePdfSetup<'a> {
+    surface_pdf: PdfSurface,
+    cr_pdf: Context,
+    layout: MollweideLayout,
+    cb_layout: crate::layout::ColorbarLayout,
+    map: &'a [f64],
+    map_w_int: u32,
+    map_h_int: u32,
+    pixel_buffer: RgbaImage,
+    scale_params: MollweideScale,
+    hist_scale_opt: Option<crate::scale::HistogramScale>,
+    scale_cache: crate::scale::ScaleCache,
+    show_colorbar: bool,
+    draw_border: bool,
+    show_graticule: bool,
+    latex_rendering: bool,
+    transparent: bool,
+    // Graticule params
+    grat_coord: Option<CoordSystem>,
+    grat_overlay: Option<CoordSystem>,
+    overlay_color: Rgba<u8>,
+    dpar_deg: f64,
+    dmer_deg: f64,
+    // Display params
+    rlabel: Option<String>,
+    llabel: Option<String>,
+    label_font_size: Option<f32>,
+    extend: crate::cli::Extend,
+    units_font_size: Option<f32>,
+    // Colorbar params
+    cmap: &'a crate::colormap::Colormap,
+    scale_type: Scale,
+    units: Option<String>,
+    gamma: f64,
+    // Other params
+    view: &'a crate::rotation::ViewTransform,
+    filename: String,
+    neg_mode: crate::NegMode,
+    bad_color: image::Rgba<u8>,
+    meta: crate::healpix::HealpixMeta,
 }
 
-pub fn _plot_mollweide_pdf_impl<F>(params: MollweideParams, pixel_renderer: F)
-where
-    F: Fn(
-        crate::params::RenderMollweideParams,
-        MollweideLayout,
-        &mut dyn PixelSink,
-        Option<DebugOverlay>,
-    ),
-{
+/// Non-generic setup for PDF rendering - only generic call is the pixel_renderer
+fn _mollweide_pdf_setup_impl<'a>(
+    params: &'a MollweideParams<'a>,
+) -> MollweidePdfSetup<'a> {
     let map = params.plot.map;
     let width = params.plot.width;
-    let filename = params.plot.filename;
+    let filename = params.plot.filename.to_string();
     let minv = params.scale.minv;
     let maxv = params.scale.maxv;
     let cmap = params.color.cmap;
@@ -220,7 +254,7 @@ where
     let bad_color = params.color.bad_color;
     let meta = params.meta;
     let latex_rendering = params.display.latex_rendering;
-    let units = params.display.units.as_deref();
+    let units = params.display.units.clone();
     let view = params.view;
     let show_graticule = params.graticule.show_graticule;
     let grat_coord = params.graticule.grat_coord;
@@ -228,7 +262,6 @@ where
     let overlay_color = params.graticule.overlay_color;
     let dpar_deg = params.graticule.dpar_deg;
     let dmer_deg = params.graticule.dmer_deg;
-    let mask = params.display.mask.as_ref();
 
     let (layout, cb_layout) = compute_mollweide_layout(
         width as f64,
@@ -236,7 +269,7 @@ where
         params.display.tick_direction.clone(),
     );
 
-    let surface_pdf = PdfSurface::new(layout.width, layout.height, filename)
+    let surface_pdf = PdfSurface::new(layout.width, layout.height, &filename)
         .expect("Failed to create PDF surface");
 
     let cr_pdf = Context::new(&surface_pdf).unwrap();
@@ -247,23 +280,13 @@ where
         cr_pdf.paint().unwrap();
     }
 
-    // Create raster surface
-    let surface_img = ImageSurface::create(
+    // Create raster surface (not used for rendering but kept for compatibility)
+    let _surface_img = ImageSurface::create(
         Format::ARgb32,
         (layout.map_w + 2.0 * layout.map_pad) as i32,
         (layout.map_h + 2.0 * layout.map_pad) as i32,
     )
     .expect("Failed to create image surface");
-
-    let cr_img = Context::new(&surface_img).unwrap();
-
-    // Clear raster background
-    if transparent {
-        cr_img.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-    } else {
-        cr_img.set_source_rgb(1.0, 1.0, 1.0);
-    }
-    cr_img.paint().unwrap();
 
     let scale_params = compute_mollweide_scale(map, minv, maxv, gamma, scale);
 
@@ -286,18 +309,13 @@ where
     // Pre-compute scale cache for fast pixel rendering
     let scale_cache = crate::scale::ScaleCache::new(scale_params.minv, scale_params.maxv, scale);
 
-    // Phase 2B: Image pre-rendering optimization
-    // Create in-memory pixel buffer instead of rendering directly to Cairo surface.
-    // This avoids per-pixel Cairo operations and allows batch optimization.
+    // Create in-memory pixel buffer
     let map_w_int = (layout.map_w + 2.0 * layout.map_pad) as u32;
     let map_h_int = (layout.map_h + 2.0 * layout.map_pad) as u32;
 
-    // Tier 3a: Lazy initialization - skip kernel zeroing of pixel buffer
-    // Reduces 1.58M page faults by using uninitialized memory. All pixels are
-    // written in the clear_background loop immediately after (see below).
     let mut pixel_buffer = crate::render::create_image_buffer_uninitialized(map_w_int, map_h_int);
 
-    // Clear buffer background (matches what we'd paint on Cairo surface)
+    // Clear buffer background
     let bg_color = if transparent {
         image::Rgba([0, 0, 0, 0])
     } else {
@@ -307,46 +325,53 @@ where
         *pixel = bg_color;
     }
 
-    // Render pixels to in-memory buffer (fast memory writes, no Cairo overhead)
-    let mut sink = PngSink {
-        img: &mut pixel_buffer,
-        x0: 0,
-        y0: 0,
-    };
-
-    let debug_overlay = if cfg!(feature = "debug_overlay") {
-        Some(DebugOverlay::grid_only())
-    } else {
-        None
-    };
-
-    pixel_renderer(
-        crate::params::RenderMollweideParams {
-            map,
-            scale: &scale_params,
-            cmap,
-            gamma,
-            scale_type: scale,
-            neg_mode,
-            bad_color,
-            meta,
-            hist_scale: hist_scale_opt.as_ref(),
-            view,
-            mask,
-            scale_cache: Some(&scale_cache),
-        },
+    MollweidePdfSetup {
+        surface_pdf,
+        cr_pdf,
         layout,
-        &mut sink,
-        debug_overlay,
-    );
+        cb_layout,
+        map,
+        map_w_int,
+        map_h_int,
+        pixel_buffer,
+        scale_params,
+        hist_scale_opt,
+        scale_cache,
+        show_colorbar,
+        draw_border,
+        show_graticule,
+        latex_rendering,
+        transparent,
+        grat_coord,
+        grat_overlay,
+        overlay_color,
+        dpar_deg,
+        dmer_deg,
+        rlabel: params.display.rlabel.clone(),
+        llabel: params.display.llabel.clone(),
+        label_font_size: params.display.label_font_size,
+        extend: params.display.extend.clone().clone().clone(),
+        units_font_size: params.display.units_font_size,
+        cmap,
+        scale_type: scale,
+        units,
+        gamma,
+        view,
+        filename,
+        neg_mode,
+        bad_color,
+        meta,
+    }
+}
 
+/// Non-generic finalization of PDF rendering
+fn _mollweide_pdf_finalize_impl<'a>(
+    setup: MollweidePdfSetup<'a>,
+    _debug_overlay: Option<DebugOverlay>,
+) {
     // Convert pre-rendered image to Cairo surface and paint onto PDF surface
-    // IMPORTANT: Cairo's Format::ARgb32 on little-endian systems expects bytes in
-    // memory as B, G, R, A (not A, R, G, B). image::RgbaImage stores as R, G, B, A,
-    // so we must reorder to B, G, R, A for Cairo.
-    let mut argb_buffer = Vec::with_capacity(pixel_buffer.len() * 4);
-    for pixel in pixel_buffer.pixels() {
-        // Convert RGBA to BGRA for Cairo::Format::ARgb32
+    let mut argb_buffer = Vec::with_capacity(setup.pixel_buffer.len() * 4);
+    for pixel in setup.pixel_buffer.pixels() {
         argb_buffer.push(pixel[2]); // B
         argb_buffer.push(pixel[1]); // G
         argb_buffer.push(pixel[0]); // R
@@ -356,67 +381,62 @@ where
     if let Ok(pixel_surface) = cairo::ImageSurface::create_for_data(
         argb_buffer,
         cairo::Format::ARgb32,
-        map_w_int as i32,
-        map_h_int as i32,
-        map_w_int as i32 * 4,
+        setup.map_w_int as i32,
+        setup.map_h_int as i32,
+        setup.map_w_int as i32 * 4,
     ) {
-        let _ = cr_pdf.set_source_surface(&pixel_surface, layout.map_x, layout.map_y);
-        cr_pdf.paint().unwrap();
+        let _ = setup.cr_pdf.set_source_surface(&pixel_surface, setup.layout.map_x, setup.layout.map_y);
+        setup.cr_pdf.paint().unwrap();
     }
 
-    // Note: We no longer need surface_img for pixel rendering.
-    // It's retained for compatibility with graticule drawing below if needed.
-
-    // Draw graticule BEFORE border (so border appears on top)
-    if show_graticule {
+    // Draw graticule BEFORE border
+    if setup.show_graticule {
         use crate::graticule::{
             render_graticule_cairo, render_graticule_cairo_with_color,
             render_graticule_mollweide_vectorized,
         };
 
-        let grat_coord_sys = grat_coord.unwrap_or(CoordSystem::E);
+        let grat_coord_sys = setup.grat_coord.unwrap_or(CoordSystem::E);
 
         let graticule = render_graticule_mollweide_vectorized(
-            view,
-            dpar_deg,
-            dmer_deg,
+            setup.view,
+            setup.dpar_deg,
+            setup.dmer_deg,
             grat_coord_sys,
-            view.input_coord,
+            setup.view.input_coord,
         );
 
-        // Render primary graticule in black
         render_graticule_cairo(
             &graticule,
-            &cr_pdf,
-            layout.map_x,
-            layout.map_y,
-            layout.map_w,
-            layout.map_h,
+            &setup.cr_pdf,
+            setup.layout.map_x,
+            setup.layout.map_y,
+            setup.layout.map_w,
+            setup.layout.map_h,
         );
 
         // Render secondary graticule overlay if specified
-        if let Some(overlay_sys) = grat_overlay {
+        if let Some(overlay_sys) = setup.grat_overlay {
             let overlay_graticule = render_graticule_mollweide_vectorized(
-                view,
-                dpar_deg,
-                dmer_deg,
+                setup.view,
+                setup.dpar_deg,
+                setup.dmer_deg,
                 overlay_sys,
-                view.input_coord,
+                setup.view.input_coord,
             );
 
-            // Convert RGBA color to normalized RGB for Cairo
-            let r = overlay_color[0] as f64 / 255.0;
-            let g = overlay_color[1] as f64 / 255.0;
-            let b = overlay_color[2] as f64 / 255.0;
+            let r = setup.overlay_color[0] as f64 / 255.0;
+            let g = setup.overlay_color[1] as f64 / 255.0;
+            let b = setup.overlay_color[2] as f64 / 255.0;
 
             render_graticule_cairo_with_color(
                 &overlay_graticule,
-                &cr_pdf,
+                &setup.cr_pdf,
                 crate::params::GeometryRect {
-                    x: layout.map_x,
-                    y: layout.map_y,
-                    w: layout.map_w,
-                    h: layout.map_h,
+                    x: setup.layout.map_x,
+                    y: setup.layout.map_y,
+                    w: setup.layout.map_w,
+                    h: setup.layout.map_h,
                 },
                 (r, g, b),
             );
@@ -424,49 +444,100 @@ where
     }
 
     // Draw vector border ON TOP
-    if draw_border {
+    if setup.draw_border {
         draw_projection_border_pdf(
-            &cr_pdf,
-            layout.map_x,
-            layout.map_y,
-            layout.map_w,
-            layout.map_h,
-            layout.border_width_px,
+            &setup.cr_pdf,
+            setup.layout.map_x,
+            setup.layout.map_y,
+            setup.layout.map_w,
+            setup.layout.map_h,
+            setup.layout.border_width_px,
         );
     }
 
-    if show_colorbar {
+    if setup.show_colorbar {
         draw_colorbar_pdf(
-            &cr_pdf,
-            cb_layout,
+            &setup.cr_pdf,
+            setup.cb_layout,
             crate::params::ColorbarParams {
-                cmap,
-                minv: scale_params.minv,
-                maxv: scale_params.maxv,
-                scale_type: scale,
-                gamma,
-                hist_scale: hist_scale_opt.as_ref(),
-                latex_rendering,
-                units,
-                extend: &params.display.extend,
-                units_font_size: params.display.units_font_size,
+                cmap: setup.cmap,
+                minv: setup.scale_params.minv,
+                maxv: setup.scale_params.maxv,
+                scale_type: setup.scale_type,
+                gamma: setup.gamma,
+                hist_scale: setup.hist_scale_opt.as_ref(),
+                latex_rendering: setup.latex_rendering,
+                units: setup.units.as_deref(),
+                extend: &setup.extend,
+                units_font_size: setup.units_font_size,
                 map_width: None,
             },
         );
     }
 
-    // Draw figure labels (rlabel, llabel)
+    // Draw figure labels
     crate::render::pdf::draw_figure_labels_pdf(
-        &cr_pdf,
-        layout.width,
-        layout.height,
-        &params.display.rlabel,
-        &params.display.llabel,
-        latex_rendering,
-        params.display.label_font_size,
+        &setup.cr_pdf,
+        setup.layout.width,
+        setup.layout.height,
+        &setup.rlabel,
+        &setup.llabel,
+        setup.latex_rendering,
+        setup.label_font_size,
     );
 
-    surface_pdf.finish();
+    setup.surface_pdf.finish();
+}
+
+pub fn plot_mollweide_pdf(params: MollweideParams) {
+    _plot_mollweide_pdf_impl(params, render_mollweide_pixels);
+}
+
+pub fn _plot_mollweide_pdf_impl<'a, F>(params: MollweideParams<'a>, pixel_renderer: F)
+where
+    F: Fn(
+        crate::params::RenderMollweideParams,
+        MollweideLayout,
+        &mut dyn PixelSink,
+        Option<DebugOverlay>,
+    ),
+{
+    // Non-generic setup - not duplicated per monomorphization
+    let mut setup = _mollweide_pdf_setup_impl(&params);
+
+    // Construct render params
+    let debug_overlay = if cfg!(feature = "debug_overlay") {
+        Some(DebugOverlay::grid_only())
+    } else {
+        None
+    };
+
+    let render_params = crate::params::RenderMollweideParams {
+        map: setup.map,
+        scale: &setup.scale_params,
+        cmap: setup.cmap,
+        gamma: setup.gamma,
+        scale_type: setup.scale_type,
+        neg_mode: setup.neg_mode,
+        bad_color: setup.bad_color,
+        meta: setup.meta,
+        hist_scale: setup.hist_scale_opt.as_ref(),
+        view: setup.view,
+        mask: None,
+        scale_cache: Some(&setup.scale_cache),
+    };
+
+    // Generic pixel rendering - only this call is monomorphized
+    let mut sink = PngSink {
+        img: &mut setup.pixel_buffer,
+        x0: 0,
+        y0: 0,
+    };
+
+    pixel_renderer(render_params, setup.layout, &mut sink, debug_overlay.clone());
+
+    // Non-generic finalization - not duplicated per monomorphization
+    _mollweide_pdf_finalize_impl(setup, debug_overlay);
 }
 
 pub fn plot_mollweide_png(params: MollweideParams) {
