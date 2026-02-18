@@ -71,7 +71,7 @@ strip = "debuginfo"    # Skip linking debug info (even faster than split-debugin
 # Standard release profile for maximum optimization
 [profile.release]
 opt-level = 3
-lto = "fat"
+lto = "thin"
 codegen-units = 1
 strip = false
 debug = true
