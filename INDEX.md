@@ -20,7 +20,8 @@
 - [PERFORMANCE_OPTIMIZATION_RESULTS.md](PERFORMANCE_OPTIMIZATION_RESULTS.md) - Benchmark data
 
 ### 🔬 Recent Optimization Work (Feb 2026)
-- [RAYON_OVERHEAD_ANALYSIS.md](RAYON_OVERHEAD_ANALYSIS.md) **← LATEST: Task batching insights & bandwidth limits**
+- [ALGORITHMIC_SPEEDUP_CASE.md](ALGORITHMIC_SPEEDUP_CASE.md) **← NEW: Ring-order & coarse-grid analysis (2-5× speedup potential)**
+- [RAYON_OVERHEAD_ANALYSIS.md](RAYON_OVERHEAD_ANALYSIS.md) - Task batching insights & bandwidth limits
 - [docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) - Session summary & lessons
 - [docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md](docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md) - Prefetch hints (+3.2% improvement) ✅
 - [docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md](docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md) - Why tiling failed (-12% regression) ❌
