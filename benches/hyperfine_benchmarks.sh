@@ -51,7 +51,7 @@ for filepath in "${BENCHMARKS[@]}"; do
         fi
         
         outfile="/tmp/bench_$(basename "$filepath" .fits).pdf"
-        COMMANDS+=("$BINARY -f '$filepath' -o '$outfile'")
+        COMMANDS+=("$BINARY '$filepath' '$outfile'")
         NAMES+=("$filename (${size_mb}MB, nside=$nside)")
     fi
 done
