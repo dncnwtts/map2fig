@@ -1,19 +1,20 @@
 [build]
 # Native CPU optimizations (take advantage of target machine features)
 # This enables SIMD and other CPU-specific features on the compilation machine
+# Using mold linker (2x faster than lld for most workloads on Linux)
+# mold 2.30.0 provides ~40-70% faster linking than lld
 rustflags = [
     "-C", "target-cpu=native",
-    # Use faster linker on Linux (lld is ~20-50% faster than default ld)
-    # It becomes default in LLVM 15+, but being explicit helps portability
-    "-C", "link-arg=-fuse-ld=lld",
+    "-C", "link-arg=-fuse-ld=mold",
 ]
 
-# Uncomment to use mold linker instead of lld (even faster on Linux)
-# mold: Only on Linux, requires installation: apt install mold
-# lld:  Cross-platform, faster than ld, may be slower than mold
-# rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=mold"]
+# Alternative linker options (if needed):
+# - lld:  Cross-platform faster linker (~20-50% vs default ld)
+#   rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=lld"]
+# - wild: Linux only, newer but less tested, potentially faster than mold
+#   rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=wild"]
 
-# Parallel compiler frontend (Rust nightly only, 50% potential speedup)
+# Parallel compiler frontend (Rust nightly only, ~15-20% potential speedup)
 # Uncomment to enable. Requires: rustup +nightly
 # RUSTFLAGS = "-Z threads=8"
 

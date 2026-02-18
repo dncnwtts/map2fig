@@ -1,6 +1,6 @@
 [package]
 name = "map2fig"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2024"
 authors = ["Duncan Watts"]
 description = "Fast, publication-quality HEALPix sky map visualization in Rust"
@@ -59,10 +59,14 @@ criterion = { version = "0.5", features = ["html_reports"] }
 divan = "0.1"
 
 [profile.dev]
-# Faster dev builds - disable full debug info but keep line tables for stack traces
-debug = "line-tables-only"
-# Speed up linking for dev builds
-split-debuginfo = "packed"
+# Ultra-fast dev builds - skip debug info entirely
+# This significantly speeds up compilation and reduces target/ size
+debug = 0              # Skip compiling debug info
+strip = "debuginfo"    # Skip linking debug info (even faster than split-debuginfo)
+# trade-off: backtraces will only show function names, not line numbers
+# Uncomment for compromise (slower build, full backtraces):
+# debug = "line-tables-only"
+# split-debuginfo = "packed"
 
 # Standard release profile for maximum optimization
 [profile.release]

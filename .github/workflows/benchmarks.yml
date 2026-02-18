@@ -26,15 +26,21 @@ jobs:
       
       - name: Build optimized binary
         run: cargo build --release
+        env:
+          RUSTFLAGS: -D warnings
       
       # Criterion benchmarks (detailed, HTML reports)
       - name: Run Criterion micro-benchmarks
         run: cargo bench --bench criterion_benchmarks -- --verbose
+        env:
+          RUSTFLAGS: -D warnings
         continue-on-error: true
       
       # Divan benchmarks (quick, cycle-accurate)
       - name: Run Divan micro-benchmarks
         run: cargo bench --bench divan_benchmarks
+        env:
+          RUSTFLAGS: -D warnings
         continue-on-error: true
       
       # Upload benchmark results
