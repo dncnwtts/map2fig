@@ -20,7 +20,7 @@ use std::str::FromStr;
 ///   Run 'grep -E "arg\(long" src/cli.rs' to see all available options,
 ///   or check the documentation.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, override_usage = "map2fig [FITS] [OUTPUT] [OPTIONS]")]
 pub struct Args {
     /// Input FITS file
     #[arg(value_name = "FITS", help_heading = None)]

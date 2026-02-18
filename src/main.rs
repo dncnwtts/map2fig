@@ -19,7 +19,7 @@ fn run() -> Result<(), String> {
 
     // Validate and auto-generate output filename if needed
     if args.fits.is_none() {
-        return Err("Error: Input FITS file is required\n\nUsage: map2fig <FITS> [OUTPUT]\n\nRun 'map2fig --help' for more information".to_string());
+        return Err("Run 'map2fig --help' for usage information".to_string());
     }
     
     if args.out.is_none() {
