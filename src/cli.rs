@@ -12,8 +12,13 @@ use std::str::FromStr;
 ///   map2fig input.fits output.pdf -c viridis --log # With custom colormap and scaling
 ///   map2fig input.fits -c plasma --hist             # Auto-generates input.png with options
 /// 
-/// Use 'map2fig --help-all' to see all advanced options for graticules,
-/// projections, rotations, masks, and more.
+/// ADVANCED OPTIONS:
+///   Use --projection (mollweide/gnomonic/hammer), --graticule, --rotate-to,
+///   --lon, --lat for coordinate system and view changes. Many more options
+///   available for color customization, masks, text labels, and fonts.
+///   
+///   Run 'grep -E "arg\(long" src/cli.rs' to see all available options,
+///   or check the documentation.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -25,15 +30,15 @@ pub struct Args {
     #[arg(value_name = "OUTPUT", help_heading = None)]
     pub out: Option<String>,
 
-    /// Column index [default: 0]
+    /// Column index
     #[arg(short = 'i', long, default_value_t = 0, required = false)]
     pub col: usize,
 
-    /// Colormap name [default: planck]
+    /// Colormap name
     #[arg(short = 'c', long, default_value = "planck", required = false)]
     pub cmap: String,
 
-    /// Output width in pixels [default: 1200]
+    /// Output width in pixels
     #[arg(short, long, default_value_t = 1200, required = false)]
     pub width: u32,
 
@@ -102,11 +107,11 @@ pub struct Args {
     pub scale: f64,
 
     /// Enable LaTeX-like mathematical rendering for colorbar labels
-    #[arg(long, hide = true, required = false)]
+    #[arg(long, required = false)]
     pub latex: bool,
 
     /// Units string for colorbar (supports LaTeX syntax when --latex is enabled)
-    #[arg(long, hide = true, required = false)]
+    #[arg(long, required = false)]
     pub units: Option<String>,
 
     /// Input coordinate system: gal, eq, ecl
@@ -117,43 +122,43 @@ pub struct Args {
     #[arg(long, default_value = "gal", hide = true, required = false)]
     pub output_coord: String,
 
-    /// Rotate view so that (lon,lat) becomes the new center `[degrees]`
-    #[arg(long, value_name = "LON,LAT", hide = true, required = false)]
+    /// Rotate view so that (lon,lat) becomes the new center [degrees]
+    #[arg(long, value_name = "LON,LAT", required = false)]
     pub rotate_to: Option<String>,
 
-    /// Roll angle around the new center `[degrees]`
-    #[arg(long, default_value_t = 0.0, hide = true, required = false)]
+    /// Roll angle around the new center [degrees]
+    #[arg(long, default_value_t = 0.0, required = false)]
     pub roll: f64,
 
     /// Projection type: mollweide, gnomonic, or hammer
-    #[arg(long, default_value = "mollweide", hide = true, required = false)]
+    #[arg(long, default_value = "mollweide", required = false)]
     pub projection: String,
 
     /// Center longitude in degrees (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true, hide = true, required = false)]
+    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true, required = false)]
     pub lon: Option<f64>,
 
-    /// Center latitude in `[degrees]` (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true, hide = true, required = false)]
+    /// Center latitude in degrees (gnomonic: projection center; mollweide: rotation center)
+    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true, required = false)]
     pub lat: Option<f64>,
 
     /// Field of view width in arcminutes (gnomonic projection only)
-    #[arg(long, alias = "gnom-width", default_value_t = 300.0, hide = true, required = false)]
+    #[arg(long, alias = "gnom-width", default_value_t = 300.0, required = false)]
     pub fov: f64,
 
     /// Resolution in arcmin/pixel (gnomonic projection only)
-    #[arg(long, alias = "gnom-res", default_value_t = 1.0, hide = true, required = false)]
+    #[arg(long, alias = "gnom-res", default_value_t = 1.0, required = false)]
     pub res: f64,
 
     /// Enable local grid graticule for gnomonic projection
     #[arg(long, alias = "gnom-graticule", hide = true, required = false)]
     pub local_graticule: bool,
 
-    /// Graticule spacing for parallels `[degrees]` (gnomonic projection only)
+    /// Graticule spacing for parallels [degrees] (gnomonic projection only)
     #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0, hide = true, required = false)]
     pub local_grat_dlat: f64,
 
-    /// Graticule spacing for meridians `[degrees]` (gnomonic projection only)
+    /// Graticule spacing for meridians [degrees] (gnomonic projection only)
     #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0, hide = true, required = false)]
     pub local_grat_dlon: f64,
 
@@ -186,7 +191,7 @@ pub struct Args {
     pub no_downgrade: bool,
 
     /// Enable graticule overlay (primary coordinate system for mollweide map)
-    #[arg(long, hide = true, required = false)]
+    #[arg(long, required = false)]
     pub graticule: bool,
 
     /// Primary graticule coordinate system: gal, eq, ecl
@@ -208,11 +213,11 @@ pub struct Args {
     #[arg(long, hide = true, required = false)]
     pub grat_labels: bool,
 
-    /// Graticule spacing for parallels `[degrees]`
+    /// Graticule spacing for parallels [degrees]
     #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_par: f64,
 
-    /// Graticule spacing for meridians `[degrees]`
+    /// Graticule spacing for meridians [degrees]
     #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_mer: f64,
 
