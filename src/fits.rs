@@ -1123,9 +1123,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn test_sparse_map_regression_fix() {
         // Regression test for the v0.5.0 bug where sparse maps were
         // initialized with f64::NEG_INFINITY instead of HPX_UNSEEN.
+        //
+        // NOTE: This test is skipped under Miri because it uses file system
+        // operations (Path::exists) which call statx syscall that Miri's
+        // isolation mode doesn't support.
         //
         // The bug manifestation:
         // - Sparse maps initialized with NEG_INFINITY (-inf)
