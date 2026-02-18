@@ -4,29 +4,45 @@ use clap::Parser;
 use image::Rgba;
 use std::str::FromStr;
 
-/// Simple HEALPix Mollweide plotter
+/// Fast, publication-quality HEALPix sky map visualization
+/// 
+/// EXAMPLES:
+///   map2fig input.fits output.png
+///   map2fig input.fits output.pdf -c viridis --log
+///   map2fig input.fits output.pdf -i 3 --min 1e-6 --max 1e-3
+/// 
+/// Use 'map2fig --help-all' to see all advanced options for graticules,
+/// projections, rotations, masks, and more.
 #[derive(Parser, Debug)]
-#[command(author, version, about)]
+#[command(author, version, about, long_about = None)]
 pub struct Args {
     /// Input FITS file
-    #[arg(short, long)]
+    #[arg(value_name = "FITS", help_heading = None)]
     pub fits: Option<String>,
 
-    /// Column index
-    #[arg(short = 'i', long, default_value_t = 0)]
+    /// Output filename (PNG or PDF)
+    #[arg(value_name = "OUTPUT", help_heading = None)]
+    pub out: Option<String>,
+
+    /// Column index [default: 0]
+    #[arg(short = 'i', long, default_value_t = 0, required = false)]
     pub col: usize,
 
-    /// Colormap name
-    #[arg(short = 'c', long, default_value = "planck")]
+    /// Colormap name [default: planck]
+    #[arg(short = 'c', long, default_value = "planck", required = false)]
     pub cmap: String,
 
-    /// Output width in pixels
-    #[arg(short, long, default_value_t = 1200)]
+    /// Output width in pixels [default: 1200]
+    #[arg(short, long, default_value_t = 1200, required = false)]
     pub width: u32,
 
-    /// Output filename
-    #[arg(short, long)]
-    pub out: Option<String>,
+    /// Lower color scale limit
+    #[arg(long, allow_negative_numbers = true)]
+    pub min: Option<f64>,
+
+    /// Upper color scale limit
+    #[arg(long, allow_negative_numbers = true)]
+    pub max: Option<f64>,
 
     /// Disable map border
     #[arg(long)]
@@ -40,16 +56,8 @@ pub struct Args {
     #[arg(long)]
     pub no_cbar: bool,
 
-    /// Lower color scale limit
-    #[arg(long, allow_negative_numbers = true)]
-    pub min: Option<f64>,
-
-    /// Upper color scale limit
-    #[arg(long, allow_negative_numbers = true)]
-    pub max: Option<f64>,
-
     /// Gamma correction
-    #[arg(long, default_value_t = 1.0)]
+    #[arg(long, default_value_t = 1.0, required = false)]
     pub gamma: f64,
 
     /// Log scale
@@ -65,202 +73,202 @@ pub struct Args {
     pub hist: bool,
 
     /// Linear region width for symlog
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub linthresh: Option<f64>,
 
     /// Asinh scaling
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub asinh: bool,
 
     /// Negative/invalid handling: zero or unseen
-    #[arg(long, default_value = "unseen")]
+    #[arg(long, default_value = "unseen", hide = true, required = false)]
     pub neg_mode: String,
 
     /// Bad pixel color: auto, gray, or r,g,b,a
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub bad_color: Option<InputColor>,
 
     /// Background pixel color: transparent, gray, or r,g,b,a
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub bg_color: Option<InputColor>,
 
     /// Planck logarithmic scaling
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub planck_log: bool,
 
     /// Factor that multiplies the data itself for unit conversions.
-    #[arg(long, default_value_t = 1.0)]
+    #[arg(long, default_value_t = 1.0, required = false)]
     pub scale: f64,
 
     /// Enable LaTeX-like mathematical rendering for colorbar labels
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub latex: bool,
 
     /// Units string for colorbar (supports LaTeX syntax when --latex is enabled)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub units: Option<String>,
 
     /// Input coordinate system: gal, eq, ecl
-    #[arg(long, default_value = "gal")]
+    #[arg(long, default_value = "gal", hide = true, required = false)]
     pub input_coord: String,
 
     /// Output coordinate system: gal, eq, ecl
-    #[arg(long, default_value = "gal")]
+    #[arg(long, default_value = "gal", hide = true, required = false)]
     pub output_coord: String,
 
     /// Rotate view so that (lon,lat) becomes the new center `[degrees]`
-    #[arg(long, value_name = "LON,LAT")]
+    #[arg(long, value_name = "LON,LAT", hide = true, required = false)]
     pub rotate_to: Option<String>,
 
     /// Roll angle around the new center `[degrees]`
-    #[arg(long, default_value_t = 0.0)]
+    #[arg(long, default_value_t = 0.0, hide = true, required = false)]
     pub roll: f64,
 
     /// Projection type: mollweide, gnomonic, or hammer
-    #[arg(long, default_value = "mollweide")]
+    #[arg(long, default_value = "mollweide", hide = true, required = false)]
     pub projection: String,
 
     /// Center longitude in degrees (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true)]
+    #[arg(long, alias = "gnom-lon", allow_negative_numbers = true, hide = true, required = false)]
     pub lon: Option<f64>,
 
     /// Center latitude in `[degrees]` (gnomonic: projection center; mollweide: rotation center)
-    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true)]
+    #[arg(long, alias = "gnom-lat", allow_negative_numbers = true, hide = true, required = false)]
     pub lat: Option<f64>,
 
     /// Field of view width in arcminutes (gnomonic projection only)
-    #[arg(long, alias = "gnom-width", default_value_t = 300.0)]
+    #[arg(long, alias = "gnom-width", default_value_t = 300.0, hide = true, required = false)]
     pub fov: f64,
 
     /// Resolution in arcmin/pixel (gnomonic projection only)
-    #[arg(long, alias = "gnom-res", default_value_t = 1.0)]
+    #[arg(long, alias = "gnom-res", default_value_t = 1.0, hide = true, required = false)]
     pub res: f64,
 
     /// Enable local grid graticule for gnomonic projection
-    #[arg(long, alias = "gnom-graticule")]
+    #[arg(long, alias = "gnom-graticule", hide = true, required = false)]
     pub local_graticule: bool,
 
     /// Graticule spacing for parallels `[degrees]` (gnomonic projection only)
-    #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0)]
+    #[arg(long, alias = "gnom-grat-dlat", default_value_t = 1.0, hide = true, required = false)]
     pub local_grat_dlat: f64,
 
     /// Graticule spacing for meridians `[degrees]` (gnomonic projection only)
-    #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0)]
+    #[arg(long, alias = "gnom-grat-dlon", default_value_t = 1.0, hide = true, required = false)]
     pub local_grat_dlon: f64,
 
     /// Graticule line width in pixels (applies to both local and mollweide graticules)
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, hide = true, required = false)]
     pub grat_line_width: u32,
 
     /// Disable text labels (title and resolution/pixel size labels)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub no_text: bool,
 
     /// Disable title display
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub no_title: bool,
 
     /// Disable text scaling with FOV (use constant text sizes, gnomonic projection only)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub no_scale_text: bool,
 
     /// Custom title for map (gnomonic: default is (lon, lat) at center)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub title: Option<String>,
 
     /// Allows for more verbose output
-    #[arg(long)]
+    #[arg(long, required = false)]
     pub verbose: bool,
 
     /// Disable automatic downgrading of high-resolution maps for performance
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub no_downgrade: bool,
 
     /// Enable graticule overlay (primary coordinate system for mollweide map)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub graticule: bool,
 
     /// Primary graticule coordinate system: gal, eq, ecl
     /// (defaults to the map's input coordinate system)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub grat_coord: Option<String>,
 
     /// Secondary graticule coordinate system to overlay (e.g., show FK5 over Galactic)
     /// Specify one of: gal, eq, ecl. If set with --grat-coord, both systems will be displayed.
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub grat_coord_overlay: Option<String>,
 
     /// Color for secondary graticule overlay (hex #RRGGBB or r,g,b,a format)
     /// Default: yellow (#FFFF00) for good contrast on dark colormaps
-    #[arg(long, default_value = "#FFFF00")]
+    #[arg(long, default_value = "#FFFF00", hide = true, required = false)]
     pub grat_overlay_color: InputColor,
 
     /// Show coordinate labels on graticule lines (shows lat/lon values)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub grat_labels: bool,
 
     /// Graticule spacing for parallels `[degrees]`
-    #[arg(long, default_value_t = 15.0)]
+    #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_par: f64,
 
     /// Graticule spacing for meridians `[degrees]`
-    #[arg(long, default_value_t = 15.0)]
+    #[arg(long, default_value_t = 15.0, hide = true, required = false)]
     pub grat_mer: f64,
 
     /// Extend colorbar with arrows at the ends: none, min, max, or both
-    #[arg(long, default_value = "none")]
+    #[arg(long, default_value = "none", hide = true, required = false)]
     pub extend: String,
 
     /// Colorbar tick direction: inward/in (default) or outward/out
-    #[arg(long, default_value = "inward")]
+    #[arg(long, default_value = "inward", hide = true, required = false)]
     pub tick_direction: String,
 
     /// Tick label font size in points (default: auto-scaled, 12pt at width 800px)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub tick_font_size: Option<f32>,
 
     /// Units text font size in points (default: auto-scaled, 16pt at width 800px)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub units_font_size: Option<f32>,
 
     /// Text label for top-left corner
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub llabel: Option<String>,
 
     /// Text label for top-right corner
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub rlabel: Option<String>,
 
     /// Font size for labels in points (default: auto-scaled, 16pt at width 800px)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub label_font_size: Option<f32>,
 
     /// Path to mask FITS file (binary mask: 0=masked, 1=valid)
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub mask_file: Option<String>,
 
     /// Mask pixels with values below this threshold
-    #[arg(long, allow_negative_numbers = true)]
+    #[arg(long, allow_negative_numbers = true, hide = true, required = false)]
     pub mask_below: Option<f64>,
 
     /// Mask pixels with values above this threshold
-    #[arg(long, allow_negative_numbers = true)]
+    #[arg(long, allow_negative_numbers = true, hide = true, required = false)]
     pub mask_above: Option<f64>,
 
     /// Color for masked regions: transparent, gray, or r,g,b,a format
-    #[arg(long, default_value = "transparent")]
+    #[arg(long, default_value = "transparent", hide = true, required = false)]
     pub maskfill_color: String,
 
     /// Coordinate system of mask file (gal, eq, ecl) - auto-detects if not specified
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub mask_coord: Option<String>,
 
     /// Fast render mode: skip graticule, colorbar, and labels for faster iteration
-    #[arg(long)]
+    #[arg(long, hide = true, required = false)]
     pub fast_render: bool,
 
     /// PDF backend: cairo
-    #[arg(long, default_value = "cairo")]
+    #[arg(long, default_value = "cairo", hide = true, required = false)]
     pub pdf_backend: String,
 }
 

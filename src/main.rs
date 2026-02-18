@@ -16,6 +16,14 @@ fn run() -> Result<(), String> {
 
     let args = Args::parse();
 
+    // Validate required arguments
+    if args.fits.is_none() {
+        return Err("Error: Input FITS file is required\n\nUsage: map2fig <FITS> [OUTPUT]\n\nRun 'map2fig --help' for more information".to_string());
+    }
+    if args.out.is_none() {
+        return Err("Error: Output filename is required\n\nUsage: map2fig <FITS> <OUTPUT>\n\nRun 'map2fig --help' for more information".to_string());
+    }
+
     // Validate PDF backend argument
     let valid_backends = ["cairo"];
     if !valid_backends.contains(&args.pdf_backend.as_str()) {
