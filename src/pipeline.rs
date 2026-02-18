@@ -1,7 +1,7 @@
 use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
-    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map, downgrade_healpix_map_two_phase,
+    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map,
     downgrade_healpix_map_checkerboard, downgrade_healpix_map_balanced, is_seen, read_healpix_meta,
     target_nside_for_resolution,
 };
