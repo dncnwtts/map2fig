@@ -902,7 +902,7 @@ cargo fmt      # Auto-format all source files
 
 ### Build Time Optimization
 
-For **25-35% faster release builds**, see [COMPILATION_OPTIMIZATION.md](COMPILATION_OPTIMIZATION.md) for detailed configuration including:
+For **25-35% faster release builds**, see [docs/build/COMPILATION_OPTIMIZATION.md](docs/build/COMPILATION_OPTIMIZATION.md) for detailed configuration including:
 - Faster linker (lld) setup
 - Optimized build profiles  
 - Release-fast profile for CI
