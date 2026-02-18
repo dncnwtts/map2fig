@@ -92,7 +92,7 @@ pub mod simd_portable;
 pub mod simd_wide;
 
 // Re-export useful items
-pub use cli::{Args, PlotConfig};
+pub use cli::{Args, PlotConfig, QualityLevel};
 pub use colormap::{Colormap, available_colormaps, get_colormap};
 pub use constants::*;
 pub use data_array::DataArray;

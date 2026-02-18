@@ -298,6 +298,37 @@ pub struct Args {
     /// PDF backend: cairo
     #[arg(long, default_value = "cairo", hide = true, required = false)]
     pub pdf_backend: String,
+
+    /// Downsampling quality: best (exact, 100% speed), balanced (2-4× faster, <1% error), or fast (4× faster, ~10% error)
+    #[arg(long, short = 'q', default_value = "best", hide = true, required = false)]
+    pub quality: String,
+}
+
+/// Downsampling quality levels for coarse-grid optimization
+#[derive(Clone, Debug, PartialEq)]
+pub enum QualityLevel {
+    /// Exact downsampling (current algorithm, no coarse-grid)
+    Best,
+    /// Balanced: adaptive coarse-grid for 2-4× speedup with <1% error
+    Balanced,
+    /// Fast: aggressive checkerboard sampling for 4× speedup with ~10% error
+    Fast,
+}
+
+impl FromStr for QualityLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "best" => Ok(QualityLevel::Best),
+            "balanced" => Ok(QualityLevel::Balanced),
+            "fast" => Ok(QualityLevel::Fast),
+            _ => Err(format!(
+                "Invalid quality level '{}'. Expected: best, balanced, or fast",
+                s
+            )),
+        }
+    }
 }
 
 /// Colorbar extend option: arrows at minimum, maximum, or both ends

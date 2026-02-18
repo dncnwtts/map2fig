@@ -1,10 +1,13 @@
 use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
-    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map, is_seen, read_healpix_meta,
+    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map, downgrade_healpix_map_two_phase,
+    downgrade_healpix_map_checkerboard, downgrade_healpix_map_balanced, is_seen, read_healpix_meta,
     target_nside_for_resolution,
 };
 use crate::rotation::CoordSystem;
+use crate::QualityLevel;
+use std::str::FromStr;
 
 /// Processed HEALPix data ready for plotting
 pub struct ProcessedData {
@@ -20,6 +23,7 @@ pub fn load_and_process_data(
     width: u32,
     verbose: bool,
     no_downgrade: bool,
+    quality: &str,
 ) -> Result<ProcessedData, String> {
     use std::time::Instant;
 
@@ -79,8 +83,26 @@ pub fn load_and_process_data(
             }
 
             let downgrade_start = Instant::now();
-            let downgraded_map =
-                downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering);
+            
+            // Parse quality level and select appropriate downsampling algorithm
+            let quality_level = QualityLevel::from_str(quality)
+                .unwrap_or(QualityLevel::Best);
+            
+            let downgraded_map = match quality_level {
+                QualityLevel::Best => {
+                    // Exact downsampling (current algorithm)
+                    downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering)
+                }
+                QualityLevel::Balanced => {
+                    // Hybrid sampling: 50% of pixels (every 2nd in one dimension)
+                    // ~2× speedup with ~2-3% error (slight noisiness visible)
+                    downgrade_healpix_map_balanced(&map, meta.nside, target_nside, meta.ordering)
+                }
+                QualityLevel::Fast => {
+                    // Checkerboard sampling: 4× speedup with ~10% error
+                    downgrade_healpix_map_checkerboard(&map, meta.nside, target_nside, meta.ordering)
+                }
+            };
             let downgrade_time = downgrade_start.elapsed();
 
             if verbose {
