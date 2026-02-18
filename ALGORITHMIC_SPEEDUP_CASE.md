@@ -64,115 +64,64 @@ Result: Prefetcher can't anticipate next read → CPU stalls on ~90% of accesses
 
 ## Solution 1: Ring-Ordered Processing
 
-### The Insight
-HEALPix supports two storage orderings:
+### ⚠️ Important Finding: Most Test Files Are Already RING Ordered
 
-- **NESTED** (current): Pixels ordered by Z-order curve; locality-hostile for downsampling
-- **RING** (alternative): Pixels in rectangular rings; sequential memory layout
+Investigation revealed:
+- **9 of 10 test files** are RING ordered (not NESTED)
+- Only 1 file (npipe6v20_217_map_K.fits) uses NESTED ordering
+- All IMPLICIT indexing files tested use RING
+
+**This invalidates the Ring-Ordered Processing optimization** as a general solution.
+
+However, understanding WHY strided access exists anyway is important:
+
+### The Real Problem: Ring Geometry vs. Downsampling Algorithm
+
+Even though files are stored in RING order (sequential rings), the downsampling algorithm creates cache-hostile access patterns:
 
 ```
-Ring ordering (much more cache-friendly):
-Ring 0:     [pixel 0] [pixel 1] ... [pixel 3]         (sequential in memory)
-Ring 1:     [pixel 4] [pixel 5] ... [pixel 7]       ← prefetcher can follow
+RING storage (sequential per ring):
+Ring 0:     [pix0] [pix1] [pix2] [pix3] ... [pix4095]    (4,096 pixels)
+Ring 1:     [pix4096] [pix4097] ... [pix8191]
 Ring 2:     ...
 
-When downsampling 8×8 regions:
-- Reads from contiguous memory blocks
-- CPU prefetcher can anticipate 80-90% of next accesses
-- Cache hit rate improves from 10% to 50%+
+When downsampling 8×8 SPATIAL block (nside=8192→1024, 8× reduction):
+- Need pixels from (x,y) coordinates across multiple rings
+- Example block reads:
+  - Row 0: ring[k], positions p, p+1, p+2, ..., p+7
+  - Row 1: ring[k+1], positions p, p+1, ..., p+7  (different ring!)
+  - Row 2: ring[k+2], positions p, p+1, ..., p+7
+  - ...
+  - Row 7: ring[k+7], positions p, p+1, ..., p+7
+
+Memory offset between Ring k and Ring k+1 in equilibrium:
+  - Offset = 4×nside = 4,096 elements (for nside=1024)
+  
+CPU prefetcher optimal stride: <256 elements (2 KB)
+Actual downsampling stride: 4,096 elements → EXCEEDS prefetcher range
 ```
 
-### Implementation Strategy
+**Result:** Even in RING order, 8×8 block downsampling requires strided memory access that defeats CPU prefetching. This causes the same cache misses (10% hit rate) observed in profiling.
 
-**Phase 1: Ring-Order Conversion (2 weeks)**
-```rust
-// Add to healpix.rs
-fn convert_nested_to_ring(nested_map: Vec<f64>, nside: u32) -> Vec<f64> {
-    let npix = (12 * nside * nside) as usize;
-    let mut ring_map = vec![HPX_UNSEEN; npix];
-    
-    for nested_pixel in 0..npix {
-        let ring_pixel = nested2ring(nside, nested_pixel as i64) as usize;
-        ring_map[ring_pixel] = nested_map[nested_pixel];
-    }
-    ring_map
-}
+### Why Ring-to-Nested Doesn't Help
+The optimization only works if we also change the downsampling algorithm, which is not practical.
 
-// Use when loading file if NESTED, then work in Ring order
-```
+### Revisiting the Approach: Algorithm Structure Matters More Than File Layout
 
-**Phase 2: Ring-Order Downsampling (2-3 weeks)**
-```rust
-fn downgrade_healpix_map_ring(
-    ring_map: Vec<f64>,
-    source_nside: u32,
-    target_nside: u32,
-) -> Vec<f64> {
-    // Sequential iteration through rings instead of random NESTED access
-    // Ring structure is naturally cache-friendly:
-    for ring_idx in 0..4*target_nside {
-        for pixel_in_ring in 0..ring_pixel_count(ring_idx) {
-            // Gather 64 source pixels in Ring order
-            // All source pixels are in contiguous memory → prefetcher happy!
-            let target_pixel = ring2pix(target_nside, ring_idx, pixel_in_ring);
-            // ... compute average ...
-        }
-    }
-}
-```
+The fundamental issue: **8×8 spatial downsampling blocks inherently require strided memory access**, regardless of RING or NESTED ordering. To improve cache efficiency, we'd need to change the algorithm itself, not just reorder files.
 
-**Phase 3: Ring-Order Output (1 week)**
-```rust
-// If user asks for NESTED output, convert back:
-fn convert_ring_to_nested(ring_map: Vec<f64>, nside: u32) -> Vec<f64> {
-    // Inverse of Phase 1
-}
-```
+**Possible algorithmic changes (future research):**
+1. **Block-aligned downsampling** - Reorganize computation to follow RING ring boundaries instead of spatial 8×8 blocks
+2. **Streaming aggregation** - Read pixels in RING order; accumulate spatially-aligned outputs
+3. **Two-level downsampling** - Downsample smaller blocks first, then combine
 
-### Performance Analysis
+These are beyond the scope of this analysis but represent the real path forward for CPU optimization beyond current bottlenecks.
 
-**Before (NESTED order):**
-- Cache hit rate: 10%
-- Memory stalls: 90% of cycles
-- Time: 6.4 seconds (downsampling)
-
-**After (RING order):**
-- Cache hit rate: 50%+ (5× improvement on cache hits)
-- Memory stalls: 60% of cycles (but with wider instruction window)
-- Estimated time: 2.5-3.2 seconds (2-2.5× speedup)
-- Why not 5×? L3 cache is only 8 MB; 806M data doesn't fit; prefetcher has limits
-
-**Mathematical bounds:**
-```
-Current bandwidth utilization: 6.4 GB/s ÷ 9.1 GB/s = 70%
-But this 70% is STALL TIME, not transfer time.
-Real data bandwidth: 806 MB ÷ 6.4s = 126 MB/s
-
-With Ring order:
-- Aim for 40-50% CPU stall rate (vs 90%)
-- Estimated bandwidth: 806 MB ÷ 2.5s = 322 MB/s (2.5× improvement)
-- Still below peak due to occasional L3 misses, but much better
-```
-
-### Quality & Correctness
-- ✅ **Exact same output** as current implementation (no quality loss)
-- ✅ **Optional** (can be flag: --ring-order-processing)
-- ✅ **Transparent** to users (input/output format unchanged)
-- ⚠️ **Requires validation** with existing test cases
-
-### Effort Estimate
-- **Complexity:** Medium (HEALPix ring/nested conversion is well-documented)
-- **Line count:** 500-800 LOC (ring2pix, pix2ring, conversion functions)
-- **Testing:** 3-4 weeks (validate against current downsampling on many maps)
-- **Risk:** Low (math is straightforward, but needs thorough testing)
-- **Timeline:** 4-6 weeks total
-
-### Why This Beats GPU for Many Users
-- ✅ Works on any machine (no CUDA/HIP SDK required)
-- ✅ Deterministic, testable (not probabilistic like some GPU algorithms)
-- ✅ Debugging is easier (same Rust codebase)
-- ✅ CI/CD simpler (no GPU-specific build)
-- ✅ 2-2.5× speedup is "good enough" for many workflows
+**For now:** Ring-ordered processing is **not recommended** because:
+- ✗ Most files already use RING ordering
+- ✗ File reordering won't fix the strided access pattern in the algorithm
+- ✗ The 4,096-element stride in 8×8 block reads exceeds CPU prefetcher range regardless of storage order
+- ✗ Implementation effort (4-6 weeks) with zero expected speedup not justified
 
 ---
 
@@ -324,119 +273,114 @@ Quality: <1% loss (very hard to perceive)
 
 ---
 
-## Comparison: Ring-Order vs Coarse-Grid
+## Comparison: Coarse-Grid Options (Revised)
 
-| Aspect | Ring-Order | Coarse-Grid |
-|--------|-----------|-----------|
-| **Speedup** | 2-2.5× | 2-4× |
-| **Quality** | Exact (no loss) | 1-15% loss (configurable) |
-| **Effort** | 4-6 weeks | 1-3 weeks |
-| **Complexity** | Medium | Low |
-| **Parallelizable** | Yes (with Rayon adjustment) | Yes (independent phase) |
-| **Portable** | Universal | Universal |
-| **Config Needed** | Optional flag | Flag for quality setting |
-| **Code Maintenance** | Significant (alternate path) | Minimal (bypass option) |
-| **Testing** | Moderate (mathematical validation) | Heavy (quality perception) |
+Since Ring-Ordered Processing doesn't provide expected benefit (files are already RING, algorithm creates strided access regardless), focus on coarse-grid variants:
 
-### Recommendation for Different Users
+| Aspect | Checkerboard | Adaptive | Two-Phase |
+|--------|-----------|-----------|-----------|
+| **Speedup** | 3-4× | 2-3.5× | 2-3× |
+| **Quality Loss** | 10-15% | ~2% | <1% |
+| **Effort** | 1 week | 2 weeks | 2-3 weeks |
+| **Complexity** | Trivial | Low | Medium |
+| **User Transparency** | Requires flag | Automatic | Automatic |
+| **Implementation** | 20 lines | 150 lines | 200 lines |
+| **Validation Needed** | Moderate | Heavy | Moderate |
 
-**Academic/Publication Use:**
-→ Ring-ordered processing (exact, no quality loss, credible for papers)
-
-**Interactive Exploration:**
-→ Coarse-grid adaptive (fast response, acceptable quality)
-
-**General Users:**
-→ Ring-ordered as default, coarse-grid as `--fast` option
-
-**Large Batch Processing:**
-→ Two-phase approximate (set-and-forget, good balance)
+**Recommended:** Start with **Adaptive** (balances speed/quality automatically)
 
 ---
 
-## Why Combine Both?
+## Recommended Focus: Coarse-Grid Methods Only
 
-**Ring-ordered + Coarse-grid (multi-phase):**
+Given that test files are already RING-ordered and the downsampling algorithm creates strided access regardless of storage order, **Ring-Ordered Processing is not viable**. Focus instead on coarse-grid variants.
+
+**Best Approach:** Implement adaptive coarse-grid sampling
+
 ```
 Current pipeline:
 Read (1.6s) → Downgrade NESTED (6.4s) → Render (2.9s) = 10.9s total
 
-Optimized pipeline:
-Read (0.8s)           [with posix_fadvise already done]
-→ Convert NESTED→RING (0.3s) [one-time cost]
-→ Downsample phase 1 (1.5s) [Ring-ordered 8192→4096]
-→ Downsample phase 2 (0.3s) [Coarsegrid 4096→1024]
-→ Convert RING→NESTED if needed (0.3s)
-→ Render (2.9s)
-= 6.7s total (38% faster, no quality loss)
+With Adaptive Coarse-Grid:
+Read (1.6s) → Downsample with adaptive grid (2.0-2.5s) → Render (2.9s)
+= 6.5-7.0s total (35% faster, 2% quality loss)
 
-OR with quality compromise:
-= 5.5s total with 2% loss (49% faster, nearly imperceptible)
+With Two-Phase Approach:
+Read (1.6s) → Downsample phase 1 (3.2s) → Downsample phase 2 (0.4s) → Render (2.9s)
+= 8.1s total (26% faster, <1% quality loss, no user-facing flags)
 ```
 
-### Implementation Roadmap
+### Multi-Approach Strategy (Revised)
 
-**Phase 1 (Now):** Coarse-grid adaptive option
-- Quick win (2-3 weeks)
-- Gives users immediate 20-30% speedup option
-- Low risk (easy to disable)
-- Validates performance measurement approach
+**Phase 1 (Short-term, 2-3 weeks):** Adaptive coarse-grid sampling
+- Quick implementation (150 lines)
+- 35% speedup with imperceptible quality loss
+- Automatic; no user configuration needed
+- Validates speedup on real data
 
-**Phase 2 (2-3 months):** Ring-ordered processing  
-- Major refactor (4-6 weeks)
-- Combines with Phase 1 for 38-49% speedup
-- Becomes new default when validated
-- Academic credibility (exact computation)
+**Phase 2 (Medium-term, 2-4 weeks):** Two-phase downsampling option
+- Adds `--quality=best|balanced|fast` flag
+- Best: original algorithm (slow, exact)
+- Balanced: two-phase (fast, <1% loss)
+- Fast: aggressive coarse-grid (fastest, 5-10% loss)
+- Lets users choose speed/quality tradeoff
 
-**Phase 3 (Future):** GPU as premium option
-- Have CPU baseline to compare against
-- Can use GPU for even larger maps
-- Users with GPU/CUDA can opt-in
+**Phase 3 (Future):** GPU for ultra-large maps
+- By this point, CPU optimizations are deployed
+- GPU becomes premium feature, not necessity
 
 ---
 
-## Risk Analysis
-
-### Ring-Order Risks
-- **Risk:** HEALPix ring/nested conversion bugs
-- **Mitigation:** Extensive test suite comparing output pixel-by-pixel against current
-- **Risk:** Performance doesn't improve as predicted (prefetcher doesn't cooperate)
-- **Mitigation:** Early prototyping to validate cache hit improvement
+## Risk Analysis (Coarse-Grid Only)
 
 ### Coarse-Grid Risks  
 - **Risk:** Quality loss in high-frequency data (unacceptable to some users)
-- **Mitigation:** Make it optional, default adaptive strategy, user education
-- **Risk:** Published maps look different if using checkerboard
-- **Mitigation:** Clear flag warning; default to ring-order (exact)
+- **Mitigation:** Make it optional with `--quality` flag; default (balanced) preserves 98%+ quality
+- **Risk:** Published maps look different if using aggressive coarse-grid
+- **Mitigation:** Document settings; default to balanced (two-phase, <1% loss)
+- **Risk:** Users confused by quality settings
+- **Mitigation:** Clear documentation, quality comparison images in README
 
-### Combined Risks
-- **Risk:** Code complexity (multiple downsampling paths)
-- **Mitigation:** Unified test harness, integration tests
-- **Risk:** Maintenance burden
-- **Mitigation:** Clear code comments, performance benchmarks in CI
+### Implementation Risks
+- **Risk:** Performance doesn't improve as much as predicted
+- **Mitigation:** Early prototyping to validate on diverse file types
+- **Risk:** Quality assessment is subjective
+- **Mitigation:** Quantitative metrics (RMS error, histogram comparison) + visual inspection
 
 ---
 
 ## Conclusion
 
-**Ring-ordered processing and coarse-grid sampling are viable 2-5× speedup solutions** without GPU complexity. 
+**Key Finding:** Investigation revealed that most test files are already RING-ordered. Therefore, **Ring-Ordered Processing optimization does not apply** — the files are already in the "optimized" layout. The cache-hostile access pattern comes from the downsampling algorithm's mathematical structure (8×8 blocks spanning ring boundaries), not the file storage order.
 
-**Best approach:** Implement both, layered:
-1. **Coarse-grid adaptive** (short-term, 2-3 week quick win)
-2. **Ring-ordered processing** (medium-term, 4-6 week major refactor)
-3. **Combination** yields 38-49% speedup, universally portable
+**Viable Solution:** Implement **coarse-grid adaptive sampling** for 35% speedup with imperceptible quality loss:
 
-This positions the project well:
-- Users get immediate options (18 months faster wait)
-- Academic credibility maintained (exact computation available)
-- GPU integration becomes a premium feature, not necessity
-- All improvements validated before considering proprietary solutions
+1. **Adaptive Coarse-Grid** (2-3 week effort, 35% speedup, 2% loss)
+   - Automatically uses coarse sampling in smooth regions
+   - User-transparent; no configuration needed
+   - Low risk, quick to validate
+
+2. **Two-Phase Option** (2-4 week effort, 26% speedup, <1% loss)  
+   - Adds `--quality` flag for user control
+   - Best for batch processing and publication
+   - Combines two downsampling passes
+
+3. **GPU** (future enhancement)
+   - Have measured CPU baseline to compare
+   - Becomes premium option, not necessity
+   - Can achieve 5-10× speedup if needed
+
+**Project positioning:**
+- Coarse-grid methods are **immediately implementable** and deliver **practical speed gains**
+- Universal portability (no CUDA/HIP SDK)
+- Quality is **configurable**, not compromised
+- Foundation for future GPU comparison
 
 ---
 
 ## References
 
-- HEALPix documentation: https://healpix.jpl.nasa.gov/
-- Cache optimization techniques: "What Every Programmer Should Know About Memory" (Ulrich Drepper)
+- FITS file ordering analysis: ORDERING metadata from test suite
+- Memory stride analysis: Ring geometry calculations (stride = 4×nside ≈ 4,096 elements)
+- CPU prefetcher limits: x86-64 architectural specification (optimal stride <256 elements/2KB)
 - Current bottleneck profiling: `RAYON_OVERHEAD_ANALYSIS.md`
-- Downsampling implementation: `src/healpix.rs` lines 1240-1330
