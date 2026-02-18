@@ -14,6 +14,7 @@
 use memmap2::Mmap;
 use std::fs::File;
 use std::io::{self, BufRead, Read, Seek, SeekFrom};
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 /// Memory-mapped FITS file reader
@@ -34,6 +35,15 @@ impl MmapFitsReader {
     pub fn new(file: File) -> io::Result<Self> {
         // Safety: FITS files are read-only during parsing
         let mmap = unsafe { Mmap::map(&file)? };
+        
+        // Hint to kernel that we'll access this file sequentially.
+        // This enables aggressive read-ahead and reduces page faults.
+        // We ignore errors here as fadvise is advisory-only.
+        let fd = file.as_raw_fd();
+        let _ = unsafe {
+            libc::posix_fadvise(fd, 0, mmap.len() as libc::off_t, libc::POSIX_FADV_SEQUENTIAL)
+        };
+        
         Ok(Self { mmap, position: 0 })
     }
 
