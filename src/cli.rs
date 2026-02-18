@@ -7,9 +7,10 @@ use std::str::FromStr;
 /// Fast, publication-quality HEALPix sky map visualization
 /// 
 /// EXAMPLES:
-///   map2fig input.fits output.png
-///   map2fig input.fits output.pdf -c viridis --log
-///   map2fig input.fits output.pdf -i 3 --min 1e-6 --max 1e-3
+///   map2fig input.fits                              # Auto-generates input.png
+///   map2fig input.fits output.pdf                   # Explicit output filename
+///   map2fig input.fits output.pdf -c viridis --log # With custom colormap and scaling
+///   map2fig input.fits -c plasma --hist             # Auto-generates input.png with options
 /// 
 /// Use 'map2fig --help-all' to see all advanced options for graticules,
 /// projections, rotations, masks, and more.
@@ -20,7 +21,7 @@ pub struct Args {
     #[arg(value_name = "FITS", help_heading = None)]
     pub fits: Option<String>,
 
-    /// Output filename (PNG or PDF)
+    /// Output filename (PNG or PDF). If not provided, auto-generates from input filename (e.g., input.fits -> input.png)
     #[arg(value_name = "OUTPUT", help_heading = None)]
     pub out: Option<String>,
 

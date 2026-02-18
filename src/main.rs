@@ -13,15 +13,20 @@ fn main() {
 
 fn run() -> Result<(), String> {
     use std::time::Instant;
+    use std::path::Path;
 
-    let args = Args::parse();
+    let mut args = Args::parse();
 
-    // Validate required arguments
+    // Validate and auto-generate output filename if needed
     if args.fits.is_none() {
         return Err("Error: Input FITS file is required\n\nUsage: map2fig <FITS> [OUTPUT]\n\nRun 'map2fig --help' for more information".to_string());
     }
+    
     if args.out.is_none() {
-        return Err("Error: Output filename is required\n\nUsage: map2fig <FITS> <OUTPUT>\n\nRun 'map2fig --help' for more information".to_string());
+        let fits_path = args.fits.as_ref().unwrap();
+        let path = Path::new(fits_path);
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+        args.out = Some(format!("{}.png", stem));
     }
 
     // Validate PDF backend argument
