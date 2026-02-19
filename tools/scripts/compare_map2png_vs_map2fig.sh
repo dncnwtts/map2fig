@@ -137,6 +137,14 @@ echo -e "  map2png:  $BINARY_MAP2PNG"
 echo -e "  Results:  $BENCHMARK_RESULTS_DIR"
 echo ""
 
+
+# Allow extra arguments for map2fig (e.g., --no-downgrade)
+MAP2FIG_EXTRA_ARGS=( )
+while [[ $# -gt 0 ]]; do
+    MAP2FIG_EXTRA_ARGS+=( "$1" )
+    shift
+done
+
 # Run benchmarks for each FITS file
 for fits_spec in "${FITS_FILES[@]}"; do
     IFS=':' read -r fits_file fits_label <<< "$fits_spec"
@@ -174,7 +182,7 @@ for fits_spec in "${FITS_FILES[@]}"; do
     # Benchmark: map2fig with PNG
     echo -e "${YELLOW}  map2fig:${NC}"
     map2fig_output="$test_output_dir/${fits_name}_map2fig.png"
-    benchmark_command "map2fig" "PNG output" "$BINARY_MAP2FIG -f $fits_file -o $map2fig_output" "$map2fig_output" "$fits_file"
+    benchmark_command "map2fig" "PNG output" "$BINARY_MAP2FIG $fits_file $map2fig_output ${MAP2FIG_EXTRA_ARGS[*]}" "$map2fig_output" "$fits_file"
     
     echo ""
 done

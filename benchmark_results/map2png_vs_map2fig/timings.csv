@@ -1,9 +1,9 @@
 Tool,Time(ms),Size(bytes),FITS_File
-map2png,178,12648,m_test
-map2fig,121,70327,m_test
-map2png,314,596280,class_dr1_40GHz_skymap_n128
-map2fig,139,1083833,class_dr1_40GHz_skymap_n128
-map2png,1567,156253,npipe_nodip
-map2fig,711,1192445,npipe_nodip
-map2png,18579,66468,combined_map_95GHz_nside8192_ptsrcmasked_50mJy
-map2fig,7526,168784,combined_map_95GHz_nside8192_ptsrcmasked_50mJy
+map2png,190,12648,m_test
+map2fig,129,67774,m_test
+map2png,334,596280,class_dr1_40GHz_skymap_n128
+map2fig,147,989478,class_dr1_40GHz_skymap_n128
+map2png,1554,156253,npipe_nodip
+map2fig,4058,1059586,npipe_nodip
+map2png,18788,66468,combined_map_95GHz_nside8192_ptsrcmasked_50mJy
+map2fig,19194,158000,combined_map_95GHz_nside8192_ptsrcmasked_50mJy
