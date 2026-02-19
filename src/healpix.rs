@@ -282,11 +282,15 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
 }
 
 #[inline]
-pub fn is_seen(v: f64) -> bool {
-    // Use -1e30 threshold instead of exact HPX_UNSEEN constant to account for
-    // floating-point precision variations in FITS files (e.g., CLASS files use
-    // -1.637499996306027e+30 which is slightly different from -1.6375e30)
-    v.is_finite() && v > -1e30
+/// Check if a value is valid (not UNSEEN/NaN/Inf) - generic for f32/f64
+/// 
+/// Works natively on the input type to avoid unnecessary conversions.
+/// Uses -1e30 threshold instead of exact HPX_UNSEEN constant to account for
+/// floating-point precision variations in FITS files (e.g., CLASS files use
+/// -1.637499996306027e+30 which is slightly different from -1.6375e30)
+pub fn is_seen<T: HealPixFloat>(v: T) -> bool {
+    // Check is_finite on native type, threshold in native type too
+    v.is_finite() && v > T::from_f64(-1e30)
 }
 
 #[inline]
@@ -1299,7 +1303,7 @@ fn downgrade_healpix_map_xyf_parallel_generic<T: HealPixFloat + Send + Sync>(
                         } as usize;
 
                         let val = map[source_pix];
-                        if is_seen(val.to_f64()) {
+                        if is_seen(val) {
                             sum = sum + val;
                             hits += 1;
                         }
@@ -1358,7 +1362,7 @@ fn downgrade_healpix_map_xyf_scalar_generic<T: HealPixFloat>(
                 } as usize;
 
                 let val = map[source_pix];
-                if is_seen(val.to_f64()) {
+                if is_seen(val) {
                     sum = sum + val;
                     hits += 1;
                 }
@@ -1437,7 +1441,7 @@ fn downgrade_healpix_map_ang_generic<T: HealPixFloat>(
                     HealpixOrdering::Nested => ang2pix_nest(source_nside, sample_theta, sample_phi),
                 } as usize;
 
-                if source_pix < map.len() && is_seen(map[source_pix].to_f64()) {
+                if source_pix < map.len() && is_seen(map[source_pix]) {
                     sum = sum + map[source_pix];
                     count += 1;
                 }
@@ -1517,7 +1521,7 @@ pub fn downgrade_healpix_map_balanced_generic<T: HealPixFloat + Send + Sync>(
                         } as usize;
 
                         let val = map[source_pix];
-                        if is_seen(val.to_f64()) {
+                        if is_seen(val) {
                             sum = sum + val;
                             hits += 1;
                         }
@@ -1594,7 +1598,7 @@ pub fn downgrade_healpix_map_checkerboard_generic<T: HealPixFloat + Send + Sync>
                         } as usize;
 
                         let val = map[source_pix];
-                        if is_seen(val.to_f64()) {
+                        if is_seen(val) {
                             sum = sum + val;
                             hits += 1;
                         }
