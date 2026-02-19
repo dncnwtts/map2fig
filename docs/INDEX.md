@@ -19,19 +19,17 @@
 - [HEALPIX_MEMORY_ANALYSIS.md](HEALPIX_MEMORY_ANALYSIS.md) - Memory optimization results
 - [PERFORMANCE_OPTIMIZATION_RESULTS.md](PERFORMANCE_OPTIMIZATION_RESULTS.md) - Benchmark data
 
-### 🔬 v0.7.5 Performance Analysis (Feb 19, 2026)
-**New Documentation**:
-- [V075_OPTIMIZATION_FINAL_RESULTS.md](V075_OPTIMIZATION_FINAL_RESULTS.md) **← v0.7.5 RELEASE: 4.7% improvement validated**
-- [DOWNGRADING_IMPACT_ANALYSIS.md](DOWNGRADING_IMPACT_ANALYSIS.md) **← NEW: HEALPix downgrading provides 3.7× speedup on nside=8192**
-- [IO_BOTTLENECK_ANALYSIS_V075.md](IO_BOTTLENECK_ANALYSIS_V075.md) - Why I/O takes 42% of time (hardware-limited)
-- [PERF_DETAILED_ANALYSIS_V075.md](PERF_DETAILED_ANALYSIS_V075.md) - Hardware counters & cycle breakdown
-- [PERFORMANCE_PROFILING_V075.md](PERFORMANCE_PROFILING_V075.md) - Wall-clock timing & phase analysis
 
-### 🔬 Recent Optimization Work (Feb 2026)
-- [docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) - Session summary & lessons
-- [docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md](docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md) - Prefetch hints (+3.2% improvement) ✅
-- [docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md](docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md) - Why tiling failed (-12% regression) ❌
-- [docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md](docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md) - Root cause analysis
+### 🔬 Optimization Documentation (Successes & Failures)
+**Centralized Reference:**
+- [docs/optimizations/V075_OPTIMIZATION_FINAL_RESULTS.md](docs/optimizations/V075_OPTIMIZATION_FINAL_RESULTS.md) **← v0.7.5 RELEASE: 4.7% improvement validated**
+- [docs/optimizations/DOWNGRADING_IMPACT_ANALYSIS.md](docs/optimizations/DOWNGRADING_IMPACT_ANALYSIS.md) **← NEW: HEALPix downgrading provides 3.7× speedup on nside=8192**
+- [docs/optimizations/IO_BOTTLENECK_ANALYSIS_V075.md](docs/optimizations/IO_BOTTLENECK_ANALYSIS_V075.md) - Why I/O takes 42% of time (hardware-limited)
+- [docs/optimizations/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md](docs/optimizations/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md) - Why tiling failed (-12% regression) ❌
+- [docs/optimizations/PREFETCH_OPTIMIZATION_RESULTS.md](docs/optimizations/PREFETCH_OPTIMIZATION_RESULTS.md) - Prefetch hints (+3.2% improvement) ✅
+- [docs/optimizations/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimizations/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) - Session summary & lessons
+
+**See docs/optimizations/ for all attempted, successful, and failed optimization strategies, analyses, and performance reports.**
 
 ### 🔧 Technical Details
 - [docs/reports/COMPARISON.md](docs/reports/COMPARISON.md) - HEALPix plotter vs healpy comparison
