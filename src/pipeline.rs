@@ -3,7 +3,7 @@ use crate::data_array::DataArray;
 use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
-    HealpixMeta, HealpixOrdering, downgrade_healpix_map, downgrade_healpix_map_balanced,
+    HealpixMeta, HealpixOrdering, HPX_UNSEEN, downgrade_healpix_map, downgrade_healpix_map_balanced,
     downgrade_healpix_map_balanced_generic, downgrade_healpix_map_checkerboard,
     downgrade_healpix_map_checkerboard_generic, downgrade_healpix_map_generic, is_seen,
     read_healpix_meta, target_nside_for_resolution,
@@ -61,6 +61,25 @@ pub fn load_and_process_data(
     let fits_read_time = fits_read_start.elapsed();
 
     let mut map = map;
+
+    // Convert zero-valued pixels to HPX_UNSEEN (explicit masking)
+    // This handles files where 0.0 represents masked/bad data
+    match &mut map {
+        DataArray::Float32(v) => {
+            for val in v.iter_mut() {
+                if *val == 0.0 {
+                    *val = HPX_UNSEEN as f32;
+                }
+            }
+        }
+        DataArray::Float64(v) => {
+            for val in v.iter_mut() {
+                if *val == 0.0 {
+                    *val = HPX_UNSEEN;
+                }
+            }
+        }
+    }
 
     // Scale data - works with both f32 and f64 without conversion
     match &mut map {
