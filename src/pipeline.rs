@@ -3,10 +3,10 @@ use crate::data_array::DataArray;
 use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
-    HealpixMeta, HealpixOrdering, HPX_UNSEEN, downgrade_healpix_map, downgrade_healpix_map_balanced,
-    downgrade_healpix_map_balanced_generic, downgrade_healpix_map_checkerboard,
-    downgrade_healpix_map_checkerboard_generic, downgrade_healpix_map_generic, is_seen,
-    read_healpix_meta, target_nside_for_resolution,
+    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map,
+    downgrade_healpix_map_balanced, downgrade_healpix_map_balanced_generic,
+    downgrade_healpix_map_checkerboard, downgrade_healpix_map_checkerboard_generic,
+    downgrade_healpix_map_generic, is_seen, read_healpix_meta, target_nside_for_resolution,
 };
 use crate::rotation::CoordSystem;
 use std::str::FromStr;

@@ -283,7 +283,7 @@ fn extract_meta<X>(header: &Header<X>) -> Option<HealpixMeta> {
 
 #[inline]
 /// Check if a value is valid (not UNSEEN/NaN/Inf) - generic for f32/f64
-/// 
+///
 /// Works natively on the input type to avoid unnecessary conversions.
 /// Uses -1e30 threshold instead of exact HPX_UNSEEN constant to account for
 /// floating-point precision variations in FITS files (e.g., CLASS files use

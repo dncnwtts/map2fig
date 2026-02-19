@@ -1,6 +1,6 @@
 [package]
 name = "map2fig"
-version = "0.7.5"
+version = "0.7.6"
 edition = "2024"
 authors = ["Duncan Watts"]
 description = "Fast, publication-quality HEALPix sky map visualization in Rust"
