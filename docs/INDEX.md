@@ -1,8 +1,8 @@
 # HEALPix Plotter - Project Index
 
-**Last Updated**: February 16, 2026  
-**Current Phase**: 1.6.3 (GPU Integration Framework)  
-**Status**: ✅ Framework Complete (JIT pending)
+**Last Updated**: February 19, 2026  
+**Current Version**: v0.7.5 (Production Release)
+**Status**: ✅ Production Ready
 
 ---
 
@@ -19,11 +19,18 @@
 - [HEALPIX_MEMORY_ANALYSIS.md](HEALPIX_MEMORY_ANALYSIS.md) - Memory optimization results
 - [PERFORMANCE_OPTIMIZATION_RESULTS.md](PERFORMANCE_OPTIMIZATION_RESULTS.md) - Benchmark data
 
+### 🔬 v0.7.5 Performance Analysis (Feb 19, 2026)
+**New Documentation**:
+- [V075_OPTIMIZATION_FINAL_RESULTS.md](V075_OPTIMIZATION_FINAL_RESULTS.md) **← v0.7.5 RELEASE: 4.7% improvement validated**
+- [IO_BOTTLENECK_ANALYSIS_V075.md](IO_BOTTLENECK_ANALYSIS_V075.md) - Why I/O takes 42% of time (hardware-limited)
+- [PERF_DETAILED_ANALYSIS_V075.md](PERF_DETAILED_ANALYSIS_V075.md) - Hardware counters & cycle breakdown
+- [PERFORMANCE_PROFILING_V075.md](PERFORMANCE_PROFILING_V075.md) - Wall-clock timing & phase analysis
+
 ### 🔬 Recent Optimization Work (Feb 2026)
-- [docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) **← LATEST: Session summary & lessons**
+- [docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md](docs/optimization/DOWNSAMPLING_OPTIMIZATION_SESSION_FEB2026.md) - Session summary & lessons
 - [docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md](docs/optimization/PREFETCH_OPTIMIZATION_RESULTS.md) - Prefetch hints (+3.2% improvement) ✅
 - [docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md](docs/optimization/TILING_OPTIMIZATION_FAILURE_ANALYSIS.md) - Why tiling failed (-12% regression) ❌
-- [docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md](docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md) - Root cause analysis (updated)
+- [docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md](docs/optimization/DOWNSAMPLING_BOTTLENECK_ROOT_CAUSE.md) - Root cause analysis
 
 ### 🔧 Technical Details
 - [docs/reports/COMPARISON.md](docs/reports/COMPARISON.md) - HEALPix plotter vs healpy comparison
