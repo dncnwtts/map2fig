@@ -22,6 +22,7 @@
 ### 🔬 v0.7.5 Performance Analysis (Feb 19, 2026)
 **New Documentation**:
 - [V075_OPTIMIZATION_FINAL_RESULTS.md](V075_OPTIMIZATION_FINAL_RESULTS.md) **← v0.7.5 RELEASE: 4.7% improvement validated**
+- [DOWNGRADING_IMPACT_ANALYSIS.md](DOWNGRADING_IMPACT_ANALYSIS.md) **← NEW: HEALPix downgrading provides 3.7× speedup on nside=8192**
 - [IO_BOTTLENECK_ANALYSIS_V075.md](IO_BOTTLENECK_ANALYSIS_V075.md) - Why I/O takes 42% of time (hardware-limited)
 - [PERF_DETAILED_ANALYSIS_V075.md](PERF_DETAILED_ANALYSIS_V075.md) - Hardware counters & cycle breakdown
 - [PERFORMANCE_PROFILING_V075.md](PERFORMANCE_PROFILING_V075.md) - Wall-clock timing & phase analysis
