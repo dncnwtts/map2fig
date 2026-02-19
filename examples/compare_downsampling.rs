@@ -1,21 +1,23 @@
-/// Compare original vs checkerboard downsampling on real FITS data
-/// 
-/// Usage: cargo run --release --example compare_downsampling -- <fits_file> [nside]
-/// Example: cargo run --release --example compare_downsampling -- combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits 1024
-
-use std::env;
-use std::time::Instant;
 use map2fig::fits::read_healpix_column_cached;
 use map2fig::healpix::{
     downgrade_healpix_map, downgrade_healpix_map_checkerboard, read_healpix_meta,
 };
+/// Compare original vs checkerboard downsampling on real FITS data
+///
+/// Usage: cargo run --release --example compare_downsampling -- <fits_file> [nside]
+/// Example: cargo run --release --example compare_downsampling -- combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits 1024
+use std::env;
+use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
         eprintln!("Usage: {} <fits_file> [target_nside]", args[0]);
-        eprintln!("Example: {} combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits 1024", args[0]);
+        eprintln!(
+            "Example: {} combined_map_95GHz_nside8192_ptsrcmasked_50mJy.fits 1024",
+            args[0]
+        );
         std::process::exit(1);
     }
 
@@ -39,10 +41,13 @@ fn main() {
             std::process::exit(1);
         }
     };
-    
+
     // Read the data column
-    let map = read_healpix_column_cached(fits_file, 0);
+    let data_array = read_healpix_column_cached(fits_file, 0);
     let read_time = start.elapsed();
+
+    // Convert to f64 for this example
+    let map = data_array.as_f64_vec().into_owned();
 
     let source_nside = meta.nside;
     let ordering = meta.ordering;
@@ -53,7 +58,11 @@ fn main() {
     println!("Source nside: {}", source_nside);
     println!("Ordering: {:?}", ordering);
     println!("Total pixels: {} ({:.2} MB)", npix, npix as f64 * 8.0 / 1e6);
-    println!("Valid pixels: {} ({:.1}%)\n", valid_pixels, valid_pixels as f64 / npix as f64 * 100.0);
+    println!(
+        "Valid pixels: {} ({:.1}%)\n",
+        valid_pixels,
+        valid_pixels as f64 / npix as f64 * 100.0
+    );
 
     // Original downsampling
     println!("Running original downsampling...");
@@ -77,7 +86,10 @@ fn main() {
     println!("Checkerboard time: {:.3}s", time_check.as_secs_f64());
     let speedup = time_orig.as_secs_f64() / time_check.as_secs_f64();
     let pct_improvement = (1.0 - time_check.as_secs_f64() / time_orig.as_secs_f64()) * 100.0;
-    println!("Speedup: {:.2}x ({:.1}% improvement)", speedup, pct_improvement);
+    println!(
+        "Speedup: {:.2}x ({:.1}% improvement)",
+        speedup, pct_improvement
+    );
 
     // Calculate quality metrics
     println!("\n=== Quality Comparison ===");
@@ -100,7 +112,11 @@ fn main() {
     }
     rmse = (rmse / map_orig.len() as f64).sqrt();
 
-    println!("Mismatched pixels: {} ({:.1}%)", mismatch, mismatch as f64 / map_orig.len() as f64 * 100.0);
+    println!(
+        "Mismatched pixels: {} ({:.1}%)",
+        mismatch,
+        mismatch as f64 / map_orig.len() as f64 * 100.0
+    );
     println!("RMSE: {:.6e}", rmse);
     println!("Unseen (original): {}", unseen_orig);
     println!("Unseen (checkerboard): {}", unseen_check);

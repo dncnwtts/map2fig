@@ -5,6 +5,7 @@
 //! from main.rs to reduce duplication and improve maintainability.
 
 use crate::cli::{Args, resolve_color_with_alpha};
+use crate::data_array::to_f64_vec;
 use crate::mask::PixelMask;
 use crate::params::*;
 use crate::pipeline::ProcessedData;
@@ -32,6 +33,9 @@ pub fn create_pixel_mask(
     data: &ProcessedData,
     verbose: bool,
 ) -> Result<Option<PixelMask>, String> {
+    // Convert DataArray to f64 vec once for all mask operations
+    let map_f64 = to_f64_vec(&data.map);
+
     if let Some(mask_below) = args.mask_below {
         if verbose {
             println!("Creating value-range mask (below: {})", mask_below);
@@ -43,7 +47,7 @@ pub fn create_pixel_mask(
             .and_then(|s| CoordSystem::from_str(s).ok())
             .unwrap_or(data.meta.coord);
         return Ok(Some(PixelMask::from_value_range(
-            &data.map,
+            &map_f64,
             args.mask_below,
             args.mask_above,
             data.meta.nside,
@@ -63,7 +67,7 @@ pub fn create_pixel_mask(
             .and_then(|s| CoordSystem::from_str(s).ok())
             .unwrap_or(data.meta.coord);
         return Ok(Some(PixelMask::from_value_range(
-            &data.map,
+            &map_f64,
             args.mask_below,
             args.mask_above,
             data.meta.nside,
@@ -160,7 +164,7 @@ pub fn build_mollweide_params<'a>(
 
     Ok(MollweideParams {
         plot: PlotData {
-            map: &data.map,
+            map: to_f64_vec(&data.map),
             width: args.width,
             filename: args.get_output_filename(),
             pdf_backend: args.pdf_backend.clone(),
@@ -236,7 +240,7 @@ pub fn build_gnomonic_params<'a>(
 
     Ok(GnomonicParams {
         plot: PlotData {
-            map: &data.map,
+            map: to_f64_vec(&data.map),
             width: args.width,
             filename: args.get_output_filename(),
             pdf_backend: args.pdf_backend.clone(),
@@ -315,7 +319,7 @@ pub fn build_hammer_params<'a>(
 
     Ok(HammerParams {
         plot: PlotData {
-            map: &data.map,
+            map: to_f64_vec(&data.map),
             width: args.width,
             filename: args.get_output_filename(),
             pdf_backend: args.pdf_backend.clone(),

@@ -94,7 +94,7 @@ pub fn compute_gnomonic_scale(
 
 /// Plot a gnomonic projection to PNG
 pub fn plot_gnomonic_png(params: GnomonicParams) {
-    let map = params.plot.map;
+    let map = &params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename;
     let minv = params.scale.minv;
@@ -593,7 +593,7 @@ pub fn plot_gnomonic_png(params: GnomonicParams) {
 
 /// Plot a gnomonic projection to PDF
 pub fn plot_gnomonic_pdf(params: GnomonicParams) {
-    let map = params.plot.map;
+    let map = &params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename;
     let minv = params.scale.minv;

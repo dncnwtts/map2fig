@@ -8,33 +8,107 @@
 //! - **FITS integration**: Reading HEALPix metadata from FITS headers
 //! - **Data sampling**: Efficient sampling of HEALPix maps at arbitrary angular positions
 //! - **Resolution management**: Computing appropriate NSIDE for given resolution
-//! - **Resampling**: Downgrading maps to lower resolution
-//!
-//! # HEALPix Overview
-//!
-//! HEALPix is a hierarchical tessellation of the sphere with equal-area pixels. It provides:
-//! - Isotropic resolution at all sky locations
-//! - Hierarchical structure amenable to fast searches
-//! - 12×NSIDE² pixels total, where NSIDE is the resolution parameter (power of 2)
-//!
-//! # RING vs NESTED Ordering
-//!
-//! - **RING**: Pixels ordered by latitude strips, simpler for visualization
-//! - **NESTED**: Hierarchical quadtree ordering, better for data compression
-//!
-//! # Examples
-//!
-//! ```ignore
-//! use map2fig::healpix::{read_healpix_meta, pix2ang_ring, sample_healpix};
-//!
-//! // Read metadata from FITS file
-//! let meta = read_healpix_meta("map.fits").expect("Invalid FITS");
-//! println!("NSIDE: {}, Ordering: {:?}", meta.nside, meta.ordering);
-//!
-//! // Convert pixel index to celestial coordinates
-//! let (theta, phi) = pix2ang_ring(meta.nside, 0);
-//! println!("Pixel 0 is at θ={}, φ={}", theta, phi);
-//! ```
+
+use std::ops::{Add, Div, Mul, Sub};
+
+/// Generic trait for floating-point types (f32, f64) supporting HEALPix operations
+///
+/// This trait enables zero-conversion downsampling by allowing generic functions
+/// to work with both f32 and f64 without type coercion.
+pub trait HealPixFloat:
+    Sized
+    + Copy
+    + PartialOrd
+    + std::fmt::Display
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+{
+    fn zero() -> Self;
+    fn one() -> Self;
+    fn from_i64(n: i64) -> Self;
+    fn from_f64(x: f64) -> Self;
+    fn to_f64(self) -> f64;
+    fn to_i64(self) -> i64;
+    fn sqrt(self) -> Self;
+    fn floor(self) -> Self;
+    fn is_finite(self) -> bool;
+    fn is_nan(self) -> bool;
+    fn unseen_value() -> Self; // Sentinel value for missing data
+}
+
+impl HealPixFloat for f32 {
+    fn zero() -> Self {
+        0.0
+    }
+    fn one() -> Self {
+        1.0
+    }
+    fn from_i64(n: i64) -> Self {
+        n as f32
+    }
+    fn from_f64(x: f64) -> Self {
+        x as f32
+    }
+    fn to_f64(self) -> f64 {
+        self as f64
+    }
+    fn to_i64(self) -> i64 {
+        self as i64
+    }
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
+    fn floor(self) -> Self {
+        self.floor()
+    }
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+    fn unseen_value() -> Self {
+        HealPixFloat::from_f64(HPX_UNSEEN)
+    }
+}
+
+impl HealPixFloat for f64 {
+    fn zero() -> Self {
+        0.0
+    }
+    fn one() -> Self {
+        1.0
+    }
+    fn from_i64(n: i64) -> Self {
+        n as f64
+    }
+    fn from_f64(x: f64) -> Self {
+        x
+    }
+    fn to_f64(self) -> f64 {
+        self
+    }
+    fn to_i64(self) -> i64 {
+        self as i64
+    }
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
+    fn floor(self) -> Self {
+        self.floor()
+    }
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+    fn unseen_value() -> Self {
+        HPX_UNSEEN
+    }
+}
 
 use std::f64::consts::PI;
 
@@ -1172,6 +1246,380 @@ pub fn target_nside_for_resolution(width: usize, height: usize) -> i64 {
         nside *= 2;
     }
     nside
+}
+
+// Generic downsampling functions that work with both f32 and f64
+// These are the primary interface to avoid type conversions
+
+/// Generic downsampling: parallel iteration over target pixels
+fn downgrade_healpix_map_xyf_parallel_generic<T: HealPixFloat + Send + Sync>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    use rayon::prelude::*;
+
+    let fact = source_nside / target_nside;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+
+    let chunk_size = if target_npix < 10_000_000 {
+        10_000
+    } else if target_npix < 100_000_000 {
+        50_000
+    } else {
+        12 * 512 * 512
+    };
+
+    let chunk_starts: Vec<usize> = (0..target_npix).step_by(chunk_size).collect();
+
+    let chunks: Vec<Vec<T>> = chunk_starts
+        .into_par_iter()
+        .map(|chunk_start| {
+            let chunk_end = (chunk_start + chunk_size).min(target_npix);
+            let mut chunk_result = vec![T::unseen_value(); chunk_end - chunk_start];
+
+            for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
+                let (x, y, face) = match ordering {
+                    HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+                    HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+                };
+
+                let mut sum = T::zero();
+                let mut hits = 0usize;
+
+                let x0 = fact * x;
+                let y0 = fact * y;
+
+                for j in y0..(y0 + fact) {
+                    for i in x0..(x0 + fact) {
+                        let source_pix = match ordering {
+                            HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                            HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                        } as usize;
+
+                        let val = map[source_pix];
+                        if is_seen(val.to_f64()) {
+                            sum = sum + val;
+                            hits += 1;
+                        }
+                    }
+                }
+
+                if hits >= 1 {
+                    chunk_result[local_idx] = sum / T::from_i64(hits as i64);
+                }
+            }
+
+            chunk_result
+        })
+        .collect();
+
+    let mut result = vec![T::unseen_value(); target_npix];
+    let mut result_idx = 0;
+    for chunk in chunks {
+        for value in chunk {
+            result[result_idx] = value;
+            result_idx += 1;
+        }
+    }
+
+    result
+}
+
+/// Generic scalar downsampling for small maps
+fn downgrade_healpix_map_xyf_scalar_generic<T: HealPixFloat>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    let fact = source_nside / target_nside;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    let mut result = vec![T::unseen_value(); target_npix];
+
+    for (target_pix, result_elem) in result.iter_mut().enumerate() {
+        let (x, y, face) = match ordering {
+            HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+            HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+        };
+
+        let mut sum = T::zero();
+        let mut hits = 0usize;
+
+        let x0 = fact * x;
+        let y0 = fact * y;
+
+        for j in y0..(y0 + fact) {
+            for i in x0..(x0 + fact) {
+                let source_pix = match ordering {
+                    HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                    HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                } as usize;
+
+                let val = map[source_pix];
+                if is_seen(val.to_f64()) {
+                    sum = sum + val;
+                    hits += 1;
+                }
+            }
+        }
+
+        if hits >= 1 {
+            *result_elem = sum / T::from_i64(hits as i64);
+        }
+    }
+
+    result
+}
+
+/// Generic downsampling dispatcher - selects scalar or parallel based on size
+fn downgrade_healpix_map_xyf_generic<T: HealPixFloat + Send + Sync>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    if source_nside <= target_nside {
+        return map.to_vec();
+    }
+    assert_eq!(source_nside % target_nside, 0);
+
+    let target_npix = (12 * target_nside * target_nside) as usize;
+
+    if target_npix > 50_000 {
+        downgrade_healpix_map_xyf_parallel_generic(map, source_nside, target_nside, ordering)
+    } else {
+        downgrade_healpix_map_xyf_scalar_generic(map, source_nside, target_nside, ordering)
+    }
+}
+
+/// Generic downsampling for low nside (angular sampling)
+fn downgrade_healpix_map_ang_generic<T: HealPixFloat>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    if source_nside <= target_nside {
+        return map.to_vec();
+    }
+
+    let ratio = (source_nside / target_nside) as usize;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+    let mut result = vec![T::unseen_value(); target_npix];
+
+    for (target_pix, result_elem) in result.iter_mut().enumerate() {
+        let mut sum = T::zero();
+        let mut count = 0;
+
+        let (theta, phi) = match ordering {
+            HealpixOrdering::Ring => pix2ang_ring(target_nside, target_pix as i64),
+            HealpixOrdering::Nested => pix2ang_nest(target_nside, target_pix as i64),
+        };
+
+        let n_samples = ratio.min(4);
+        let step = 1.0 / n_samples as f64;
+
+        for i in 0..n_samples {
+            for j in 0..n_samples {
+                let d_theta = (i as f64 + 0.5) * step - 0.5;
+                let d_phi = (j as f64 + 0.5) * step - 0.5;
+
+                let sample_theta = (theta
+                    + d_theta * std::f64::consts::PI / (2.0 * target_nside as f64))
+                    .clamp(0.0, std::f64::consts::PI);
+                let sample_phi = (phi + d_phi * 2.0 * std::f64::consts::PI / target_nside as f64)
+                    .rem_euclid(2.0 * std::f64::consts::PI);
+
+                let source_pix = match ordering {
+                    HealpixOrdering::Ring => ang2pix_ring(source_nside, sample_theta, sample_phi),
+                    HealpixOrdering::Nested => ang2pix_nest(source_nside, sample_theta, sample_phi),
+                } as usize;
+
+                if source_pix < map.len() && is_seen(map[source_pix].to_f64()) {
+                    sum = sum + map[source_pix];
+                    count += 1;
+                }
+            }
+        }
+
+        *result_elem = if count > 0 {
+            sum / T::from_i64(count as i64)
+        } else {
+            T::unseen_value()
+        };
+    }
+
+    result
+}
+
+/// Public generic downsampling function (no conversion needed)
+pub fn downgrade_healpix_map_generic<T: HealPixFloat + Send + Sync>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    if target_nside < 256 {
+        downgrade_healpix_map_ang_generic(map, source_nside, target_nside, ordering)
+    } else {
+        downgrade_healpix_map_xyf_generic(map, source_nside, target_nside, ordering)
+    }
+}
+
+/// Generic balanced downsampling: sample every 2nd pixel in one dimension (50% of pixels)
+pub fn downgrade_healpix_map_balanced_generic<T: HealPixFloat + Send + Sync>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    use rayon::prelude::*;
+
+    let fact = source_nside / target_nside;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+
+    let chunk_size = if target_npix < 10_000_000 {
+        10_000
+    } else if target_npix < 100_000_000 {
+        50_000
+    } else {
+        12 * 512 * 512
+    };
+
+    let chunk_starts: Vec<usize> = (0..target_npix).step_by(chunk_size).collect();
+
+    let chunks: Vec<Vec<T>> = chunk_starts
+        .into_par_iter()
+        .map(|chunk_start| {
+            let chunk_end = (chunk_start + chunk_size).min(target_npix);
+            let mut chunk_result = vec![T::unseen_value(); chunk_end - chunk_start];
+
+            for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
+                let (x, y, face) = match ordering {
+                    HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+                    HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+                };
+
+                let mut sum = T::zero();
+                let mut hits = 0usize;
+
+                let x0 = fact * x;
+                let y0 = fact * y;
+
+                // Sample every 2nd pixel in y dimension only (50% sampling)
+                for j in (y0..(y0 + fact)).step_by(2) {
+                    for i in x0..(x0 + fact) {
+                        let source_pix = match ordering {
+                            HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                            HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                        } as usize;
+
+                        let val = map[source_pix];
+                        if is_seen(val.to_f64()) {
+                            sum = sum + val;
+                            hits += 1;
+                        }
+                    }
+                }
+
+                if hits >= 1 {
+                    chunk_result[local_idx] = sum / T::from_i64(hits as i64);
+                }
+            }
+
+            chunk_result
+        })
+        .collect();
+
+    let mut result = vec![T::unseen_value(); target_npix];
+    let mut result_idx = 0;
+    for chunk in chunks {
+        for value in chunk {
+            result[result_idx] = value;
+            result_idx += 1;
+        }
+    }
+
+    result
+}
+
+/// Generic checkerboard downsampling: sample every 2nd pixel to reduce I/O
+pub fn downgrade_healpix_map_checkerboard_generic<T: HealPixFloat + Send + Sync>(
+    map: &[T],
+    source_nside: i64,
+    target_nside: i64,
+    ordering: HealpixOrdering,
+) -> Vec<T> {
+    use rayon::prelude::*;
+
+    let fact = source_nside / target_nside;
+    let target_npix = (12 * target_nside * target_nside) as usize;
+
+    let chunk_size = if target_npix < 10_000_000 {
+        10_000
+    } else if target_npix < 100_000_000 {
+        50_000
+    } else {
+        12 * 512 * 512
+    };
+
+    let chunk_starts: Vec<usize> = (0..target_npix).step_by(chunk_size).collect();
+
+    let chunks: Vec<Vec<T>> = chunk_starts
+        .into_par_iter()
+        .map(|chunk_start| {
+            let chunk_end = (chunk_start + chunk_size).min(target_npix);
+            let mut chunk_result = vec![T::unseen_value(); chunk_end - chunk_start];
+
+            for (local_idx, target_pix) in (chunk_start..chunk_end).enumerate() {
+                let (x, y, face) = match ordering {
+                    HealpixOrdering::Ring => ring2xyf(target_nside, target_pix as i64),
+                    HealpixOrdering::Nested => nest2xyf(target_nside, target_pix as i64),
+                };
+
+                let mut sum = T::zero();
+                let mut hits = 0usize;
+
+                let x0 = fact * x;
+                let y0 = fact * y;
+
+                // Checkerboard: skip every other pixel (step_by 2)
+                for j in (y0..(y0 + fact)).step_by(2) {
+                    for i in (x0..(x0 + fact)).step_by(2) {
+                        let source_pix = match ordering {
+                            HealpixOrdering::Ring => xyf2ring(source_nside, i, j, face),
+                            HealpixOrdering::Nested => xyf2nest(source_nside, i, j, face),
+                        } as usize;
+
+                        let val = map[source_pix];
+                        if is_seen(val.to_f64()) {
+                            sum = sum + val;
+                            hits += 1;
+                        }
+                    }
+                }
+
+                if hits >= 1 {
+                    chunk_result[local_idx] = sum / T::from_i64(hits as i64);
+                }
+            }
+
+            chunk_result
+        })
+        .collect();
+
+    let mut result = vec![T::unseen_value(); target_npix];
+    let mut result_idx = 0;
+    for chunk in chunks {
+        for value in chunk {
+            result[result_idx] = value;
+            result_idx += 1;
+        }
+    }
+
+    result
 }
 
 /// Downgrade a HEALPix map from high nside to lower nside by averaging pixels

@@ -20,7 +20,7 @@ mod integration_tests {
         }
 
         let plot_data = PlotData {
-            map: &map,
+            map: map.clone(),
             width: 800,
             filename: "test_basic.pdf".to_string(),
             pdf_backend: "cairo".to_string(),
@@ -49,7 +49,7 @@ mod integration_tests {
         }
 
         let plot_data = PlotData {
-            map: &map,
+            map: map.clone(),
             width: 600,
             filename: "test_extreme.pdf".to_string(),
             pdf_backend: "cairo".to_string(),
@@ -135,7 +135,7 @@ mod integration_tests {
 
         for width in &[400u32, 800, 1200, 1600, 2400] {
             let plot_data = PlotData {
-                map: &map,
+                map: map.clone(),
                 width: *width,
                 filename: format!("test_{}.pdf", width),
                 pdf_backend: "cairo".to_string(),
@@ -153,7 +153,7 @@ mod integration_tests {
         let map = vec![1.0f64; npix];
 
         let plot_data = PlotData {
-            map: &map,
+            map: map.clone(),
             width: 100,
             filename: "test_minimal.pdf".to_string(),
             pdf_backend: "cairo".to_string(),

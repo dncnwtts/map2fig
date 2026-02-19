@@ -12,8 +12,8 @@ use crate::scale::Scale;
 use image::Rgba;
 
 /// Core plot data: map, dimensions, and output location.
-pub struct PlotData<'a> {
-    pub map: &'a [f64],
+pub struct PlotData {
+    pub map: Vec<f64>,
     pub width: u32,
     pub filename: String,
     pub pdf_backend: String,
@@ -68,7 +68,7 @@ pub struct GraticuleParams {
 
 /// Mollweide projection parameters bundling all related data.
 pub struct MollweideParams<'a> {
-    pub plot: PlotData<'a>,
+    pub plot: PlotData,
     pub scale: ScaleParams,
     pub color: ColorParams<'a>,
     pub display: DisplayParams,
@@ -79,7 +79,7 @@ pub struct MollweideParams<'a> {
 
 /// Hammer projection parameters bundling all related data.
 pub struct HammerParams<'a> {
-    pub plot: PlotData<'a>,
+    pub plot: PlotData,
     pub scale: ScaleParams,
     pub color: ColorParams<'a>,
     pub display: DisplayParams,
@@ -90,7 +90,7 @@ pub struct HammerParams<'a> {
 
 /// Gnomonic projection parameters bundling all related data.
 pub struct GnomonicParams<'a> {
-    pub plot: PlotData<'a>,
+    pub plot: PlotData,
     pub scale: ScaleParams,
     pub color: ColorParams<'a>,
     pub display: DisplayParams,

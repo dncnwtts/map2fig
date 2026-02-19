@@ -300,7 +300,13 @@ pub struct Args {
     pub pdf_backend: String,
 
     /// Downsampling quality: best (exact, 100% speed), balanced (2-4× faster, <1% error), or fast (4× faster, ~10% error)
-    #[arg(long, short = 'q', default_value = "best", hide = true, required = false)]
+    #[arg(
+        long,
+        short = 'q',
+        default_value = "best",
+        hide = true,
+        required = false
+    )]
     pub quality: String,
 }
 

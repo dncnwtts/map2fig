@@ -510,7 +510,7 @@ mod tests {
         // Should not panic
         let params = MollweideParams {
             plot: PlotData {
-                map: &map,
+                map: map.clone(),
                 width: 100,
                 filename: "test.png".to_string(),
                 pdf_backend: "cairo".to_string(),
@@ -709,7 +709,7 @@ mod tests {
 
         let params = MollweideParams {
             plot: PlotData {
-                map: &map,
+                map: map.clone(),
                 width: 64,
                 filename: "test_extreme.png".to_string(),
                 pdf_backend: "cairo".to_string(),

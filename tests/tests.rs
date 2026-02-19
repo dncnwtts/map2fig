@@ -120,7 +120,7 @@ fn test_plot_smoke() {
 
     let params = MollweideParams {
         plot: PlotData {
-            map: &map,
+            map: map.clone(),
             width: 32,
             filename: "smoke.png".to_string(),
             pdf_backend: "cairo".to_string(),

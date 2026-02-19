@@ -397,7 +397,10 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
     if let Some((data, _nside)) = try_read_float32_column_native(filename, &mmap, col_idx) {
         let f32_elapsed = f32_start.elapsed();
         if enable_profile {
-            eprintln!("[I/O DIAG] float32 read took: {:.3}s", f32_elapsed.as_secs_f64());
+            eprintln!(
+                "[I/O DIAG] float32 read took: {:.3}s",
+                f32_elapsed.as_secs_f64()
+            );
         }
         return DataArray::from_f32(data);
     }
@@ -408,7 +411,10 @@ pub fn read_healpix_column(filename: &str, col_idx: usize) -> DataArray {
     if let Some((data, _nside)) = try_read_float64_column_native(filename, &mmap, col_idx) {
         let f64_elapsed = f64_start.elapsed();
         if enable_profile {
-            eprintln!("[I/O DIAG] float64 read took: {:.3}s", f64_elapsed.as_secs_f64());
+            eprintln!(
+                "[I/O DIAG] float64 read took: {:.3}s",
+                f64_elapsed.as_secs_f64()
+            );
         }
         return DataArray::from_f64(data);
     }
@@ -816,10 +822,10 @@ fn enforce_cache_size_limit() {
 ///
 /// Set `MAP2FIX_USE_MMAP=1` environment variable to use memory-mapped I/O instead of buffered reading.
 /// This can improve performance for large files (>500 MB) at the cost of higher memory usage.
-pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
+pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> DataArray {
     // Try cache first
     if let Some(data) = try_load_column_cache(filename, col_idx) {
-        return data;
+        return DataArray::from_f64(data);
     }
 
     let enable_profile = std::env::var("MAP2FIG_PROFILE").is_ok();
@@ -839,48 +845,50 @@ pub fn read_healpix_column_cached(filename: &str, col_idx: usize) -> Vec<f64> {
     };
     let fits_elapsed = fits_start.elapsed();
     if enable_profile {
-        eprintln!("[I/O DIAG] FITS parsing took: {:.3}s", fits_elapsed.as_secs_f64());
+        eprintln!(
+            "[I/O DIAG] FITS parsing took: {:.3}s",
+            fits_elapsed.as_secs_f64()
+        );
     }
 
-    // Convert to Vec<f64> for caching (cache system uses f64)
-    // Note: For float32 FITS files, conversion from f32->f64 takes ~2.6s
-    // This is unavoidable as we need f64 for downsampling pipeline
-    let convert_start = std::time::Instant::now();
-    let data = data_array.as_f64_vec().into_owned();
-    let convert_elapsed = convert_start.elapsed();
-    if enable_profile {
-        eprintln!("[I/O DIAG] DataArray->f64 conversion took: {:.3}s", convert_elapsed.as_secs_f64());
-    }
+    // Return DataArray as-is, preserving f32/f64 type - NO CONVERSION
+    // This is the key optimization: avoid expensive f32->f64 conversion (4.98s wasted)
 
-    // Save to cache for next time (with error reporting)
-    let cache_start = std::time::Instant::now();
-    match save_column_cache(filename, col_idx, &data) {
-        Some(_) => {
-            let cache_elapsed = cache_start.elapsed();
-            if enable_profile {
-                eprintln!(
-                    "[I/O DIAG] Column cache SAVE SUCCESS ({:.3}s): {} col#{}",
-                    cache_elapsed.as_secs_f64(),
-                    filename, col_idx
-                );
+    // Only save f64 data to cache (f32 files are too large, skip caching)
+    if let DataArray::Float64(ref vec) = data_array {
+        let cache_start = std::time::Instant::now();
+        match save_column_cache(filename, col_idx, vec) {
+            Some(_) => {
+                let cache_elapsed = cache_start.elapsed();
+                if enable_profile {
+                    eprintln!(
+                        "[I/O DIAG] Column cache SAVE SUCCESS ({:.3}s): {} col#{}",
+                        cache_elapsed.as_secs_f64(),
+                        filename,
+                        col_idx
+                    );
+                }
+            }
+            None => {
+                let cache_elapsed = cache_start.elapsed();
+                if enable_profile {
+                    eprintln!(
+                        "[I/O DIAG] Column cache SAVE FAILED ({:.3}s): {} col#{}",
+                        cache_elapsed.as_secs_f64(),
+                        filename,
+                        col_idx
+                    );
+                }
             }
         }
-        None => {
-            let cache_elapsed = cache_start.elapsed();
-            if enable_profile {
-                eprintln!(
-                    "[I/O DIAG] Column cache SAVE FAILED ({:.3}s): {} col#{}",
-                    cache_elapsed.as_secs_f64(),
-                    filename, col_idx
-                );
-            }
-        }
+    } else if enable_profile {
+        eprintln!("[I/O DIAG] Skipping cache for f32 data (too large)");
     }
 
     // Enforce cache size limit (2 GB max)
     enforce_cache_size_limit();
 
-    data
+    data_array
 }
 // ============================================================================
 // Memory-mapped FITS Reading (Optional optimization path)

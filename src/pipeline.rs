@@ -1,17 +1,22 @@
+use crate::QualityLevel;
+use crate::data_array::DataArray;
 use crate::fits::read_healpix_column_cached;
 use crate::generate_index_map;
 use crate::healpix::{
-    HPX_UNSEEN, HealpixMeta, HealpixOrdering, downgrade_healpix_map,
-    downgrade_healpix_map_checkerboard, downgrade_healpix_map_balanced, is_seen, read_healpix_meta,
-    target_nside_for_resolution,
+    HealpixMeta, HealpixOrdering, downgrade_healpix_map, downgrade_healpix_map_balanced,
+    downgrade_healpix_map_balanced_generic, downgrade_healpix_map_checkerboard,
+    downgrade_healpix_map_checkerboard_generic, downgrade_healpix_map_generic, is_seen,
+    read_healpix_meta, target_nside_for_resolution,
 };
 use crate::rotation::CoordSystem;
-use crate::QualityLevel;
 use std::str::FromStr;
 
 /// Processed HEALPix data ready for plotting
+///
+/// Preserves native FITS precision (f32 or f64) throughout the pipeline
+/// to avoid unnecessary type conversions. No f32→f64 or f64→f32 conversions occur.
 pub struct ProcessedData {
-    pub map: Vec<f64>,
+    pub map: DataArray,
     pub meta: HealpixMeta,
 }
 
@@ -28,13 +33,16 @@ pub fn load_and_process_data(
     use std::time::Instant;
 
     let Some(new_fits_path) = fits_path else {
-        let map = generate_index_map(1);
+        let map_vec = generate_index_map(1);
         let meta = HealpixMeta {
             ordering: HealpixOrdering::Ring,
             nside: 1,
             coord: CoordSystem::G,
         };
-        return Ok(ProcessedData { map, meta });
+        return Ok(ProcessedData {
+            map: DataArray::from_f64(map_vec),
+            meta,
+        });
     };
     // Load metadata
     let meta = read_healpix_meta(new_fits_path).ok_or_else(|| {
@@ -49,21 +57,27 @@ pub fn load_and_process_data(
     // This is important for files with explicit masking where 0.0 represents bad/masked data.
     // We check for zero values BEFORE scaling, and also preserve existing HPX_UNSEEN values.
     let fits_read_start = Instant::now();
-    let mut map = read_healpix_column_cached(new_fits_path, col);
+    let map = read_healpix_column_cached(new_fits_path, col);
     let fits_read_time = fits_read_start.elapsed();
 
-    for v in &mut map {
-        // Skip already-unseen pixels (from FITS file with explicit HPX_UNSEEN values)
-        if !is_seen(*v) {
-            continue;
-        }
+    let mut map = map;
 
-        // Convert zero-valued pixels to HPX_UNSEEN (mask indicator for this file)
-        // Use a small threshold (1e-20) instead of exact comparison to handle floating-point precision
-        if v.abs() < 1e-20 {
-            *v = HPX_UNSEEN;
-        } else {
-            *v *= scale_factor;
+    // Scale data - works with both f32 and f64 without conversion
+    match &mut map {
+        DataArray::Float32(v) => {
+            let factor = scale_factor as f32;
+            for val in v.iter_mut() {
+                if is_seen(*val as f64) {
+                    *val *= factor;
+                }
+            }
+        }
+        DataArray::Float64(v) => {
+            for val in v.iter_mut() {
+                if is_seen(*val) {
+                    *val *= scale_factor;
+                }
+            }
         }
     }
 
@@ -83,24 +97,56 @@ pub fn load_and_process_data(
             }
 
             let downgrade_start = Instant::now();
-            
+
             // Parse quality level and select appropriate downsampling algorithm
-            let quality_level = QualityLevel::from_str(quality)
-                .unwrap_or(QualityLevel::Best);
-            
-            let downgraded_map = match quality_level {
-                QualityLevel::Best => {
-                    // Exact downsampling (current algorithm)
-                    downgrade_healpix_map(&map, meta.nside, target_nside, meta.ordering)
+            let quality_level = QualityLevel::from_str(quality).unwrap_or(QualityLevel::Best);
+
+            // Downgrade using generic functions that preserve f32/f64 types
+            let downgraded_map = match &map {
+                DataArray::Float32(v) => {
+                    // Use generic downsampling for f32 data (no conversion)
+                    let downsampled_f32 = match quality_level {
+                        QualityLevel::Best => downgrade_healpix_map_generic(
+                            v,
+                            meta.nside,
+                            target_nside,
+                            meta.ordering,
+                        ),
+                        QualityLevel::Balanced => downgrade_healpix_map_balanced_generic(
+                            v,
+                            meta.nside,
+                            target_nside,
+                            meta.ordering,
+                        ),
+                        QualityLevel::Fast => downgrade_healpix_map_checkerboard_generic(
+                            v,
+                            meta.nside,
+                            target_nside,
+                            meta.ordering,
+                        ),
+                    };
+                    DataArray::Float32(downsampled_f32)
                 }
-                QualityLevel::Balanced => {
-                    // Hybrid sampling: 50% of pixels (every 2nd in one dimension)
-                    // ~2× speedup with ~2-3% error (slight noisiness visible)
-                    downgrade_healpix_map_balanced(&map, meta.nside, target_nside, meta.ordering)
-                }
-                QualityLevel::Fast => {
-                    // Checkerboard sampling: 4× speedup with ~10% error
-                    downgrade_healpix_map_checkerboard(&map, meta.nside, target_nside, meta.ordering)
+                DataArray::Float64(v) => {
+                    // Use old f64 functions for f64 data (backward compatible)
+                    let downsampled_f64 = match quality_level {
+                        QualityLevel::Best => {
+                            downgrade_healpix_map(v, meta.nside, target_nside, meta.ordering)
+                        }
+                        QualityLevel::Balanced => downgrade_healpix_map_balanced(
+                            v,
+                            meta.nside,
+                            target_nside,
+                            meta.ordering,
+                        ),
+                        QualityLevel::Fast => downgrade_healpix_map_checkerboard(
+                            v,
+                            meta.nside,
+                            target_nside,
+                            meta.ordering,
+                        ),
+                    };
+                    DataArray::Float64(downsampled_f64)
                 }
             };
             let downgrade_time = downgrade_start.elapsed();

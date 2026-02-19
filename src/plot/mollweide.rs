@@ -238,7 +238,7 @@ struct MollweidePdfSetup<'a> {
 
 /// Non-generic setup for PDF rendering - only generic call is the pixel_renderer
 fn _mollweide_pdf_setup_impl<'a>(params: &'a MollweideParams<'a>) -> MollweidePdfSetup<'a> {
-    let map = params.plot.map;
+    let map = &params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename.to_string();
     let minv = params.scale.minv;
@@ -564,7 +564,7 @@ pub fn _plot_mollweide_png_impl_projected<F>(
         Option<DebugOverlay>,
     ),
 {
-    let map = params.plot.map;
+    let map = &params.plot.map;
     let width = params.plot.width;
     let filename = params.plot.filename;
     let minv = params.scale.minv;

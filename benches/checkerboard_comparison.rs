@@ -1,8 +1,6 @@
 /// Benchmark comparing original vs checkerboard downsampling
 /// Run with: cargo bench --bench checkerboard_comparison
-
 use std::path::Path;
-use std::time::Instant;
 
 fn main() {
     // Try to find a test FITS file
@@ -34,5 +32,8 @@ fn main() {
     // For now, this shows the test structure
     println!("\nTo properly run this benchmark:");
     println!("1. The downsample functions need to be exposed in lib.rs");
-    println!("2. Run via: cargo run --release --example benchmark_checkerboard -- {}", fits_file);
+    println!(
+        "2. Run via: cargo run --release --example benchmark_checkerboard -- {}",
+        fits_file
+    );
 }
