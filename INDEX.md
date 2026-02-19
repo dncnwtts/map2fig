@@ -1,8 +1,9 @@
 # HEALPix Plotter - Project Index
 
-**Last Updated**: February 16, 2026  
-**Current Phase**: 1.6.3 (GPU Integration Framework)  
-**Status**: ✅ Framework Complete (JIT pending)
+**Last Updated**: February 19, 2026  
+**Current Version**: v0.7.5  
+**Latest Release**: Generic Downsampling (2.41× Speedup)  
+**Status**: ✅ Production Ready
 
 ---
 
@@ -10,8 +11,8 @@
 
 ### 🚀 Getting Started
 - [README.md](README.md) - Build & run instructions
+- [CHANGELOG.md](CHANGELOG.md) - **NEW:** What's changed in v0.7.5
 - [Installation Guide](#installation) - Setup steps
-- [COMPILATION_OPTIMIZATION.md](COMPILATION_OPTIMIZATION.md) - **NEW:** Speed up compile times by 25-35%
 
 ### 📊 Documentation
 - [GPU_STATUS_REPORT.md](GPU_STATUS_REPORT.md) **← CURRENT: Full framework analysis**
